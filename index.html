@@ -224,6 +224,14 @@
             localStorage.setItem(CLEAN_MARKER, '1');
         })();
     </script>
+    <style>
+        @media (max-width: 640px) {
+            table { font-size: 11px; }
+            td, th { padding: 5px 6px !important; }
+        }
+        .overflow-x-auto::-webkit-scrollbar { display: none; }
+        .overflow-x-auto { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    </style>
 <body>
     <div id="root"></div>
 
@@ -1710,8 +1718,8 @@ ${invoice.items.map(item => `
                                         </svg>
                                     </div>
                                     <div>
-                                        <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{t.appName}</h1>
-                                        <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.appSubtitle}</p>
+                                        <h1 className={`text-lg sm:text-2xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{t.appName}</h1>
+                                        <p className={`hidden sm:block text-xs ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.appSubtitle}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
@@ -1737,7 +1745,7 @@ ${invoice.items.map(item => `
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                         </svg>
-                                        <span className="text-sm font-medium">{t.export}</span>
+                                        <span className="hidden sm:inline text-sm font-medium">{t.export}</span>
                                     </button>
                                     
                                     {/* Botón Importar */}
@@ -1751,7 +1759,7 @@ ${invoice.items.map(item => `
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                         </svg>
-                                        <span className="text-sm font-medium">{t.import}</span>
+                                        <span className="hidden sm:inline text-sm font-medium">{t.import}</span>
                                         <input
                                             type="file"
                                             accept=".json"
@@ -1772,7 +1780,7 @@ ${invoice.items.map(item => `
                                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                                     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                                                 </svg>
-                                                <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                                                <span className={`hidden sm:inline text-sm font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                                                     {currentUser.name}
                                                 </span>
                                                 <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -1944,7 +1952,7 @@ ${invoice.items.map(item => `
                     
                     {/* Contenido principal */}
                     {activeModule === 'home' && (
-                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
                             
                             {/* Barra superior: buscador + botón ordenar */}
                             <div className="flex items-center gap-3 mb-6">
@@ -2074,7 +2082,7 @@ ${invoice.items.map(item => `
                             });
 
                             return (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                                 {visibleModules.map((key, index) => {
                                     const mod = allModules[key];
                                     const colors = colorMap[mod.color];
@@ -2650,7 +2658,7 @@ ${invoice.items.map(item => `
 
             return (
                 <div className={`min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
-                    <div className="max-w-6xl mx-auto px-6 py-8">
+                    <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
                         {/* Header */}
                         {onBack && (
                             <button onClick={onBack}
@@ -2859,7 +2867,7 @@ ${invoice.items.map(item => `
                                     </div>
 
                                     {/* ── Cards resumen comparativo ── */}
-                                    <div className="grid grid-cols-3 gap-4 mb-5">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
                                         {[
                                             { lbl:'Ingresos', a:ingA, b:ingB, p:pIngA, invert:false },
                                             { lbl:'Egresos', a:egrA, b:egrB, p:pEgrA, invert:true },
@@ -2891,7 +2899,7 @@ ${invoice.items.map(item => `
                                     {/* ── Ingresos mes a mes: todos los años ── */}
                                     <div className={`${card} mb-5`}>
                                         <div className={`${label} mb-3`}>📈 Ingresos por mes — todos los años</div>
-                                        <div className="overflow-x-auto">
+                                        <div className="overflow-x-auto -mx-3 sm:mx-0">
                                             <table className="w-full text-xs">
                                                 <thead>
                                                     <tr className={`border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
@@ -2940,7 +2948,7 @@ ${invoice.items.map(item => `
                                         {rubrosComp.length === 0 ? (
                                             <p className={`text-xs ${darkMode?'text-slate-300':'text-slate-400'}`}>Sin datos de costos</p>
                                         ) : (
-                                            <div className="overflow-x-auto">
+                                            <div className="overflow-x-auto -mx-3 sm:mx-0">
                                                 <table className="w-full text-xs">
                                                     <thead>
                                                         <tr className={`border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
@@ -3081,7 +3089,7 @@ ${invoice.items.map(item => `
 
             return (
                 <div className={`min-h-screen ${bg}`}>
-                    <div className="max-w-5xl mx-auto px-6 py-8">
+                    <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
                         {/* Header */}
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-4">
@@ -3186,8 +3194,8 @@ ${invoice.items.map(item => `
 
                         {/* Modal */}
                         {showModal && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                                <div className={`rounded-xl shadow-2xl w-full max-w-md p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                                <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                     <div className="flex items-center justify-between mb-5">
                                         <h3 className={`text-lg font-bold ${txt}`}>{editing ? 'Editar credencial' : 'Nueva credencial'}</h3>
                                         <button onClick={() => setShowModal(false)}
@@ -3491,7 +3499,7 @@ ${invoice.items.map(item => `
 
             return (
                 <div className={`min-h-screen ${bg}`}>
-                    <div className="max-w-5xl mx-auto px-6 py-8">
+                    <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
                         {/* Header */}
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-4">
@@ -3636,7 +3644,7 @@ ${invoice.items.map(item => `
                         {/* DETAIL VIEW */}
                         {view === 'detail' && selected && (
                             <div className="space-y-6">
-                                <div className="grid grid-cols-3 gap-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                     {[{ label: 'Monto original', value: fmt(selected.monto, selected.moneda), color: 'text-slate-700' }, { label: 'Total pagado', value: fmt(totalPagado(selected), selected.moneda), color: 'text-teal-600' }, { label: 'Saldo pendiente', value: fmt(saldoPendiente(selected), selected.moneda), color: saldoPendiente(selected) <= 0 ? 'text-green-600' : 'text-red-600' }].map(({ label, value, color }) => (
                                         <div key={label} className={`rounded-xl border p-4 ${card}`}>
                                             <p className={`text-xs mb-1 ${sub}`}>{label}</p>
@@ -3781,7 +3789,7 @@ ${invoice.items.map(item => `
 
                         {/* MODAL: Nuevo/Editar Préstamo */}
                         {showFormModal && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                                 <div className={`rounded-2xl shadow-2xl w-full max-w-md p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                     <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingPrestamo ? 'Editar préstamo' : 'Nuevo préstamo'}</h3>
                                     <div className="space-y-3">
@@ -3804,7 +3812,7 @@ ${invoice.items.map(item => `
 
                         {/* MODAL: Pago */}
                         {showPagoModal && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                                 <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                     <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingPagoIdx !== null ? 'Editar pago' : 'Registrar pago'}</h3>
                                     <div className="space-y-3">
@@ -3823,7 +3831,7 @@ ${invoice.items.map(item => `
 
                         {/* MODAL: Cuotas con repetición */}
                         {showCuotaModal && (
-                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                                 <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                     <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingCuotaIdx !== null ? 'Editar cuota' : 'Agregar cuotas programadas'}</h3>
                                     <div className="space-y-3">
@@ -3920,7 +3928,7 @@ ${invoice.items.map(item => `
             }
             
             return (
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
                     {/* Banner de solo lectura */}
                     {!canEdit && (
                         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
@@ -4459,7 +4467,7 @@ ${invoice.items.map(item => `
             };
             
             return (
-                <div className="max-w-7xl mx-auto px-4 py-8">
+                <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
                     {/* Banner de solo lectura */}
                     {!canEdit && (
                         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
@@ -5268,7 +5276,7 @@ ${invoice.items.map(item => `
                     return (
                     <div className={`mt-4 rounded-xl border-2 p-5 ${darkMode ? 'border-slate-600 bg-slate-800' : 'border-blue-100 bg-white shadow-sm'}`}>
                         <h3 className={`text-sm font-bold uppercase tracking-wide mb-4 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>💳 Resumen por método de pago</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                             {metodosConDatos.map(met => {
                                 const itemsPorMoneda = porMetodo[met];
                                 const totalGastosPorMoneda = Object.entries(itemsPorMoneda).reduce((acc, [m, items]) => { acc[m] = items.reduce((s, i) => s + i.monto, 0); return acc; }, {});
@@ -5415,7 +5423,7 @@ ${invoice.items.map(item => `
 
                 {/* Modal: Nueva / Editar acreditación */}
                 {showAcreditacionModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingAcreditacion ? 'Editar acreditación' : 'Nueva acreditación'}</h3>
                             <div className="space-y-3">
@@ -5449,7 +5457,7 @@ ${invoice.items.map(item => `
 
                 {/* Modal: Registrar / Editar fondo */}
                 {showFondoModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingFondo ? 'Editar registro' : 'Registrar fondos'}</h3>
                             <div className="space-y-3">
@@ -5478,7 +5486,7 @@ ${invoice.items.map(item => `
 
                 {/* Modal: Gasto planificado */}
                 {showGastoModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingGasto ? 'Editar gasto' : 'Gasto planificado'}</h3>
                             <div className="space-y-3">
@@ -5516,7 +5524,7 @@ ${invoice.items.map(item => `
                     const getEmpName = (empId) => { const emp = allEmployees.find(e => e.id === empId || String(e.id) === String(empId)); return emp ? (emp.nombre || emp.name || emp.firstName || 'Empleado') : 'Empleado'; };
                     const pendientes = allSueldos.filter(s => !s.pagado).map(s => ({ ...s, nombreEmpleado: getEmpName(s.empId), moneda: s.moneda || 'CZK' }));
                     return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-lg p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className={`text-lg font-bold ${txt}`}>👤 Sueldos pendientes</h3>
@@ -5579,7 +5587,7 @@ ${invoice.items.map(item => `
                     const today = new Date().toISOString().split('T')[0];
                     const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate < today).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
                     return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-lg p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className={`text-lg font-bold ${txt}`}>🧾 Facturas vencidas</h3>
@@ -5634,7 +5642,7 @@ ${invoice.items.map(item => `
 
                 {/* Modal: Gestionar lugares */}
                 {showLugarModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <h3 className={`text-lg font-bold mb-4 ${txt}`}>⚙ Gestionar lugares</h3>
                             <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
@@ -5808,7 +5816,7 @@ ${invoice.items.map(item => `
                         {selectedAhorro.resuelto && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">✓ Resuelto</span>}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 mb-5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
                         {[
                             { label: 'Total ahorrado', value: fmtMonto(saTotal, selectedAhorro.moneda), color: 'text-purple-600' },
                             { label: 'Meta', value: saMeta > 0 ? fmtMonto(saMeta, selectedAhorro.moneda) : '—', color: txt },
@@ -5895,7 +5903,7 @@ ${invoice.items.map(item => `
                 )}
 
                 {showAhorroModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-md p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingAhorro ? 'Editar ahorro' : 'Nuevo ahorro'}</h3>
                             <div className="space-y-3">
@@ -5926,7 +5934,7 @@ ${invoice.items.map(item => `
                 )}
 
                 {showAporteModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <h3 className={`text-lg font-bold mb-4 ${txt}`}>Agregar aporte</h3>
                             <div className="space-y-3">
@@ -6897,7 +6905,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     </p>
                     
                     {/* Selector de Año */}
-                    <div className="flex items-center gap-4 mb-6">
+                    <div className="flex flex-wrap items-center gap-3 mb-6">
                         <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                             📅 Año:
                         </label>
@@ -6916,7 +6924,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     </div>
                     
                     {/* Botones de vista */}
-                    <div className="flex gap-3 mb-6">
+                    <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
                         <button
                             onClick={() => setViewMode('table')}
                             className={`px-6 py-2 rounded-lg font-medium transition-colors ${
@@ -6959,7 +6967,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         </button>
                         <button
                             onClick={() => setViewMode('notes')}
-                            className={`relative px-6 py-2 rounded-lg font-medium transition-colors ${viewMode === 'notes' ? 'bg-amber-500 text-white' : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'}`}
+                            className={`relative px-3 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${viewMode === 'notes' ? 'bg-amber-500 text-white' : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'}`}
                         >
                             📝 Notas
                             {cashNotes.filter(n => !n.resuelta).length > 0 && (
@@ -7276,7 +7284,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 );
                             })()}
 
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto -mx-3 sm:mx-0">
                                 <table className="w-full">
                                     <thead>
                                         <tr className={`text-xs font-semibold uppercase tracking-wider ${darkMode ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
@@ -7417,7 +7425,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </button>
                                 )}
                             </div>
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto -mx-3 sm:mx-0">
                                 {(() => {
                                     const now = new Date();
                                     const mesActualIdx = selectedYear === now.getFullYear() ? now.getMonth() : -1;
@@ -7666,7 +7674,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             filas={[...meses.map(mes => { const obj={'Mes':mes.substring(0,3)}; years.forEach(yr=>{obj[yr]=getByMes(yr,mes,'INGRESOS');}); const a=getByMes(selectedYear,mes,'INGRESOS'),b=getByMes(selectedYear-1,mes,'INGRESOS'); obj['%vs'+(selectedYear-1)]=b!==0?((a-b)/Math.abs(b)*100).toFixed(0)+'%':'–'; return obj; }), {'Mes':'TOTAL',...Object.fromEntries(years.map(yr=>[yr,getAnual(yr,'INGRESOS')])), ['%vs'+(selectedYear-1)]: (() => {const a=getAnual(selectedYear,'INGRESOS'),b=getAnual(selectedYear-1,'INGRESOS');return b!==0?((a-b)/Math.abs(b)*100).toFixed(0)+'%':'–';})()} ]}
                                         />
                                     </div>
-                                    <div className="overflow-x-auto">
+                                    <div className="overflow-x-auto -mx-3 sm:mx-0">
                                         <table className="w-full text-xs">
                                             <thead>
                                                 <tr className={darkMode?'border-b border-slate-700':'border-b border-slate-200'}>
@@ -7731,7 +7739,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             filas={[...tiposCosto.filter(t=>t!=='INGRESOS').map(tipo => { const a=getAnual(selectedYear,tipo),b=getAnual(selectedYear-1,tipo),d=a-b,p=pct(a,b); return {'Rubro':tipo,[selectedYear]:a,[selectedYear-1]:b,'Diferencia':d===0?'–':(d>0?'+':'')+d,'%':b===0?'–':arrow(p)+Math.abs(p).toFixed(0)+'%'}; }), {'Rubro':'TOTAL EGRESOS',[selectedYear]:getAnual(selectedYear,'EGRESOS'),[selectedYear-1]:getAnual(selectedYear-1,'EGRESOS')}]}
                                         />
                                     </div>
-                                    <div className="overflow-x-auto">
+                                    <div className="overflow-x-auto -mx-3 sm:mx-0">
                                         <table className="w-full text-xs">
                                             <thead>
                                                 <tr className={darkMode?'border-b border-slate-700':'border-b border-slate-200'}>
@@ -7795,7 +7803,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             filas={[...meses.map(mes => { const a=getByMes(selectedYear,mes,null),b=getByMes(selectedYear-1,mes,null),d=a-b,p=b!==0?((a-b)/Math.abs(b)*100):(a>0?100:a<0?-100:0); return {'Mes':mes.substring(0,3),[selectedYear]:a===0?'–':(a>0?'+':'')+a,[selectedYear-1]:b===0?'–':(b>0?'+':'')+b,'Diferencia':d===0?'–':(d>0?'+':'')+d,'%':a===0&&b===0?'–':arrow(p)+Math.abs(p).toFixed(0)+'%'}; }), {'Mes':'TOTAL',[selectedYear]:(v=>v===0?'–':(v>0?'+':'')+v)(getAnual(selectedYear,null)),[selectedYear-1]:(v=>v===0?'–':(v>0?'+':'')+v)(getAnual(selectedYear-1,null))}]}
                                         />
                                     </div>
-                                    <div className="overflow-x-auto">
+                                    <div className="overflow-x-auto -mx-3 sm:mx-0">
                                         <table className="w-full text-xs">
                                             <thead>
                                                 <tr className={darkMode?'border-b border-slate-700':'border-b border-slate-200'}>
@@ -7857,7 +7865,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             filas={[...meses.map(mes => { const origenes=['BANK','CASH','APPS','OTHER']; const vals=origenes.map(o=>getByMesOrigen(selectedYear,mes,o)); const total=vals.reduce((s,v)=>s+v,0); if(total===0) return null; const row={'Período':mes.substring(0,3)}; origenes.forEach((o,i)=>{const lbl=['Banco','Efectivo','Apps','Otros'][i]; row[lbl]=vals[i]||'–'; row['%'+lbl]=vals[i]>0?((vals[i]/total)*100).toFixed(0)+'%':'–';}); row['Total']=total; return row; }).filter(Boolean), {'Período':'TOTAL AÑO',...(() => {const origenes=['BANK','CASH','APPS','OTHER']; const vals=origenes.map(o=>getAnualOrigen(selectedYear,o)); const total=vals.reduce((s,v)=>s+v,0); const row={}; origenes.forEach((o,i)=>{const lbl=['Banco','Efectivo','Apps','Otros'][i]; row[lbl]=vals[i]||'–'; row['%'+lbl]=vals[i]>0?((vals[i]/total)*100).toFixed(1)+'%':'–';}); row['Total']=total; return row;})()}]}
                                         />
                                     </div>
-                                    <div className="overflow-x-auto">
+                                    <div className="overflow-x-auto -mx-3 sm:mx-0">
                                         <table className="w-full text-xs">
                                             <thead>
                                                 <tr className={darkMode?'border-b border-slate-700':'border-b border-slate-200'}>
@@ -8126,8 +8134,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* Modal Exportar Registro Diario */}
                     {showExportCajaModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                            <div className={`rounded-xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                            <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                 <div className="flex items-center justify-between mb-5">
                                     <h3 className={`font-bold text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                                         🖨️ Exportar Registro Diario
@@ -8219,8 +8227,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* Modal Gestionar Rubros/Tipos de Costo */}
                     {showTiposModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                            <div className={`rounded-xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                            <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>⚙️ Gestionar Rubros</h3>
                                     <button onClick={() => setShowTiposModal(false)}
@@ -8319,7 +8327,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* Modal Nuevo Ingreso */}
                     {showIngresoModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                             <div className={`rounded-xl shadow-2xl w-full max-w-md p-5 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <h2 className={`text-base font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>🟢 Nuevo Ingreso</h2>
@@ -8539,7 +8547,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                             {/* Modal nueva/editar nota */}
                             {showNoteModal && (
-                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                                     <div className={'rounded-xl shadow-2xl w-full max-w-md p-6 ' + (darkMode ? 'bg-slate-800' : 'bg-white')}>
                                         <h3 className={'text-lg font-bold mb-4 ' + (darkMode ? 'text-white' : 'text-slate-900')}>
                                             {editingNote ? 'Editar nota' : 'Nueva nota'}
@@ -10018,11 +10026,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </p>
 
                             {/* ── SELECTOR DE SEGMENTO ── */}
-                            <div className="flex gap-1 mt-4 p-1 rounded-xl w-fit"
+                            <div className="flex gap-1 mt-4 p-1 rounded-xl overflow-x-auto max-w-full"
                                 style={{background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}}>
                                 {[['legajos','👥 '+t.legajos],['pagos','📆 '+t.pagos],['horas','⏱ '+t.horasTrabajadas],['seguros','🏥 '+t.seguros],['sueldos','💸 '+t.sueldosPagados],['pendientes','⚠️ '+t.sueldosPendientes],['plantilla','📋 Plantilla']].map(([seg, label]) => (
                                     <button key={seg} onClick={() => setActiveSegment(seg)}
-                                        className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                        className={`px-3 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
                                             activeSegment === seg
                                                 ? 'bg-green-600 text-white shadow-sm'
                                                 : darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'
@@ -10031,7 +10039,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </button>
                                 ))}
                                 <button onClick={() => setActiveSegment('notas')}
-                                    className={`relative px-5 py-2 rounded-lg text-sm font-semibold transition-all ${activeSegment === 'notas' ? 'bg-green-600 text-white shadow-sm' : darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+                                    className={`relative px-3 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${activeSegment === 'notas' ? 'bg-green-600 text-white shadow-sm' : darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
                                     📝 Notas
                                     {payrollNotes.filter(n => !n.resuelta).length > 0 && (
                                         <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center leading-none">
@@ -10047,7 +10055,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         SEGMENTO 1 – LEGAJOS
                     ══════════════════════════════════════════════════════ */}
                     {activeSegment === 'legajos' && (
-                        <div className="max-w-7xl mx-auto px-6 py-8">
+                        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
                             {!canEdit && (
                                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-r-lg">
                                     <p className="font-bold text-yellow-800">👁️ Modo Solo Lectura</p>
@@ -10210,7 +10218,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         SEGMENTO 2 – PAGOS MENSUALES
                     ══════════════════════════════════════════════════════ */}
                     {activeSegment === 'pagos' && (
-                        <div className="max-w-7xl mx-auto px-6 py-8">
+                        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
 
                             {/* Selector mes/año + buscador */}
                             <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -11539,8 +11547,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* ══ MODAL: AGREGAR/EDITAR PENDIENTE ════════════════════ */}
                     {showPendienteModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                            <div className={`rounded-xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                            <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                                         {editingPendienteId ? t.editPendingTitle : t.addPendingTitle}
@@ -11606,8 +11614,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* ══ MODAL: REGISTRAR SEGURO MÉDICO ════════════════════ */}
                     {showSeguroModal && seguroModalEmp && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                            <div className={`rounded-xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                            <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <div>
                                         <h3 className={`font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -11797,7 +11805,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             )}
 
                             {showPayrollNoteModal && (
-                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                                     <div className={'rounded-xl shadow-2xl w-full max-w-md p-6 ' + (darkMode ? 'bg-slate-800' : 'bg-white')}>
                                         <h3 className={'text-lg font-bold mb-4 ' + (darkMode ? 'text-white' : 'text-slate-900')}>
                                             {editingPayrollNote ? 'Editar nota' : 'Nueva nota'}
@@ -11848,8 +11856,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* ══ MODAL: AGREGAR/EDITAR EMPLEADO ══════════════════ */}
                     {showEmployeeModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
-                            <div className={`rounded-xl shadow-2xl w-full max-w-lg my-8 p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+                            <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-lg my-0 sm:my-8 p-4 sm:p-6 max-h-[95vh] overflow-y-auto ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                 <div className="flex items-center justify-between mb-5">
                                     <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                                         {editingEmployee ? t.editEmployee : t.newEmployee}
@@ -12283,8 +12291,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* ══ MODAL: REGISTRAR PAGO ════════════════════════════ */}
                     {showPayModal && payModalEmp && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                            <div className={`rounded-xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                            <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <div>
                                         <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -13074,7 +13082,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             
             return (
-                <div className="max-w-7xl mx-auto px-4 py-8">
+                <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
                     {/* Banner de solo lectura */}
                     {!canEdit && (
                         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
@@ -13523,7 +13531,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     
                     {/* MODAL: PRODUCTO */}
                     {showProductModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                             <div className={'rounded-xl shadow-2xl max-w-md w-full p-6 ' + (darkMode ? 'bg-slate-800' : 'bg-white')}>
                                 <h3 className={'text-xl font-bold mb-4 ' + (darkMode ? 'text-white' : 'text-slate-900')}>
                                     {editingProduct ? ' Editar Producto' : ' Nuevo Producto'}
@@ -13600,7 +13608,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     
                     {/* MODAL: TITULAR */}
                     {showHolderModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                             <div className={'rounded-xl shadow-2xl max-w-2xl w-full p-6 ' + (darkMode ? 'bg-slate-800' : 'bg-white')}>
                                 <h3 className={'text-xl font-bold mb-4 ' + (darkMode ? 'text-white' : 'text-slate-900')}>
                                     {editingHolder ? ' Editar Titular' : '🏢 Nuevo Titular'}
@@ -13655,7 +13663,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     
                     {/* MODAL: CLIENTE (mismo que titular) */}
                     {showClientModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                             <div className={'rounded-xl shadow-2xl max-w-2xl w-full p-6 ' + (darkMode ? 'bg-slate-800' : 'bg-white')}>
                                 <h3 className={'text-xl font-bold mb-4 ' + (darkMode ? 'text-white' : 'text-slate-900')}>
                                     {editingClient ? ' Editar Cliente' : ' Nuevo Cliente'}
@@ -14773,7 +14781,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* Modal pago masivo */}
                     {showPagoMasivoModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                             <div className={`rounded-xl shadow-2xl w-full max-w-sm p-5 ${darkMode?'bg-slate-800':'bg-white'}`}>
                                 <h3 className={`text-base font-bold mb-1 ${darkMode?'text-white':'text-slate-900'}`}>
                                     ✓ Pagar {seleccionadas.length} factura{seleccionadas.length>1?'s':''}
@@ -17716,7 +17724,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                                 {/* Modal */}
                                 {showInvNoteModal && (
-                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                                         <div className={'rounded-xl shadow-2xl w-full max-w-md p-6 ' + ('bg-white')}>
                                             <h3 className={'text-lg font-bold mb-4 ' + ('text-slate-900')}>
                                                 {editingInvNote ? 'Editar nota' : 'Nueva nota'}
@@ -18117,7 +18125,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         </button>
                                     </div>
                                     
-                                    <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         <button
                                             onClick={() => {
                                                 setShowConfigPanel(false);
@@ -19069,7 +19077,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {/* Modal de configuración de notificación por email */}
                 {showEmailModal && emailModalInvoice && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-xl shadow-2xl ${'bg-white'} max-w-md w-full p-6 animate-fade-in`}>
                             <div className="mb-6">
                                 <h3 className={`text-xl font-bold ${'text-slate-800'} mb-2`}>
