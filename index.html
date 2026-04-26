@@ -207,6 +207,10 @@
                 // Préstamos
                 set('prestamosData',  prestamos.data?.data || []);
 
+                // markedCategories
+                const mc = await _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle();
+                if (mc.data?.data) localStorage.setItem('markedCategories', JSON.stringify(mc.data.data));
+
                 console.log('✅ Datos cargados desde Supabase | usuarios:', (sysU.data||[]).length, '| empleados:', (emp.data||[]).length);
             } catch(e) {
                 console.error('❌ Error cargando desde Supabase:', e);
@@ -16911,9 +16915,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             };
             
-            // Guardar categorías marcadas en localStorage
+            // Guardar categorías marcadas en localStorage y Supabase
             useEffect(() => {
-                localStorage.setItem('markedCategories', JSON.stringify([...markedCategories]));
+                const arr = [...markedCategories];
+                localStorage.setItem('markedCategories', JSON.stringify(arr));
+                dbUpsertOne('app_config', 'markedCategories', arr);
             }, [markedCategories]);
             const [searchTerm, setSearchTerm] = useState('');
             const [filterCategory, setFilterCategory] = useState('all');
