@@ -10079,6 +10079,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [employees, setEmployees] = useState([]);
             const [empLoaded, setEmpLoaded] = useState(false);
             useEffect(() => { dbGetAll('employees').then(d => { setEmployees(d||[]); setEmpLoaded(true); }); }, []);
+            useEffect(() => {
+                if (!empLoaded) return;
+                dbSetArray('employees', employees);
+                localStorage.setItem('employees', JSON.stringify(employees));
+            }, [employees]);
             const [showEmployeeModal, setShowEmployeeModal] = useState(false);
             const [editingEmployee, setEditingEmployee] = useState(null);
             const [formData, setFormData] = useState({
@@ -11232,6 +11237,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const activeEmployees = employees.filter(e => e.activo);
 
             // ── RENDER ────────────────────────────────────────────────────
+            if (!empLoaded) return (
+                <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                    <div className="text-center">
+                        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
+                        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Cargando datos...</p>
+                    </div>
+                </div>
+            );
             return (
                 <div className={`min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
 
