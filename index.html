@@ -10048,9 +10048,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [activeSegment, setActiveSegment] = useState('legajos'); // 'legajos' | 'pagos'
 
             // ── Notas de sueldos ───────────────────────────────────────────
-            const [payrollNotes, setPayrollNotes] = useState(() => {
-                []
-            });
+            const [payrollNotes, setPayrollNotes] = useState([]);
+            const [payNotesLoaded, setPayNotesLoaded] = useState(false);
+            useEffect(() => { dbGetAll('payroll_notes').then(d => { setPayrollNotes(d||[]); setPayNotesLoaded(true); }); }, []);
             const [payrollNotesSubTab, setPayrollNotesSubTab] = useState('active');
             const [showPayrollNoteModal, setShowPayrollNoteModal] = useState(false);
             const [editingPayrollNote, setEditingPayrollNote] = useState(null);
