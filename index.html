@@ -55,6 +55,13 @@
         // ── Migración one-time desde localStorage ────────────────
         async function migrarLocalStorage() {
             if (localStorage.getItem('supa_migrated_v1')) return false;
+            // Solo migrar si hay datos reales (no es una sesión incógnito vacía)
+            const employees = localStorage.getItem('employees');
+            const tienenDatos = employees && JSON.parse(employees).length > 0;
+            if (!tienenDatos) {
+                // Sesión sin datos — no migrar, solo precargar
+                return false;
+            }
             console.log('Migrando datos a Supabase...');
             const maps = [
                 { ls: 'employees',             table: 'employees',         type: 'array' },
