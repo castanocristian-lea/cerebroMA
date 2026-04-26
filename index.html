@@ -92,7 +92,58 @@
             localStorage.setItem('supa_migrated_v1', '1');
             console.log('Migración completa');
         }
-        migrarLocalStorage();
+
+        // ── Precargar TODO desde Supabase en localStorage antes de que React arranque
+        async function precargarDesdeSupabase() {
+            try {
+                const [emp, payN, cashN, cashTx, calEv, calH, calCfg, creds, sysU,
+                       payM, payP, payH, payIns, cashPlan] = await Promise.all([
+                    _sb.from('employees').select('data'),
+                    _sb.from('payroll_notes').select('data'),
+                    _sb.from('cash_notes').select('data'),
+                    _sb.from('cash_transactions').select('*'),
+                    _sb.from('calendar_events').select('data'),
+                    _sb.from('calendar_hours').select('data'),
+                    _sb.from('calendar_config').select('*'),
+                    _sb.from('credentials').select('data'),
+                    _sb.from('system_users').select('data'),
+                    _sb.from('payroll_monthly').select('*').eq('id','main').maybeSingle(),
+                    _sb.from('payroll_monthly').select('*').eq('id','pendientes').maybeSingle(),
+                    _sb.from('payroll_hours').select('*').eq('id','main').maybeSingle(),
+                    _sb.from('payroll_insurance').select('*').eq('id','main').maybeSingle(),
+                    _sb.from('cash_planning').select('*'),
+                ]);
+                if (emp.data?.length) localStorage.setItem('employees', JSON.stringify(emp.data.map(r=>r.data)));
+                if (payN.data?.length) localStorage.setItem('payrollNotes', JSON.stringify(payN.data.map(r=>r.data)));
+                if (cashN.data?.length) localStorage.setItem('cashNotes', JSON.stringify(cashN.data.map(r=>r.data)));
+                if (calEv.data?.length) localStorage.setItem('calendarioEventos', JSON.stringify(calEv.data.map(r=>r.data)));
+                if (calH.data?.length) localStorage.setItem('calendarioHoras', JSON.stringify(calH.data.map(r=>r.data)));
+                if (creds.data?.length) localStorage.setItem('credencialesData', JSON.stringify(creds.data.map(r=>r.data)));
+                if (sysU.data?.length) localStorage.setItem('systemUsers', JSON.stringify(sysU.data.map(r=>r.data)));
+                const txRow = cashTx.data?.find(r=>r.id==='multiyear');
+                if (txRow?.data) localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(txRow.data));
+                if (calCfg.data) calCfg.data.forEach(r => {
+                    if (r.id==='ubicaciones') localStorage.setItem('calendarioUbicaciones', JSON.stringify(r.data));
+                    if (r.id==='tipos') localStorage.setItem('calendarioTipos', JSON.stringify(r.data));
+                });
+                if (cashPlan.data) cashPlan.data.forEach(r => {
+                    const keys = {ahorros:'cajaAhorros',acreditaciones:'cajaAcreditaciones',fondos:'cajaFondos',lugares:'cajaLugares'};
+                    if (keys[r.id]) localStorage.setItem(keys[r.id], JSON.stringify(r.data));
+                });
+                if (payM.data?.data) localStorage.setItem('payrollMonthlyData', JSON.stringify(payM.data.data));
+                if (payP.data?.data) localStorage.setItem('sueldosPendientesData', JSON.stringify(payP.data.data));
+                if (payH.data?.data) localStorage.setItem('horasAjustesData', JSON.stringify(payH.data.data));
+                if (payIns.data?.data) localStorage.setItem('seguroMedicoData', JSON.stringify(payIns.data.data));
+                console.log('✅ Datos precargados desde Supabase');
+            } catch(e) { console.warn('Supabase preload error:', e); }
+        }
+
+        async function init() {
+            await migrarLocalStorage();
+            await precargarDesdeSupabase();
+            window.__supabaseReady = true;
+        }
+        init();
     </script>
     <script>
         // Configurar PDF.js
@@ -20930,7 +20981,21 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             );
         };
 
-        ReactDOM.render(<Malagestion />, document.getElementById('root'));
+        // Esperar a que Supabase precargue antes de renderizar
+        async function arrancarApp() {
+            // Si init() ya terminó, window.__supabaseReady es true
+            if (!window.__supabaseReady) {
+                await new Promise(resolve => {
+                    const check = setInterval(() => {
+                        if (window.__supabaseReady) { clearInterval(check); resolve(); }
+                    }, 50);
+                    // Fallback: máximo 8 segundos
+                    setTimeout(() => { clearInterval(check); resolve(); }, 8000);
+                });
+            }
+            ReactDOM.render(<Malagestion />, document.getElementById('root'));
+        }
+        arrancarApp();
     </script>
 </body>
 </html>
