@@ -76,6 +76,7 @@
                 { ls: 'seguroMedicoData',      table: 'payroll_insurance', type: 'val',   key: 'main' },
                 { ls: 'horasAjustesData',      table: 'payroll_hours',     type: 'val',   key: 'main' },
                 { ls: 'payrollMonthlyData',    table: 'payroll_monthly',   type: 'val',   key: 'main' },
+                { ls: 'sueldosPendientesData', table: 'payroll_monthly',   type: 'val',   key: 'pendientes' },
                 { ls: 'credencialesData',      table: 'credentials',       type: 'array' },
                 { ls: 'systemUsers',           table: 'system_users',      type: 'array' },
             ];
@@ -10758,11 +10759,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [sueldosYear, setSueldosYear] = useState(now.getFullYear());
 
             // ── SUELDOS PENDIENTES ────────────────────────────────────────
-            const [pendientesData, setPendientesData] = useState(() => {
-                const s = localStorage.getItem('sueldosPendientesData');
-                return s ? JSON.parse(s) : [];
-            });
-            useEffect(() => { localStorage.setItem('sueldosPendientesData', JSON.stringify(pendientesData)); }, [pendientesData]);
+            const [pendientesData, setPendientesData] = useState([]);
+            useEffect(() => {
+                dbGetKey('payroll_monthly', 'pendientes').then(d => {
+                    if (d && d.length > 0) { setPendientesData(d); localStorage.setItem('sueldosPendientesData', JSON.stringify(d)); }
+                    else { const s = localStorage.getItem('sueldosPendientesData'); if(s) try { setPendientesData(JSON.parse(s)); } catch(e){} }
+                });
+            }, []);
+            useEffect(() => {
+                localStorage.setItem('sueldosPendientesData', JSON.stringify(pendientesData));
+                dbUpsertOne('payroll_monthly', 'pendientes', pendientesData);
+            }, [pendientesData]);
             const [showPendienteModal, setShowPendienteModal] = useState(false);
             const [pendienteForm, setPendienteForm] = useState({ empId: '', monto: '', vencimiento: '', nota: '' });
             const [editingPendienteId, setEditingPendienteId] = useState(null);
