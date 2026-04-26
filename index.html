@@ -68,6 +68,14 @@
                 { ls: 'calendarioHoras',       table: 'calendar_hours',    type: 'array' },
                 { ls: 'calendarioUbicaciones', table: 'calendar_config',   type: 'val',   key: 'ubicaciones' },
                 { ls: 'calendarioTipos',       table: 'calendar_config',   type: 'val',   key: 'tipos' },
+                { ls: 'cajaAhorros',           table: 'cash_planning',     type: 'val',   key: 'ahorros' },
+                { ls: 'cajaAcreditaciones',    table: 'cash_planning',     type: 'val',   key: 'acreditaciones' },
+                { ls: 'cajaFondos',            table: 'cash_planning',     type: 'val',   key: 'fondos' },
+                { ls: 'cajaLugares',           table: 'cash_planning',     type: 'val',   key: 'lugares' },
+                { ls: 'cashTransactionsMultiYear', table: 'cash_transactions', type: 'val', key: 'multiyear' },
+                { ls: 'seguroMedicoData',      table: 'payroll_insurance', type: 'val',   key: 'main' },
+                { ls: 'horasAjustesData',      table: 'payroll_hours',     type: 'val',   key: 'main' },
+                { ls: 'payrollMonthlyData',    table: 'payroll_monthly',   type: 'val',   key: 'main' },
                 { ls: 'credencialesData',      table: 'credentials',       type: 'array' },
                 { ls: 'systemUsers',           table: 'system_users',      type: 'array' },
             ];
@@ -239,6 +247,7 @@
             const ajustes = JSON.parse(localStorage.getItem('horasAjustesData') || '{}');
             ajustes[ajusteKey] = 33.3;
             localStorage.setItem('horasAjustesData', JSON.stringify(ajustes));
+            dbUpsertOne('payroll_hours','main',ajustes);
             localStorage.setItem(FIX_MARKER, '1');
             console.log('Fix Santiago marzo 2026: 33.3 hs guardado en horasAjustesData');
         })();
@@ -3203,7 +3212,7 @@ ${invoice.items.map(item => `
             const [tiposEvento, setTiposEvento] = React.useState(() => {
                 try { return JSON.parse(localStorage.getItem('calendarioTipos') || 'null') || TIPOS_DEFAULT; } catch { return TIPOS_DEFAULT; }
             });
-            React.useEffect(() => { localStorage.setItem('calendarioTipos', JSON.stringify(tiposEvento)); }, [tiposEvento]);
+            React.useEffect(() => { localStorage.setItem('calendarioTipos', JSON.stringify(tiposEvento)); dbUpsertOne('calendar_config','tipos',tiposEvento); }, [tiposEvento]);
             // Objeto TIPOS para compatibilidad con código existente
             const TIPOS = Object.fromEntries(tiposEvento.map(t => [t.key, { label: t.label, color: t.color }]));
             const getTipoColor = (key) => TIPOS[key]?.color || '#94a3b8';
@@ -3216,7 +3225,7 @@ ${invoice.items.map(item => `
                 dbSetArray('calendar_events', eventos);
                 localStorage.setItem('calendarioEventos', JSON.stringify(eventos));
             }, [eventos]);
-            React.useEffect(() => { localStorage.setItem('calendarioUbicaciones', JSON.stringify(ubicaciones)); }, [ubicaciones]);
+            React.useEffect(() => { localStorage.setItem('calendarioUbicaciones', JSON.stringify(ubicaciones)); dbUpsertOne('calendar_config','ubicaciones',ubicaciones); }, [ubicaciones]);
 
             const getColorEmp = (id) => {
                 const idx = empleados.findIndex(e => String(e.id) === String(id));
@@ -6120,10 +6129,10 @@ ${invoice.items.map(item => `
             const [editingGasto, setEditingGasto] = React.useState(null);
             const [gastoForm, setGastoForm] = React.useState({ nombre: '', monto: '', moneda: 'CZK', notas: '', metodoPago: 'BANK' });
 
-            const saveFondos = (list) => { setFondos(list); localStorage.setItem('cajaFondos', JSON.stringify(list)); };
-            const saveLugares = (list) => { setLugares(list); localStorage.setItem('cajaLugares', JSON.stringify(list)); };
+            const saveFondos = (list) => { setFondos(list); localStorage.setItem('cajaFondos', JSON.stringify(list)); dbUpsertOne('cash_planning','fondos',list); };
+            const saveLugares = (list) => { setLugares(list); localStorage.setItem('cajaLugares', JSON.stringify(list)); dbUpsertOne('cash_planning','lugares',list); };
             const saveGastos = (list) => { setGastos(list); localStorage.setItem('cajaGastosPlaneados', JSON.stringify(list)); };
-            const saveAcreditaciones = (list) => { setAcreditaciones(list); localStorage.setItem('cajaAcreditaciones', JSON.stringify(list)); };
+            const saveAcreditaciones = (list) => { setAcreditaciones(list); localStorage.setItem('cajaAcreditaciones', JSON.stringify(list)); dbUpsertOne('cash_planning','acreditaciones',list); };
             const openNewAcreditacion = () => { setEditingAcreditacion(null); setAcreditacionForm({ origen: '', fecha: new Date().toISOString().split('T')[0], monto: '', moneda: 'CZK', notas: '' }); setShowAcreditacionModal(true); };
             const openEditAcreditacion = (a) => { setEditingAcreditacion(a); setAcreditacionForm({ origen: a.origen, fecha: a.fecha, monto: String(a.monto), moneda: a.moneda, notas: a.notas||'' }); setShowAcreditacionModal(true); };
             const saveAcreditacion = () => {
@@ -6872,7 +6881,7 @@ ${invoice.items.map(item => `
             const saPct = saMeta > 0 ? Math.min(100, (saTotal/saMeta)*100) : 0;
             const saFalta = saMeta > 0 ? Math.max(0, saMeta - saTotal) : 0;
 
-            const saveAhorros = (list) => { setAhorros(list); localStorage.setItem('cajaAhorros', JSON.stringify(list)); };
+            const saveAhorros = (list) => { setAhorros(list); localStorage.setItem('cajaAhorros', JSON.stringify(list)); dbUpsertOne('cash_planning','ahorros',list); };
             const openNewAhorro = () => { setEditingAhorro(null); setAhorroForm({ nombre: '', meta: '', moneda: 'CZK', lugar: 'BANK', para: '', fechaMeta: '', notas: '' }); setShowAhorroModal(true); };
             const openEditAhorro = (a) => { setEditingAhorro(a); setAhorroForm({ nombre: a.nombre, meta: String(a.meta||''), moneda: a.moneda, lugar: a.lugar, para: a.para||'', fechaMeta: a.fechaMeta||'', notas: a.notas||'' }); setShowAhorroModal(true); };
             const saveAhorro = () => {
@@ -7169,26 +7178,38 @@ ${invoice.items.map(item => `
             }
             // Estados
             const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-            const [allTransactions, setAllTransactions] = useState(() => {
-                const saved = localStorage.getItem('cashTransactionsMultiYear');
-                return saved ? JSON.parse(saved) : {};
-            });
+            const [allTransactions, setAllTransactions] = useState({});
+            const [allTxLoaded, setAllTxLoaded] = useState(false);
+            useEffect(() => {
+                dbGetKey('cash_transactions', 'multiyear').then(d => {
+                    if (d) setAllTransactions(d);
+                    else {
+                        const ls = localStorage.getItem('cashTransactionsMultiYear');
+                        if (ls) setAllTransactions(JSON.parse(ls));
+                    }
+                    setAllTxLoaded(true);
+                });
+            }, []);
             const [showTransactionModal, setShowTransactionModal] = useState(false);
             const [showIngresoModal, setShowIngresoModal] = useState(false);
             const [ingresoForm, setIngresoForm] = useState({ fecha: new Date().toISOString().split('T')[0], origen: 'BANK', monto: '', notas: '' });
             const [editingTransaction, setEditingTransaction] = useState(null);
             const [viewMode, setViewMode] = useState('table'); // 'table', 'summary', 'stats', 'note
             const [ahorros, setAhorros] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaAhorros') || '[]'); } catch(e) { return []; } });
+            useEffect(() => { dbGetKey('cash_planning','ahorros').then(d => { if(d) setAhorros(d); }); }, []);
             const [showAhorroModal, setShowAhorroModal] = useState(false);
             const [editingAhorro, setEditingAhorro] = useState(null);
             const [ahorroForm, setAhorroForm] = useState({ nombre: '', meta: '', moneda: 'CZK', lugar: 'BANK', para: '', fechaMeta: '', notas: '' });
             const [planeacionTab, setPlaneacionTab] = useState('fondos');
             const [acreditaciones, setAcreditaciones] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaAcreditaciones') || '[]'); } catch(e) { return []; } });
+            useEffect(() => { dbGetKey('cash_planning','acreditaciones').then(d => { if(d) setAcreditaciones(d); }); }, []);
             const [showAcreditacionModal, setShowAcreditacionModal] = useState(false);
             const [editingAcreditacion, setEditingAcreditacion] = useState(null);
             const [acreditacionForm, setAcreditacionForm] = useState({ origen: '', fecha: new Date().toISOString().split('T')[0], monto: '', moneda: 'CZK', notas: '' }); // 'fondos' | 'ahorro'
             const [fondos, setFondos] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaFondos') || '[]'); } catch(e) { return []; } });
+            useEffect(() => { dbGetKey('cash_planning','fondos').then(d => { if(d) setFondos(d); }); }, []);
             const [lugares, setLugares] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaLugares') || JSON.stringify(['Banco Fio', 'Efectivo', 'Revolut'])); } catch(e) { return ['Banco Fio', 'Efectivo', 'Revolut']; } });
+            useEffect(() => { dbGetKey('cash_planning','lugares').then(d => { if(d) setLugares(d); }); }, []);
             const [showFondoModal, setShowFondoModal] = useState(false);
             const [editingFondo, setEditingFondo] = useState(null);
             const [fondoForm, setFondoForm] = useState({ lugar: '', monto: '', moneda: 'CZK', notas: '' });
@@ -7297,6 +7318,7 @@ ${invoice.items.map(item => `
             // Guardar en localStorage cuando cambian las transacciones
             useEffect(() => {
                 localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(allTransactions));
+                if (allTxLoaded) dbUpsertOne('cash_transactions', 'multiyear', allTransactions);
             }, [allTransactions]);
 
             // Escuchar cambios desde Administrador de Proveedores (sync inverso)
@@ -10628,6 +10650,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             });
             useEffect(() => {
                 localStorage.setItem('payrollMonthlyData', JSON.stringify(payrollData));
+                dbUpsertOne('payroll_monthly', 'main', payrollData);
             }, [payrollData]);
 
             const now = new Date();
@@ -10641,6 +10664,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             });
             useEffect(() => {
                 localStorage.setItem('horasAjustesData', JSON.stringify(horasAjustes));
+                dbUpsertOne('payroll_hours','main',horasAjustes);
             }, [horasAjustes]);
             const [editingHorasCell, setEditingHorasCell] = useState(null);
             const [editingHorasVal, setEditingHorasVal] = useState('');
@@ -10770,6 +10794,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             });
             useEffect(() => {
                 localStorage.setItem('seguroMedicoData', JSON.stringify(seguroData));
+                dbUpsertOne('payroll_insurance', 'main', seguroData);
             }, [seguroData]);
 
             const seguroKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
