@@ -138,10 +138,16 @@
             } catch(e) { console.warn('Supabase preload error:', e); }
         }
 
+        // Promise global que se resuelve cuando Supabase está listo
+        window.__supabaseReadyPromise = new Promise(resolve => {
+            window.__resolveSupabase = resolve;
+        });
+
         async function init() {
             await migrarLocalStorage();
             await precargarDesdeSupabase();
             window.__supabaseReady = true;
+            window.__resolveSupabase();
         }
         init();
     </script>
@@ -20983,15 +20989,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         // Esperar a que Supabase precargue antes de renderizar
         async function arrancarApp() {
-            // Si init() ya terminó, window.__supabaseReady es true
-            if (!window.__supabaseReady) {
-                await new Promise(resolve => {
-                    const check = setInterval(() => {
-                        if (window.__supabaseReady) { clearInterval(check); resolve(); }
-                    }, 50);
-                    // Fallback: máximo 8 segundos
-                    setTimeout(() => { clearInterval(check); resolve(); }, 8000);
-                });
+            // Esperar a la Promise global de Supabase (con fallback de 10s)
+            if (window.__supabaseReadyPromise) {
+                await Promise.race([
+                    window.__supabaseReadyPromise,
+                    new Promise(resolve => setTimeout(resolve, 10000))
+                ]);
             }
             ReactDOM.render(<Malagestion />, document.getElementById('root'));
         }
