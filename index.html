@@ -7182,8 +7182,10 @@ ${invoice.items.map(item => `
             const [allTxLoaded, setAllTxLoaded] = useState(false);
             useEffect(() => {
                 dbGetKey('cash_transactions', 'multiyear').then(d => {
-                    if (d) setAllTransactions(d);
-                    else {
+                    if (d) {
+                        setAllTransactions(d);
+                        localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(d));
+                    } else {
                         const ls = localStorage.getItem('cashTransactionsMultiYear');
                         if (ls) setAllTransactions(JSON.parse(ls));
                     }
@@ -10654,6 +10656,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 return saved ? JSON.parse(saved) : {};
             });
             useEffect(() => {
+                dbGetKey('payroll_monthly', 'main').then(d => {
+                    if (d && Object.keys(d).length > 0) {
+                        setPayrollData(d);
+                        localStorage.setItem('payrollMonthlyData', JSON.stringify(d));
+                    }
+                });
+            }, []);
+            useEffect(() => {
                 localStorage.setItem('payrollMonthlyData', JSON.stringify(payrollData));
                 dbUpsertOne('payroll_monthly', 'main', payrollData);
             }, [payrollData]);
@@ -10667,6 +10677,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 try { return JSON.parse(localStorage.getItem('horasAjustesData') || '{}') || {}; }
                 catch(e) { return {}; }
             });
+            useEffect(() => {
+                dbGetKey('payroll_hours', 'main').then(d => {
+                    if (d && Object.keys(d).length > 0) {
+                        setHorasAjustes(d);
+                        localStorage.setItem('horasAjustesData', JSON.stringify(d));
+                    }
+                });
+            }, []);
             useEffect(() => {
                 localStorage.setItem('horasAjustesData', JSON.stringify(horasAjustes));
                 dbUpsertOne('payroll_hours','main',horasAjustes);
@@ -10797,6 +10815,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const saved = localStorage.getItem('seguroMedicoData');
                 return saved ? JSON.parse(saved) : {};
             });
+            useEffect(() => {
+                dbGetKey('payroll_insurance', 'main').then(d => {
+                    if (d && Object.keys(d).length > 0) {
+                        setSeguroData(d);
+                        localStorage.setItem('seguroMedicoData', JSON.stringify(d));
+                    }
+                });
+            }, []);
             useEffect(() => {
                 localStorage.setItem('seguroMedicoData', JSON.stringify(seguroData));
                 dbUpsertOne('payroll_insurance', 'main', seguroData);
