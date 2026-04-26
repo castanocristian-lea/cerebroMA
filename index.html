@@ -54,7 +54,7 @@
 
         // ── Migración one-time desde localStorage ────────────────
         async function migrarLocalStorage() {
-            if (localStorage.getItem('supa_migrated_v1')) return;
+            if (localStorage.getItem('supa_migrated_v1')) return false;
             console.log('Migrando datos a Supabase...');
             const maps = [
                 { ls: 'employees',             table: 'employees',         type: 'array' },
@@ -91,10 +91,20 @@
             }
             localStorage.setItem('supa_migrated_v1', '1');
             console.log('Migración completa');
+            return true;
         }
 
         // ── Precargar TODO desde Supabase en localStorage antes de que React arranque
         async function precargarDesdeSupabase() {
+            // Solo sobreescribe si localStorage está vacío o tiene dato vacío
+            const lsSet = (key, val) => {
+                const existing = localStorage.getItem(key);
+                const isEmpty = !existing || existing === '{}' || existing === '[]' || existing === 'null';
+                if (isEmpty && val) {
+                    const str = JSON.stringify(val);
+                    if (str !== '{}' && str !== '[]') localStorage.setItem(key, str);
+                }
+            };
             try {
                 const [emp, payN, cashN, cashTx, calEv, calH, calCfg, creds, sysU,
                        payM, payP, payH, payIns, cashPlan] = await Promise.all([
@@ -113,15 +123,15 @@
                     _sb.from('payroll_insurance').select('*').eq('id','main').maybeSingle(),
                     _sb.from('cash_planning').select('*'),
                 ]);
-                if (emp.data?.length) localStorage.setItem('employees', JSON.stringify(emp.data.map(r=>r.data)));
-                if (payN.data?.length) localStorage.setItem('payrollNotes', JSON.stringify(payN.data.map(r=>r.data)));
-                if (cashN.data?.length) localStorage.setItem('cashNotes', JSON.stringify(cashN.data.map(r=>r.data)));
-                if (calEv.data?.length) localStorage.setItem('calendarioEventos', JSON.stringify(calEv.data.map(r=>r.data)));
-                if (calH.data?.length) localStorage.setItem('calendarioHoras', JSON.stringify(calH.data.map(r=>r.data)));
-                if (creds.data?.length) localStorage.setItem('credencialesData', JSON.stringify(creds.data.map(r=>r.data)));
-                if (sysU.data?.length) localStorage.setItem('systemUsers', JSON.stringify(sysU.data.map(r=>r.data)));
+                if (emp.data?.length) lsSet('employees', emp.data.map(r=>r.data));
+                if (payN.data?.length) lsSet('payrollNotes', payN.data.map(r=>r.data));
+                if (cashN.data?.length) lsSet('cashNotes', cashN.data.map(r=>r.data));
+                if (calEv.data?.length) lsSet('calendarioEventos', calEv.data.map(r=>r.data));
+                if (calH.data?.length) lsSet('calendarioHoras', calH.data.map(r=>r.data));
+                if (creds.data?.length) lsSet('credencialesData', creds.data.map(r=>r.data));
+                if (sysU.data?.length) lsSet('systemUsers', sysU.data.map(r=>r.data));
                 const txRow = cashTx.data?.find(r=>r.id==='multiyear');
-                if (txRow?.data) localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(txRow.data));
+                if (txRow?.data) lsSet('cashTransactionsMultiYear', txRow.data);
                 if (calCfg.data) calCfg.data.forEach(r => {
                     if (r.id==='ubicaciones') localStorage.setItem('calendarioUbicaciones', JSON.stringify(r.data));
                     if (r.id==='tipos') localStorage.setItem('calendarioTipos', JSON.stringify(r.data));
@@ -130,10 +140,10 @@
                     const keys = {ahorros:'cajaAhorros',acreditaciones:'cajaAcreditaciones',fondos:'cajaFondos',lugares:'cajaLugares'};
                     if (keys[r.id]) localStorage.setItem(keys[r.id], JSON.stringify(r.data));
                 });
-                if (payM.data?.data) localStorage.setItem('payrollMonthlyData', JSON.stringify(payM.data.data));
-                if (payP.data?.data) localStorage.setItem('sueldosPendientesData', JSON.stringify(payP.data.data));
-                if (payH.data?.data) localStorage.setItem('horasAjustesData', JSON.stringify(payH.data.data));
-                if (payIns.data?.data) localStorage.setItem('seguroMedicoData', JSON.stringify(payIns.data.data));
+                lsSet('payrollMonthlyData', payM.data?.data);
+                lsSet('sueldosPendientesData', payP.data?.data);
+                lsSet('horasAjustesData', payH.data?.data);
+                lsSet('seguroMedicoData', payIns.data?.data);
                 console.log('✅ Datos precargados desde Supabase');
             } catch(e) { console.warn('Supabase preload error:', e); }
         }
@@ -144,8 +154,11 @@
         });
 
         async function init() {
-            await migrarLocalStorage();
-            await precargarDesdeSupabase();
+            const acabaDeMigrar = await migrarLocalStorage();
+            // Si acaba de migrar, el localStorage ya tiene los datos frescos — no precargar de Supabase
+            if (!acabaDeMigrar) {
+                await precargarDesdeSupabase();
+            }
             window.__supabaseReady = true;
             window.__resolveSupabase();
         }
@@ -1604,6 +1617,9 @@ ${invoice.items.map(item => `
                                 const str = typeof value === 'string' ? value : JSON.stringify(value);
                                 localStorage.setItem(key, str);
                             }
+
+                            // Forzar re-migración a Supabase en el próximo arranque
+                            localStorage.removeItem('supa_migrated_v1');
 
                             alert('✅ Backup restaurado exitosamente. La página se recargará.');
                             window.location.reload();
@@ -10709,18 +10725,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // ════════════════════════════════════════════════════
             // SEGMENTO 2 – PAGOS MENSUALES
             // ════════════════════════════════════════════════════
-            const [payrollData, setPayrollData] = useState({});
-            const [payrollDataLoaded, setPayrollDataLoaded] = useState(false);
+            const [payrollData, setPayrollData] = useState(() => {
+                try { const ls = localStorage.getItem('payrollMonthlyData'); return ls ? JSON.parse(ls) : {}; } catch(e) { return {}; }
+            });
+            const [payrollDataLoaded, setPayrollDataLoaded] = useState(true);
             useEffect(() => {
                 dbGetKey('payroll_monthly', 'main').then(d => {
-                    if (d && Object.keys(d).length > 0) {
-                        setPayrollData(d);
-                        localStorage.setItem('payrollMonthlyData', JSON.stringify(d));
-                    } else {
-                        const ls = localStorage.getItem('payrollMonthlyData');
-                        if (ls) setPayrollData(JSON.parse(ls));
-                    }
-                    setPayrollDataLoaded(true);
+                    if (d && Object.keys(d).length > 0 && Object.keys(payrollData).length === 0) setPayrollData(d);
                 });
             }, []);
             useEffect(() => {
@@ -10733,17 +10744,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [selectedMonth, setSelectedMonth] = useState(now.getMonth()); // 0-based
             const [horasYear, setHorasYear] = useState(now.getFullYear());
             // Ajustes manuales de horas: { 'empId_year_month': horas | null }
-            const [horasAjustes, setHorasAjustes] = useState({});
-            const [horasLoaded, setHorasLoaded] = useState(false);
+            const [horasAjustes, setHorasAjustes] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('horasAjustesData') || '{}') || {}; } catch(e) { return {}; }
+            });
             useEffect(() => {
                 dbGetKey('payroll_hours', 'main').then(d => {
-                    if (d && Object.keys(d).length > 0) {
-                        setHorasAjustes(d);
-                        localStorage.setItem('horasAjustesData', JSON.stringify(d));
-                    } else {
-                        try { const ls = localStorage.getItem('horasAjustesData'); if(ls) setHorasAjustes(JSON.parse(ls)||{}); } catch(e){}
-                    }
-                    setHorasLoaded(true);
+                    if (d && Object.keys(d).length > 0 && Object.keys(horasAjustes).length === 0) setHorasAjustes(d);
                 });
             }, []);
             useEffect(() => {
@@ -10816,11 +10822,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [sueldosYear, setSueldosYear] = useState(now.getFullYear());
 
             // ── SUELDOS PENDIENTES ────────────────────────────────────────
-            const [pendientesData, setPendientesData] = useState([]);
+            const [pendientesData, setPendientesData] = useState(() => {
+                try { const s = localStorage.getItem('sueldosPendientesData'); return s ? JSON.parse(s) : []; } catch(e) { return []; }
+            });
             useEffect(() => {
                 dbGetKey('payroll_monthly', 'pendientes').then(d => {
-                    if (d && d.length > 0) { setPendientesData(d); localStorage.setItem('sueldosPendientesData', JSON.stringify(d)); }
-                    else { const s = localStorage.getItem('sueldosPendientesData'); if(s) try { setPendientesData(JSON.parse(s)); } catch(e){} }
+                    if (d && d.length > 0 && pendientesData.length === 0) setPendientesData(d);
                 });
             }, []);
             useEffect(() => {
@@ -10879,22 +10886,18 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // ── SEGUROS MÉDICOS ─────────────────────────────────────────
             const [seguroData, setSeguroData] = useState(() => {
-                return {};
+                try { const ls = localStorage.getItem('seguroMedicoData'); return ls ? JSON.parse(ls) : {}; } catch(e) { return {}; }
             });
-            const [seguroLoaded, setSeguroLoaded] = useState(false);
             useEffect(() => {
+                // Solo actualizar si Supabase tiene datos más frescos que el localStorage
                 dbGetKey('payroll_insurance', 'main').then(d => {
-                    if (d && Object.keys(d).length > 0) {
+                    if (d && Object.keys(d).length > 0 && Object.keys(seguroData).length === 0) {
                         setSeguroData(d);
-                        localStorage.setItem('seguroMedicoData', JSON.stringify(d));
-                    } else {
-                        const ls = localStorage.getItem('seguroMedicoData');
-                        if (ls) try { setSeguroData(JSON.parse(ls)); } catch(e){}
                     }
-                    setSeguroLoaded(true);
                 });
             }, []);
             useEffect(() => {
+                if (Object.keys(seguroData).length === 0) return;
                 localStorage.setItem('seguroMedicoData', JSON.stringify(seguroData));
                 dbUpsertOne('payroll_insurance', 'main', seguroData);
             }, [seguroData]);
