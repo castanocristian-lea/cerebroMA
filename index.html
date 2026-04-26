@@ -77,6 +77,21 @@
                 { ls: 'horasAjustesData',      table: 'payroll_hours',     type: 'val',   key: 'main' },
                 { ls: 'payrollMonthlyData',    table: 'payroll_monthly',   type: 'val',   key: 'main' },
                 { ls: 'sueldosPendientesData', table: 'payroll_monthly',   type: 'val',   key: 'pendientes' },
+                { ls: 'notasMes',              table: 'payroll_monthly',   type: 'val',   key: 'notasMes' },
+                { ls: 'salarioOverride',       table: 'payroll_monthly',   type: 'val',   key: 'salarioOverride' },
+                { ls: 'suppliersInfo',         table: 'suppliers',         type: 'val',   key: 'main' },
+                { ls: 'categories',            table: 'suppliers',         type: 'val',   key: 'categories' },
+                { ls: 'invoices',              table: 'suppliers',         type: 'val',   key: 'invoices' },
+                { ls: 'invNotes',              table: 'suppliers',         type: 'val',   key: 'invNotes' },
+                { ls: 'taxRates',              table: 'suppliers',         type: 'val',   key: 'taxRates' },
+                { ls: 'salesInvoices',         table: 'suppliers',         type: 'val',   key: 'salesInvoices' },
+                { ls: 'salesProducts',         table: 'suppliers',         type: 'val',   key: 'salesProducts' },
+                { ls: 'salesHolders',          table: 'suppliers',         type: 'val',   key: 'salesHolders' },
+                { ls: 'salesClients',          table: 'suppliers',         type: 'val',   key: 'salesClients' },
+                { ls: 'cajaRubrosCosto',       table: 'cash_planning',     type: 'val',   key: 'rubrosCosto' },
+                { ls: 'cajaFacturasPlaneadas', table: 'cash_planning',     type: 'val',   key: 'facturasPlaneadas' },
+                { ls: 'cajaAsignaciones',      table: 'cash_planning',     type: 'val',   key: 'asignaciones' },
+                { ls: 'cajaSueldosPlaneados',  table: 'cash_planning',     type: 'val',   key: 'sueldosPlaneados' },
                 { ls: 'credencialesData',      table: 'credentials',       type: 'array' },
                 { ls: 'systemUsers',           table: 'system_users',      type: 'array' },
             ];
@@ -129,7 +144,12 @@
                 if (calEv.data?.length) lsSet('calendarioEventos', calEv.data.map(r=>r.data));
                 if (calH.data?.length) lsSet('calendarioHoras', calH.data.map(r=>r.data));
                 if (creds.data?.length) lsSet('credencialesData', creds.data.map(r=>r.data));
-                if (sysU.data?.length) lsSet('systemUsers', sysU.data.map(r=>r.data));
+                if (sysU.data?.length) {
+                    lsSet('systemUsers', sysU.data.map(r=>r.data));
+                    console.log('👤 systemUsers cargados:', sysU.data.length);
+                } else {
+                    console.log('⚠️ systemUsers vacío en Supabase');
+                }
                 const txRow = cashTx.data?.find(r=>r.id==='multiyear');
                 if (txRow?.data) lsSet('cashTransactionsMultiYear', txRow.data);
                 if (calCfg.data) calCfg.data.forEach(r => {
@@ -144,6 +164,28 @@
                 lsSet('sueldosPendientesData', payP.data?.data);
                 lsSet('horasAjustesData', payH.data?.data);
                 lsSet('seguroMedicoData', payIns.data?.data);
+                // Precargar datos adicionales
+                const extraKeys = [
+                    ['payroll_monthly','notasMes','notasMes'],
+                    ['payroll_monthly','salarioOverride','salarioOverride'],
+                    ['suppliers','main','suppliersInfo'],
+                    ['suppliers','categories','categories'],
+                    ['suppliers','invoices','invoices'],
+                    ['suppliers','invNotes','invNotes'],
+                    ['suppliers','taxRates','taxRates'],
+                    ['suppliers','salesInvoices','salesInvoices'],
+                    ['suppliers','salesProducts','salesProducts'],
+                    ['suppliers','salesHolders','salesHolders'],
+                    ['suppliers','salesClients','salesClients'],
+                    ['cash_planning','rubrosCosto','cajaRubrosCosto'],
+                    ['cash_planning','facturasPlaneadas','cajaFacturasPlaneadas'],
+                    ['cash_planning','asignaciones','cajaAsignaciones'],
+                    ['cash_planning','sueldosPlaneados','cajaSueldosPlaneados'],
+                ];
+                await Promise.all(extraKeys.map(async ([table, key, lsKey]) => {
+                    const r = await _sb.from(table).select('data').eq('id', key).maybeSingle();
+                    if (r.data?.data) lsSet(lsKey, r.data.data);
+                }));
                 console.log('✅ Datos precargados desde Supabase');
             } catch(e) { console.warn('Supabase preload error:', e); }
         }
@@ -1651,6 +1693,7 @@ ${invoice.items.map(item => `
                     };
                     systemUsers.push(defaultAdmin);
                     localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+                dbSetArray('system_users', systemUsers);
                 }
                 
                 // Buscar usuario por nombre
@@ -4558,6 +4601,7 @@ ${invoice.items.map(item => `
 
             const writeCaja = (allTx) => {
                 localStorage.setItem(CAJA_KEY, JSON.stringify(allTx));
+                dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY, newValue: JSON.stringify(allTx) }));
             };
             const syncPagoToCaja = (prestamo, pago, cajaId, isDelete = false) => {
@@ -7343,9 +7387,8 @@ ${invoice.items.map(item => `
             });
             useEffect(() => { localStorage.setItem('cajaRubrosCosto', JSON.stringify(tiposCosto)); }, [tiposCosto]);
             useEffect(() => {
-                if (!cashNotesLoaded) return;
-                dbSetArray('cash_notes', cashNotes);
                 localStorage.setItem('cashNotes', JSON.stringify(cashNotes));
+                if (cashNotes.length > 0) dbSetArray('cash_notes', cashNotes);
             }, [cashNotes]);
 
             // Funciones de Notas
@@ -7391,10 +7434,12 @@ ${invoice.items.map(item => `
             const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
                           'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
             
-            // Guardar en localStorage cuando cambian las transacciones
+            // Guardar en localStorage y Supabase cuando cambian las transacciones
             useEffect(() => {
                 localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(allTransactions));
-                if (allTxLoaded) dbUpsertOne('cash_transactions', 'multiyear', allTransactions);
+                if (Object.keys(allTransactions).length > 0) {
+                    dbUpsertOne('cash_transactions', 'multiyear', allTransactions);
+                }
             }, [allTransactions]);
 
             // Escuchar cambios desde Administrador de Proveedores (sync inverso)
@@ -7404,6 +7449,7 @@ ${invoice.items.map(item => `
                         try {
                             const fresh = JSON.parse(e.newValue);
                             setAllTransactions(fresh);
+                            dbUpsertOne('cash_transactions', 'multiyear', fresh);
                         } catch(err) {}
                     }
                 };
@@ -10132,9 +10178,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [editingPayrollNote, setEditingPayrollNote] = useState(null);
             const [payrollNoteForm, setPayrollNoteForm] = useState({ fecha: new Date().toISOString().split('T')[0], fechaObjetivo: '', titulo: '', texto: '' });
             useEffect(() => {
-                if (!payNotesLoaded) return;
-                dbSetArray('payroll_notes', payrollNotes);
                 localStorage.setItem('payrollNotes', JSON.stringify(payrollNotes));
+                if (payrollNotes.length > 0) dbSetArray('payroll_notes', payrollNotes);
             }, [payrollNotes]);
             const openNewPayrollNote = () => { setEditingPayrollNote(null); setPayrollNoteForm({ fecha: new Date().toISOString().split('T')[0], fechaObjetivo: '', titulo: '', texto: '' }); setShowPayrollNoteModal(true); };
             const openEditPayrollNote = (note) => { setEditingPayrollNote(note); setPayrollNoteForm({ fecha: note.fecha, fechaObjetivo: note.fechaObjetivo || '', titulo: note.titulo || '', texto: note.texto }); setShowPayrollNoteModal(true); };
@@ -10156,7 +10201,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [empLoaded, setEmpLoaded] = useState(false);
             useEffect(() => { dbGetAll('employees').then(d => { setEmployees(d||[]); setEmpLoaded(true); }); }, []);
             useEffect(() => {
-                if (!empLoaded) return;
+                if (employees.length === 0) return;
                 dbSetArray('employees', employees);
                 localStorage.setItem('employees', JSON.stringify(employees));
             }, [employees]);
@@ -10736,7 +10781,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             }, []);
             useEffect(() => {
                 localStorage.setItem('payrollMonthlyData', JSON.stringify(payrollData));
-                dbUpsertOne('payroll_monthly', 'main', payrollData);
+                if (Object.keys(payrollData).length > 0) dbUpsertOne('payroll_monthly', 'main', payrollData);
             }, [payrollData]);
 
             const now = new Date();
@@ -10791,7 +10836,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const s = localStorage.getItem('salarioOverride');
                 return s ? JSON.parse(s) : {};
             });
-            useEffect(() => { localStorage.setItem('salarioOverride', JSON.stringify(salarioOverride)); }, [salarioOverride]);
+            useEffect(() => { localStorage.setItem('salarioOverride', JSON.stringify(salarioOverride));
+                dbUpsertOne('payroll_monthly', 'salarioOverride', salarioOverride); }, [salarioOverride]);
             const overrideKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
             const getSalarioMes = (emp) => {
                 const k = overrideKey(emp.id);
@@ -10803,7 +10849,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const s = localStorage.getItem('notasMes');
                 return s ? JSON.parse(s) : {};
             });
-            useEffect(() => { localStorage.setItem('notasMes', JSON.stringify(notasMes)); }, [notasMes]);
+            useEffect(() => { localStorage.setItem('notasMes', JSON.stringify(notasMes));
+                dbUpsertOne('payroll_monthly', 'notasMes', notasMes); }, [notasMes]);
             const notaKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
             const getNota = (empId) => notasMes[notaKey(empId)] || '';
 
@@ -10897,9 +10944,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
             useEffect(() => {
-                if (Object.keys(seguroData).length === 0) return;
                 localStorage.setItem('seguroMedicoData', JSON.stringify(seguroData));
-                dbUpsertOne('payroll_insurance', 'main', seguroData);
+                if (Object.keys(seguroData).length > 0) dbUpsertOne('payroll_insurance', 'main', seguroData);
             }, [seguroData]);
 
             const seguroKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
@@ -10978,6 +11024,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     year: yr
                 });
                 localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
+                dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
 
                 setShowSeguroModal(false);
@@ -11064,6 +11111,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     });
                 }
                 localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
+                dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
             };
 
@@ -13921,18 +13969,22 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Guardar en localStorage
             useEffect(() => {
                 localStorage.setItem('salesProducts', JSON.stringify(products));
+                dbUpsertOne('suppliers', 'salesProducts', products);
             }, [products]);
             
             useEffect(() => {
                 localStorage.setItem('salesHolders', JSON.stringify(holders));
+                dbUpsertOne('suppliers', 'salesHolders', holders);
             }, [holders]);
             
             useEffect(() => {
                 localStorage.setItem('salesClients', JSON.stringify(clients));
+                dbUpsertOne('suppliers', 'salesClients', clients);
             }, [clients]);
             
             useEffect(() => {
                 localStorage.setItem('salesInvoices', JSON.stringify(salesInvoices));
+                dbUpsertOne('suppliers', 'salesInvoices', salesInvoices);
             }, [salesInvoices]);
             
             // Funciones para Productos
@@ -16922,8 +16974,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const saved = localStorage.getItem('suppliersInfo');
                 return saved ? JSON.parse(saved) : {};
             });
-            useEffect(() => { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); }, [suppliersInfo]);
-            useEffect(() => { localStorage.setItem('categories', JSON.stringify(categories)); }, [categories]);
+            useEffect(() => { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo));
+                dbUpsertOne('suppliers', 'main', suppliersInfo); }, [suppliersInfo]);
+            useEffect(() => { localStorage.setItem('categories', JSON.stringify(categories));
+                dbUpsertOne('suppliers', 'categories', categories); }, [categories]);
             const openNewInvNote = () => {
                 setEditingInvNote(null);
                 setInvNoteForm({ fecha: new Date().toISOString().split('T')[0], titulo: '', texto: '' });
@@ -16990,7 +17044,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [showInvNoteModal, setShowInvNoteModal] = useState(false);
             const [editingInvNote, setEditingInvNote] = useState(null);
             const [invNoteForm, setInvNoteForm] = useState({ fecha: new Date().toISOString().split('T')[0], titulo: '', texto: '' });
-            useEffect(() => { localStorage.setItem('invNotes', JSON.stringify(invNotes)); }, [invNotes]);
+            useEffect(() => { localStorage.setItem('invNotes', JSON.stringify(invNotes));
+                dbUpsertOne('suppliers', 'invNotes', invNotes); }, [invNotes]);
             
             // Estados para Settings
             const [showSettings, setShowSettings] = useState(false);
@@ -17072,6 +17127,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 };
                 allTx[year] = [...yearTx, newTx];
                 localStorage.setItem(CAJA_KEY, JSON.stringify(allTx));
+                dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY, newValue: JSON.stringify(allTx) }));
 
                 alert(`✅ Factura pagada y registrada en Caja Diaria como ${tipoCosto} · ${pagoOrigen}`);
@@ -17115,16 +17171,19 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Guardar categorías cuando cambien
             useEffect(() => {
                 localStorage.setItem('categories', JSON.stringify(categories));
+                dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
             
             // Guardar información de proveedores cuando cambie
             useEffect(() => {
                 localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo));
+                dbUpsertOne('suppliers', 'main', suppliersInfo);
             }, [suppliersInfo]);
             
             // Guardar tax rates cuando cambien
             useEffect(() => {
                 localStorage.setItem('taxRates', JSON.stringify(taxRates));
+                dbUpsertOne('suppliers', 'taxRates', taxRates);
             }, [taxRates]);
 
             // Agregar categoría
@@ -17371,6 +17430,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             window.storage.set('invoices', JSON.stringify(invoices));
                         } else {
                             localStorage.setItem('invoices', JSON.stringify(invoices));
+                dbUpsertOne('suppliers', 'invoices', invoices);
                         }
                     } catch (error) {
                         console.log('Error guardando:', error);
@@ -17381,6 +17441,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Guardar categorías en localStorage
             useEffect(() => {
                 localStorage.setItem('categories', JSON.stringify(categories));
+                dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
 
             // Escaneo masivo eliminado - ahora solo entrada manual
