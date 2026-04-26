@@ -10651,16 +10651,18 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // ════════════════════════════════════════════════════
             // SEGMENTO 2 – PAGOS MENSUALES
             // ════════════════════════════════════════════════════
-            const [payrollData, setPayrollData] = useState(() => {
-                const saved = localStorage.getItem('payrollMonthlyData');
-                return saved ? JSON.parse(saved) : {};
-            });
+            const [payrollData, setPayrollData] = useState({});
+            const [payrollDataLoaded, setPayrollDataLoaded] = useState(false);
             useEffect(() => {
                 dbGetKey('payroll_monthly', 'main').then(d => {
                     if (d && Object.keys(d).length > 0) {
                         setPayrollData(d);
                         localStorage.setItem('payrollMonthlyData', JSON.stringify(d));
+                    } else {
+                        const ls = localStorage.getItem('payrollMonthlyData');
+                        if (ls) setPayrollData(JSON.parse(ls));
                     }
+                    setPayrollDataLoaded(true);
                 });
             }, []);
             useEffect(() => {
@@ -10673,16 +10675,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [selectedMonth, setSelectedMonth] = useState(now.getMonth()); // 0-based
             const [horasYear, setHorasYear] = useState(now.getFullYear());
             // Ajustes manuales de horas: { 'empId_year_month': horas | null }
-            const [horasAjustes, setHorasAjustes] = useState(() => {
-                try { return JSON.parse(localStorage.getItem('horasAjustesData') || '{}') || {}; }
-                catch(e) { return {}; }
-            });
+            const [horasAjustes, setHorasAjustes] = useState({});
+            const [horasLoaded, setHorasLoaded] = useState(false);
             useEffect(() => {
                 dbGetKey('payroll_hours', 'main').then(d => {
                     if (d && Object.keys(d).length > 0) {
                         setHorasAjustes(d);
                         localStorage.setItem('horasAjustesData', JSON.stringify(d));
+                    } else {
+                        try { const ls = localStorage.getItem('horasAjustesData'); if(ls) setHorasAjustes(JSON.parse(ls)||{}); } catch(e){}
                     }
+                    setHorasLoaded(true);
                 });
             }, []);
             useEffect(() => {
@@ -10812,15 +10815,19 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // ── SEGUROS MÉDICOS ─────────────────────────────────────────
             const [seguroData, setSeguroData] = useState(() => {
-                const saved = localStorage.getItem('seguroMedicoData');
-                return saved ? JSON.parse(saved) : {};
+                return {};
             });
+            const [seguroLoaded, setSeguroLoaded] = useState(false);
             useEffect(() => {
                 dbGetKey('payroll_insurance', 'main').then(d => {
                     if (d && Object.keys(d).length > 0) {
                         setSeguroData(d);
                         localStorage.setItem('seguroMedicoData', JSON.stringify(d));
+                    } else {
+                        const ls = localStorage.getItem('seguroMedicoData');
+                        if (ls) try { setSeguroData(JSON.parse(ls)); } catch(e){}
                     }
+                    setSeguroLoaded(true);
                 });
             }, []);
             useEffect(() => {
@@ -11476,7 +11483,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     {/* ══════════════════════════════════════════════════════
                         SEGMENTO 2 – PAGOS MENSUALES
                     ══════════════════════════════════════════════════════ */}
-                    {activeSegment === 'pagos' && (
+                    {activeSegment === 'pagos' && !payrollDataLoaded && (
+                        <div className="flex items-center justify-center py-20">
+                            <div className="text-center">
+                                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"/>
+                                <p className={`text-sm ${darkMode?'text-slate-400':'text-slate-500'}`}>Cargando pagos...</p>
+                            </div>
+                        </div>
+                    )}
+                    {activeSegment === 'pagos' && payrollDataLoaded && (
                         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
 
                             {/* Selector mes/año + buscador */}
