@@ -13,6 +13,78 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // ── Supabase client ─────────────────────────────────────
+        const SUPA_URL = 'https://cxuftcufdnofykmlkcru.supabase.co';
+        const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4dWZ0Y3VmZG5vZnlrbWxrY3J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMzQ0MDMsImV4cCI6MjA5MjcxMDQwM30.CM6ssNRpkbBaDdv8vqxyJxehfu-S2D0WnhxSZn4jT40';
+        const _sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
+        async function dbGetAll(table) {
+            const { data, error } = await _sb.from(table).select('*').order('updated_at', { ascending: true });
+            if (error) { console.error('dbGetAll', table, error); return []; }
+            return data.map(r => r.data);
+        }
+        async function dbGetKey(table, key) {
+            const { data, error } = await _sb.from(table).select('data').eq('id', key).single();
+            if (error) return null;
+            return data?.data ?? null;
+        }
+        async function dbSetArray(table, arr, idField = 'id') {
+            // Borrar los que ya no existen
+            const ids = arr.map(i => i[idField]);
+            if (ids.length > 0) {
+                await _sb.from(table).delete().not('id', 'in', '(' + ids.join(',') + ')');
+            } else {
+                await _sb.from(table).delete().neq('id', -1);
+                return;
+            }
+            const rows = arr.map(item => ({ id: item[idField], data: item, updated_at: new Date().toISOString() }));
+            const { error } = await _sb.from(table).upsert(rows, { onConflict: 'id' });
+            if (error) console.error('dbSetArray', table, error);
+        }
+        async function dbUpsertOne(table, id, item) {
+            const { error } = await _sb.from(table).upsert({ id, data: item, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+            if (error) console.error('dbUpsertOne', table, error);
+        }
+        async function dbDeleteOne(table, id) {
+            const { error } = await _sb.from(table).delete().eq('id', id);
+            if (error) console.error('dbDeleteOne', table, error);
+        }
+
+        // ── Migración one-time desde localStorage ────────────────
+        async function migrarLocalStorage() {
+            if (localStorage.getItem('supa_migrated_v1')) return;
+            console.log('Migrando datos a Supabase...');
+            const maps = [
+                { ls: 'employees',             table: 'employees',         type: 'array' },
+                { ls: 'payrollMonthlyData',    table: 'payroll_monthly',   type: 'obj',   key: 'main' },
+                { ls: 'horasAjustesData',      table: 'payroll_hours',     type: 'obj',   key: 'main' },
+                { ls: 'seguroMedicoData',      table: 'payroll_insurance', type: 'obj',   key: 'main' },
+                { ls: 'payrollNotes',          table: 'payroll_notes',     type: 'array' },
+                { ls: 'cashTransactions',      table: 'cash_transactions', type: 'array' },
+                { ls: 'cashNotes',             table: 'cash_notes',        type: 'array' },
+                { ls: 'calendarioEventos',     table: 'calendar_events',   type: 'array' },
+                { ls: 'calendarioHoras',       table: 'calendar_hours',    type: 'array' },
+                { ls: 'calendarioUbicaciones', table: 'calendar_config',   type: 'val',   key: 'ubicaciones' },
+                { ls: 'calendarioTipos',       table: 'calendar_config',   type: 'val',   key: 'tipos' },
+                { ls: 'credencialesData',      table: 'credentials',       type: 'array' },
+                { ls: 'systemUsers',           table: 'system_users',      type: 'array' },
+            ];
+            for (const m of maps) {
+                const raw = localStorage.getItem(m.ls);
+                if (!raw) continue;
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (m.type === 'array') await dbSetArray(m.table, parsed);
+                    else await dbUpsertOne(m.table, m.key, parsed);
+                } catch(e) { console.warn('Error migrando', m.ls, e); }
+            }
+            localStorage.setItem('supa_migrated_v1', '1');
+            console.log('Migración completa');
+        }
+        migrarLocalStorage();
+    </script>
     <script>
         // Configurar PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -3072,13 +3144,21 @@ ${invoice.items.map(item => `
             // ── Estado ─────────────────────────────────────────────────────
             const [view, setView] = React.useState('semana'); // 'dia' | 'semana' | 'mes' | 'horas'
             const [currentDate, setCurrentDate] = React.useState(new Date());
-            const [eventos, setEventos] = React.useState(() => {
-                try { return JSON.parse(localStorage.getItem('calendarioEventos') || '[]'); } catch { return []; }
-            });
-            const [registrosHoras, setRegistrosHoras] = React.useState(() => {
-                try { return JSON.parse(localStorage.getItem('calendarioHoras') || '[]'); } catch { return []; }
-            });
-            React.useEffect(() => { localStorage.setItem('calendarioHoras', JSON.stringify(registrosHoras)); }, [registrosHoras]);
+            const [eventos, setEventos] = React.useState([]);
+            const [evLoaded, setEvLoaded] = React.useState(false);
+            React.useEffect(() => {
+                dbGetAll('calendar_events').then(data => { setEventos(data || []); setEvLoaded(true); });
+            }, []);
+            const [registrosHoras, setRegistrosHoras] = React.useState([]);
+            const [horasLoaded, setHorasLoaded] = React.useState(false);
+            React.useEffect(() => {
+                dbGetAll('calendar_hours').then(data => { setRegistrosHoras(data || []); setHorasLoaded(true); });
+            }, []);
+            React.useEffect(() => {
+                if (!horasLoaded) return;
+                dbSetArray('calendar_hours', registrosHoras);
+                localStorage.setItem('calendarioHoras', JSON.stringify(registrosHoras));
+            }, [registrosHoras]);
             const [showHorasModal, setShowHorasModal] = React.useState(false);
             const [editingHoras, setEditingHoras] = React.useState(null);
             const [horasForm, setHorasForm] = React.useState({ empleadoId: '', fecha: '', horasNormales: '', horasExtras: '', horasFeriado: '', notas: '', fromEvento: false });
@@ -3131,7 +3211,11 @@ ${invoice.items.map(item => `
             const DIAS_SEMANA = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
             const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-            React.useEffect(() => { localStorage.setItem('calendarioEventos', JSON.stringify(eventos)); }, [eventos]);
+            React.useEffect(() => {
+                if (!evLoaded) return;
+                dbSetArray('calendar_events', eventos);
+                localStorage.setItem('calendarioEventos', JSON.stringify(eventos));
+            }, [eventos]);
             React.useEffect(() => { localStorage.setItem('calendarioUbicaciones', JSON.stringify(ubicaciones)); }, [ubicaciones]);
 
             const getColorEmp = (id) => {
@@ -4134,9 +4218,11 @@ ${invoice.items.map(item => `
         };
 
         const CredencialesModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
-            const [creds, setCreds] = React.useState(() => {
-                try { return JSON.parse(localStorage.getItem('credencialesData') || '[]'); } catch { return []; }
-            });
+            const [creds, setCreds] = React.useState([]);
+            const [credsLoaded, setCredsLoaded] = React.useState(false);
+            React.useEffect(() => {
+                dbGetAll('credentials').then(data => { setCreds(data || []); setCredsLoaded(true); });
+            }, []);
             const [showModal, setShowModal] = React.useState(false);
             const [editing, setEditing] = React.useState(null);
             const [search, setSearch] = React.useState('');
@@ -4144,6 +4230,8 @@ ${invoice.items.map(item => `
             const [form, setForm] = React.useState({ servicio: '', url: '', usuario: '', password: '', notas: '' });
 
             React.useEffect(() => {
+                if (!credsLoaded) return;
+                dbSetArray('credentials', creds);
                 localStorage.setItem('credencialesData', JSON.stringify(creds));
             }, [creds]);
 
@@ -7110,10 +7198,9 @@ ${invoice.items.map(item => `
             const [selectedAhorroId, setSelectedAhorroId] = useState(null);
             const [showAporteModal, setShowAporteModal] = useState(false);
             const [aporteForm, setAporteForm] = useState({ fecha: new Date().toISOString().split('T')[0], monto: '', lugar: 'BANK', notas: '' });
-            const [cashNotes, setCashNotes] = useState(() => {
-                const saved = localStorage.getItem('cashNotes');
-                return saved ? JSON.parse(saved) : [];
-            });
+            const [cashNotes, setCashNotes] = useState([]);
+            const [cashNotesLoaded, setCashNotesLoaded] = useState(false);
+            useEffect(() => { dbGetAll('cash_notes').then(d => { setCashNotes(d||[]); setCashNotesLoaded(true); }); }, []);
             const [notesSubTab, setNotesSubTab] = useState('active'); // 'active' | 'archive'
             const [showNoteModal, setShowNoteModal] = useState(false);
             const [editingNote, setEditingNote] = useState(null);
@@ -7158,7 +7245,11 @@ ${invoice.items.map(item => `
                 return saved ? JSON.parse(saved) : DEFAULT_TIPOS_COSTO;
             });
             useEffect(() => { localStorage.setItem('cajaRubrosCosto', JSON.stringify(tiposCosto)); }, [tiposCosto]);
-            useEffect(() => { localStorage.setItem('cashNotes', JSON.stringify(cashNotes)); }, [cashNotes]);
+            useEffect(() => {
+                if (!cashNotesLoaded) return;
+                dbSetArray('cash_notes', cashNotes);
+                localStorage.setItem('cashNotes', JSON.stringify(cashNotes));
+            }, [cashNotes]);
 
             // Funciones de Notas
             const openNewNote = () => {
@@ -9936,13 +10027,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // ── Notas de sueldos ───────────────────────────────────────────
             const [payrollNotes, setPayrollNotes] = useState(() => {
-                try { return JSON.parse(localStorage.getItem('payrollNotes') || '[]'); } catch { return []; }
+                []
             });
             const [payrollNotesSubTab, setPayrollNotesSubTab] = useState('active');
             const [showPayrollNoteModal, setShowPayrollNoteModal] = useState(false);
             const [editingPayrollNote, setEditingPayrollNote] = useState(null);
             const [payrollNoteForm, setPayrollNoteForm] = useState({ fecha: new Date().toISOString().split('T')[0], fechaObjetivo: '', titulo: '', texto: '' });
-            useEffect(() => { localStorage.setItem('payrollNotes', JSON.stringify(payrollNotes)); }, [payrollNotes]);
+            useEffect(() => {
+                if (!payNotesLoaded) return;
+                dbSetArray('payroll_notes', payrollNotes);
+                localStorage.setItem('payrollNotes', JSON.stringify(payrollNotes));
+            }, [payrollNotes]);
             const openNewPayrollNote = () => { setEditingPayrollNote(null); setPayrollNoteForm({ fecha: new Date().toISOString().split('T')[0], fechaObjetivo: '', titulo: '', texto: '' }); setShowPayrollNoteModal(true); };
             const openEditPayrollNote = (note) => { setEditingPayrollNote(note); setPayrollNoteForm({ fecha: note.fecha, fechaObjetivo: note.fechaObjetivo || '', titulo: note.titulo || '', texto: note.texto }); setShowPayrollNoteModal(true); };
             const savePayrollNote = () => {
@@ -9959,10 +10054,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const unresolvePayrollNote = (id) => setPayrollNotes(prev => prev.map(n => n.id === id ? { ...n, resuelta: false, fechaResolucion: null } : n));
             const deletePayrollNote = (id) => { if (confirm('¿Eliminar esta nota?')) setPayrollNotes(prev => prev.filter(n => n.id !== id)); };
             // Estados
-            const [employees, setEmployees] = useState(() => {
-                const saved = localStorage.getItem('employees');
-                return saved ? JSON.parse(saved) : [];
-            });
+            const [employees, setEmployees] = useState([]);
+            const [empLoaded, setEmpLoaded] = useState(false);
+            useEffect(() => { dbGetAll('employees').then(d => { setEmployees(d||[]); setEmpLoaded(true); }); }, []);
             const [showEmployeeModal, setShowEmployeeModal] = useState(false);
             const [editingEmployee, setEditingEmployee] = useState(null);
             const [formData, setFormData] = useState({
