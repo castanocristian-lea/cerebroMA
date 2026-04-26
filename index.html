@@ -1704,7 +1704,10 @@ ${invoice.items.map(item => `
                 }
                 
                 // Buscar usuario por nombre
-                const user = systemUsers.find(u => u.name.toLowerCase() === userInput.toLowerCase());
+                const user = systemUsers.find(u => 
+                    u.name.toLowerCase() === userInput.toLowerCase() ||
+                    (u.username && u.username.toLowerCase() === userInput.toLowerCase())
+                );
                 
                 if (!user) {
                     setPinError(true);
