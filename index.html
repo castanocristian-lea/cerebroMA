@@ -1668,7 +1668,7 @@ ${invoice.items.map(item => `
                 }
             };
             
-            const t = translations[currentLanguage];
+            const t = translations[currentLanguage] || translations['es'];
             
             const changeLanguage = (lang) => {
                 setCurrentLanguage(lang);
@@ -2217,7 +2217,7 @@ ${invoice.items.map(item => `
                                                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${darkMode ? 'bg-red-900/40' : 'bg-red-50'}`}>
                                                                 <LogOut className="w-3.5 h-3.5"/>
                                                             </div>
-                                                            <span className="text-sm font-medium">{t.logout || 'Cerrar Sesión'}</span>
+                                                            <span className="text-sm font-medium">Cerrar Sesión</span>
                                                         </button>
                                                     </div>
                                                 </div>
