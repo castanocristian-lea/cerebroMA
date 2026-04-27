@@ -1279,6 +1279,7 @@ ${invoice.items.map(item => `
             const [isUnlocked, setIsUnlocked] = useState(false);
             const [userInput, setUserInput] = useState('');
             const [pinInput, setPinInput] = useState('');
+            const [showPassword, setShowPassword] = useState(false);
             const [showUser, setShowUser] = useState(false);
             const [showPin, setShowPin] = useState(false);
             const [pinError, setPinError] = useState(false);
@@ -1323,7 +1324,7 @@ ${invoice.items.map(item => `
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'caja', 'config', 'prestamos', 'credenciales', 'calendario'];
+            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'stock'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
@@ -1794,173 +1795,118 @@ ${invoice.items.map(item => `
             // Pantalla de PIN
             if (!isUnlocked) {
                 return (
-                    <div className={`min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900'} flex items-center justify-center p-4`}>
-                        <div className={`${darkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white'} rounded-2xl shadow-2xl p-8 w-full max-w-md`}>
-                            {/* Botón de dark mode */}
-                            <div className="flex justify-end mb-4">
-                                <button
-                                    onClick={toggleDarkMode}
-                                    className={`p-2 rounded-lg ${darkMode ? 'bg-slate-700 text-yellow-400' : 'bg-slate-100 text-slate-600'}`}
-                                    title={darkMode ? t.lightMode : t.darkMode}
-                                >
-                                    {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                                </button>
-                            </div>
-                            
-                            {/* Selector de idioma */}
-                            <div className="flex justify-center gap-2 mb-6">
-                                <button
-                                    onClick={() => changeLanguage('es')}
-                                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                                        currentLanguage === 'es' 
-                                            ? 'bg-blue-600 text-white' 
-                                            : darkMode
-                                                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                                >
-                                    🇪🇸 Español
-                                </button>
-                                <button
-                                    onClick={() => changeLanguage('en')}
-                                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                                        currentLanguage === 'en' 
-                                            ? 'bg-blue-600 text-white' 
-                                            : darkMode
-                                                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                                >
-                                    🇬🇧 English
-                                </button>
-                                <button
-                                    onClick={() => changeLanguage('cz')}
-                                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                                        currentLanguage === 'cz' 
-                                            ? 'bg-blue-600 text-white' 
-                                            : darkMode
-                                                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                                >
-                                    🇨🇿 Čeština
-                                </button>
-                            </div>
-                            
-                            <div className="text-center mb-6">
-                                <div className="inline-block mb-4">
-                                    <div className={`w-20 h-20 sm:w-32 sm:h-32 mx-auto rounded-full ${darkMode ? 'bg-gradient-to-br from-purple-900 to-blue-900' : 'bg-gradient-to-br from-purple-100 to-blue-100'} p-4 flex items-center justify-center shadow-lg`}>
-                                        <svg viewBox="0 0 24 24" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            {/* Cerebro detallado */}
-                                            <path d="M12 3C10.9 3 10 3.9 10 5c0 .7.4 1.4 1 1.7C9.3 7.1 8 8.8 8 11c0 2.2 1.3 4.1 3 5v1c0 1.1-.9 2-2 2v2c2.2 0 4-1.8 4-4v-1c1.7-.9 3-2.8 3-5 0-2.2-1.3-3.9-3-4.3.6-.3 1-1 1-1.7 0-1.1-.9-2-2-2z" className={darkMode ? 'fill-purple-300' : 'fill-purple-600'} />
-                                            <circle cx="10" cy="11" r="1.5" className={darkMode ? 'fill-blue-400' : 'fill-blue-600'} />
-                                            <circle cx="14" cy="11" r="1.5" className={darkMode ? 'fill-blue-400' : 'fill-blue-600'} />
-                                            <path d="M8 11c0-.5.2-1 .5-1.4M16 11c0-.5-.2-1-.5-1.4M11 14h2" stroke={darkMode ? '#a78bfa' : '#7c3aed'} strokeWidth="1" strokeLinecap="round" />
-                                        </svg>
-                                    </div>
-                                </div>
-                                <h1 className={`text-2xl sm:text-4xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'} mb-1`}>{t.appName}</h1>
-                                <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.appSubtitle}</p>
-                            </div>
-                            
-                            <form onSubmit={handleLogin} className="space-y-4">
-                                <div>
-                                    <label className={`block text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'} mb-2`}>
-                                        {t.enterUser}
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showUser ? "text" : "password"}
-                                            value={userInput}
-                                            onChange={(e) => setUserInput(e.target.value)}
-                                            className={`w-full px-4 py-4 pr-12 border-2 rounded-xl text-center text-lg sm:text-xl font-mono tracking-wider focus:outline-none focus:ring-2 ${
-                                                pinError 
-                                                    ? 'border-red-500 bg-red-50 focus:ring-red-500' 
-                                                    : darkMode
-                                                        ? 'border-slate-600 bg-slate-700 text-white focus:ring-blue-500'
-                                                        : 'border-slate-300 focus:ring-blue-500'
-                                            }`}
-                                            placeholder="•••••"
-                                            autoComplete="username"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowUser(!showUser)}
-                                            className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors ${
-                                                darkMode 
-                                                    ? 'text-slate-400 hover:text-slate-300 hover:bg-slate-600' 
-                                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                            }`}
-                                        >
-                                            {showUser ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    <div className={`min-h-screen relative flex items-center justify-center overflow-hidden ${darkMode ? 'bg-slate-950' : 'bg-[#060918]'}`}>
+                        {/* Fondo animado con gradientes */}
+                        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                            <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full opacity-20 blur-3xl animate-pulse" style={{background:'radial-gradient(circle, #6366f1, transparent)'}}/>
+                            <div className="absolute top-1/3 -right-32 w-80 h-80 rounded-full opacity-15 blur-3xl animate-pulse" style={{background:'radial-gradient(circle, #06b6d4, transparent)', animationDelay:'1s'}}/>
+                            <div className="absolute -bottom-32 left-1/3 w-72 h-72 rounded-full opacity-10 blur-3xl animate-pulse" style={{background:'radial-gradient(circle, #8b5cf6, transparent)', animationDelay:'2s'}}/>
+                            {/* Grid de puntos */}
+                            <div className="absolute inset-0 opacity-5" style={{backgroundImage:'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize:'32px 32px'}}/>
+                            {/* Líneas horizontales decorativas */}
+                            <div className="absolute top-0 left-0 right-0 h-px opacity-20" style={{background:'linear-gradient(90deg, transparent, #6366f1, #06b6d4, transparent)'}}/>
+                            <div className="absolute bottom-0 left-0 right-0 h-px opacity-20" style={{background:'linear-gradient(90deg, transparent, #8b5cf6, #6366f1, transparent)'}}/>
+                        </div>
+
+                        {/* Panel de login */}
+                        <div className="relative z-10 w-full max-w-sm mx-4">
+                            {/* Borde con gradiente */}
+                            <div className="relative rounded-2xl p-px" style={{background:'linear-gradient(135deg, #6366f1 0%, #06b6d4 50%, #8b5cf6 100%)'}}>
+                                <div className={`rounded-2xl px-8 py-10 ${darkMode ? 'bg-slate-900' : 'bg-[#0d1117]'}`}>
+
+                                    {/* Header */}
+                                    <div className="flex justify-between items-center mb-8">
+                                        <div className="flex gap-1.5">
+                                            {['es','en','cs'].map(lang => (
+                                                <button key={lang} onClick={() => changeLanguage(lang)}
+                                                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${currentLanguage === lang ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+                                                    {lang === 'es' ? '🇪🇸' : lang === 'en' ? '🇬🇧' : '🇨🇿'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <button onClick={toggleDarkMode} className="text-slate-500 hover:text-slate-300 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
+                                            {darkMode ? <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/></svg> : <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>}
                                         </button>
                                     </div>
-                                </div>
-                                
-                                <div>
-                                    <label className={`block text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'} mb-2`}>
-                                        {t.enterPin}
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPin ? "text" : "password"}
-                                            inputMode="numeric"
-                                            value={pinInput}
-                                            onChange={(e) => setPinInput(e.target.value)}
-                                            className={`w-full px-4 py-4 pr-12 border-2 rounded-xl text-center text-3xl font-mono tracking-widest focus:outline-none focus:ring-2 ${
-                                                pinError 
-                                                    ? 'border-red-500 bg-red-50 focus:ring-red-500' 
-                                                    : darkMode
-                                                        ? 'border-slate-600 bg-slate-700 text-white focus:ring-blue-500'
-                                                        : 'border-slate-300 focus:ring-blue-500'
-                                            }`}
-                                            placeholder="••••"
-                                            maxLength="4"
-                                            autoComplete="current-password"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPin(!showPin)}
-                                            className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors ${
-                                                darkMode 
-                                                    ? 'text-slate-400 hover:text-slate-300 hover:bg-slate-600' 
-                                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                            }`}
-                                        >
-                                            {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+
+                                    {/* Logo y título */}
+                                    <div className="text-center mb-10">
+                                        <div className="relative inline-block mb-5">
+                                            <div className="absolute inset-0 rounded-full blur-xl opacity-60" style={{background:'linear-gradient(135deg, #6366f1, #06b6d4)'}}/>
+                                            <div className="relative w-20 h-20 rounded-full flex items-center justify-center mx-auto" style={{background:'linear-gradient(135deg, #1e1b4b, #0c4a6e)'}}>
+                                                <svg className="w-10 h-10" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <circle cx="50" cy="35" r="18" fill="#818cf8"/>
+                                                    <ellipse cx="50" cy="72" rx="28" ry="20" fill="#6366f1"/>
+                                                    <circle cx="50" cy="35" r="10" fill="#c7d2fe"/>
+                                                    <circle cx="44" cy="33" r="3" fill="#1e1b4b"/>
+                                                    <circle cx="56" cy="33" r="3" fill="#1e1b4b"/>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <h1 className="text-3xl font-black text-white tracking-tight">CerebroMA</h1>
+                                        <p className="text-xs mt-1.5 tracking-widest uppercase font-medium" style={{color:'#6366f1'}}>Sistema de Gestión · Malá Argenta</p>
+                                    </div>
+
+                                    {/* Formulario */}
+                                    <form onSubmit={handleLogin} className="space-y-4">
+                                        {pinError && (
+                                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/40 border border-red-700/50">
+                                                <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                <p className="text-xs text-red-300">Usuario o PIN incorrecto</p>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className="block text-xs font-semibold mb-1.5 tracking-wide" style={{color:'#94a3b8'}}>USUARIO</label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showPassword ? 'text' : 'password'}
+                                                    value={userInput}
+                                                    onChange={e => setUserInput(e.target.value)}
+                                                    placeholder="••••••"
+                                                    autoComplete="username"
+                                                    className="w-full px-4 py-3.5 rounded-xl text-white text-sm outline-none transition-all border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+                                                    style={{background:'rgba(255,255,255,0.05)'}}
+                                                />
+                                                <button type="button" onClick={() => setShowPassword(v => !v)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">{showPassword ? <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21"/></> : <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></>}</svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold mb-1.5 tracking-wide" style={{color:'#94a3b8'}}>PIN</label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showPin ? 'text' : 'password'}
+                                                    value={pinInput}
+                                                    onChange={e => setPinInput(e.target.value)}
+                                                    placeholder="••••"
+                                                    inputMode="numeric"
+                                                    autoComplete="current-password"
+                                                    className="w-full px-4 py-3.5 rounded-xl text-white text-sm outline-none transition-all border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+                                                    style={{background:'rgba(255,255,255,0.05)'}}
+                                                />
+                                                <button type="button" onClick={() => setShowPin(v => !v)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">{showPin ? <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21"/></> : <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></>}</svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <button type="submit"
+                                            className="w-full py-3.5 rounded-xl font-bold text-white text-sm tracking-wide mt-2 transition-all hover:opacity-90 active:scale-95"
+                                            style={{background:'linear-gradient(135deg, #6366f1, #06b6d4)'}}>
+                                            {t.enter || 'Ingresar'}
                                         </button>
-                                    </div>
-                                    {/* Teclado numérico visual para mobile */}
-                                    <div className="grid grid-cols-3 gap-2 mt-3 sm:hidden">
-                                        {[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map((n, i) => (
-                                            <button key={i} type="button"
-                                                onClick={() => {
-                                                    if (n === '⌫') setPinInput(p => p.slice(0,-1));
-                                                    else if (n !== '' && pinInput.length < 4) setPinInput(p => p + n);
-                                                }}
-                                                className={`py-3.5 rounded-xl text-xl font-semibold transition-colors ${n === '' ? 'invisible' : darkMode ? 'bg-slate-700 text-white hover:bg-slate-600 active:bg-slate-500' : 'bg-slate-100 text-slate-800 hover:bg-slate-200 active:bg-slate-300'}`}>
-                                                {n}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    {pinError && (
-                                        <p className="text-red-600 text-sm mt-2 text-center font-medium">
-                                            ❌ {t.incorrectPin}
-                                        </p>
-                                    )}
+                                    </form>
+
+                                    <p className="text-center text-xs mt-6" style={{color:'#334155'}}>CerebroMA © {new Date().getFullYear()}</p>
                                 </div>
-                                
-                                <button
-                                    type="submit"
-                                    className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transition-colors active:bg-blue-800"
-                                >
-                                    {t.enter}
-                                </button>
-                            </form>
+                            </div>
                         </div>
                     </div>
                 );
             }
+
             
             // Pantalla principal con menú
             return (
@@ -2323,6 +2269,15 @@ ${invoice.items.map(item => `
                                     desc: 'Eventos, turnos y fechas importantes',
                                     detail: 'Agenda con vistas diaria, semanal y mensual por empleado y ubicación.',
                                 },
+                                stock: {
+                                    permission: 'apps',
+                                    navigate: 'stock',
+                                    color: 'amber',
+                                    icon: <svg className={`w-8 h-8 ${darkMode ? 'text-amber-400' : 'text-amber-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
+                                    title: 'Manejo de Stock',
+                                    desc: 'Control de inventario y stock',
+                                    detail: 'Módulo en construcción. Próximamente disponible.',
+                                },
                             };
 
                             const colorMap = {
@@ -2334,7 +2289,7 @@ ${invoice.items.map(item => `
                                 orange:  { border: 'hover:border-orange-500',  bg: darkMode ? 'bg-orange-900'  : 'bg-orange-100',  hover: 'group-hover:bg-orange-600' },
                                 teal:    { border: 'hover:border-teal-500',    bg: darkMode ? 'bg-teal-900'    : 'bg-teal-100',    hover: 'group-hover:bg-teal-600' },
                                 indigo:  { border: 'hover:border-indigo-500',  bg: darkMode ? 'bg-indigo-900'  : 'bg-indigo-100',  hover: 'group-hover:bg-indigo-600' },
-                                blue:    { border: 'hover:border-blue-500',    bg: darkMode ? 'bg-blue-900'    : 'bg-blue-100',    hover: 'group-hover:bg-blue-600' },
+                                amber:   { border: 'hover:border-amber-500',   bg: darkMode ? 'bg-amber-900'   : 'bg-amber-100',   hover: 'group-hover:bg-amber-600' },
                             };
 
                             const visibleModules = moduleOrder.filter(key => {
@@ -2518,6 +2473,20 @@ ${invoice.items.map(item => `
                     )}
 
                     {/* Módulo: Seguimiento de Préstamos */}
+                    {activeModule === 'stock' && (
+                        <div className={`min-h-screen flex flex-col items-center justify-center ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                            <div className="text-center max-w-md px-6">
+                                <button onClick={() => setActiveModule('home')} className={`mb-8 flex items-center gap-1 text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>
+                                <div className="text-7xl mb-6">📦</div>
+                                <h1 className={`text-2xl font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-800'}`}>Manejo de Stock</h1>
+                                <p className={`text-base mb-2 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>Control de inventario y stock</p>
+                                <div className={`mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${darkMode ? 'bg-amber-900/40 text-amber-400 border border-amber-700' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                    🚧 En construcción
+                                </div>
+                                <p className={`mt-4 text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Este módulo estará disponible próximamente.</p>
+                            </div>
+                        </div>
+                    )}
                     {activeModule === 'prestamos' && (
                         <div className="flex-1 overflow-y-auto">
                             <PrestamosModule darkMode={darkMode} currentUser={currentUser} onBack={() => setActiveModule('home')} />
@@ -3333,6 +3302,13 @@ ${invoice.items.map(item => `
             const [editingHoras, setEditingHoras] = React.useState(null);
             const [horasForm, setHorasForm] = React.useState({ empleadoId: '', fecha: '', horasNormales: '', horasExtras: '', horasFeriado: '', notas: '', fromEvento: false });
             const [horasFiltroEmp, setHorasFiltroEmp] = React.useState('todos');
+            const [expandedHorasEmps, setExpandedHorasEmps] = React.useState({});
+            const [empVerMes, setEmpVerMes] = React.useState({});
+            const [horasDesde, setHorasDesde] = React.useState(() => {
+                const h = new Date(); const p = new Date(h.getFullYear(), h.getMonth(), 1);
+                return p.toISOString().slice(0,10);
+            });
+            const [horasHasta, setHorasHasta] = React.useState(() => new Date().toISOString().slice(0,10));
             const [ubicaciones, setUbicaciones] = React.useState(() => {
                 try { return JSON.parse(localStorage.getItem('calendarioUbicaciones') || '["Cocina","Mercado","Salón","Barra","Delivery"]'); } catch { return ['Cocina','Mercado','Salón','Barra','Delivery']; }
             });
@@ -3350,6 +3326,9 @@ ${invoice.items.map(item => `
             const [filterUbicaciones, setFilterUbicaciones] = React.useState(new Set(['__todas__']));
             const [configTab, setConfigTab] = React.useState('ubicaciones');
             const [searchResumen, setSearchResumen] = React.useState('');
+            const [showLeyenda, setShowLeyenda] = React.useState(false);
+            const [showEmpResumen, setShowEmpResumen] = React.useState(false);
+            const [showUbicResumen, setShowUbicResumen] = React.useState(false);
             const [newTipoLabel, setNewTipoLabel] = React.useState('');
             const [newTipoColor, setNewTipoColor] = React.useState('#6366f1');
             const [editingTipoIdx, setEditingTipoIdx] = React.useState(null);
@@ -3482,13 +3461,28 @@ ${invoice.items.map(item => `
             const saveEvento = () => {
                 if (!form.empleadoId || !form.fecha) return;
                 if (editingEvento) {
+                    // Verificar si el evento original tenía horario y si cambió
+                    const original = eventos.find(e => e.id === editingEvento.id);
+                    const teniaHorario = original?.horaInicio && original?.horaFin;
+                    const cambioHorario = teniaHorario && (form.horaInicio !== original.horaInicio || form.horaFin !== original.horaFin);
+                    if (cambioHorario) {
+                        if (!confirm('⚠️ ATENCIÓN\n\nEstás modificando el horario de este evento.\nEsto afectará el cálculo de horas trabajadas de ' + (form.empleadoId ? (eventos.find(e=>e.id===editingEvento.id)?.empleadoId) : '') + '.\n\n¿Confirmás los cambios?')) return;
+                    }
                     setEventos(prev => prev.map(e => e.id === editingEvento.id ? {...form, id: e.id} : e));
                 } else {
                     setEventos(prev => [...prev, {...form, id: Date.now()}]);
                 }
                 setShowModal(false);
             };
-            const deleteEvento = (id) => { if (confirm('¿Eliminar este evento?')) setEventos(prev => prev.filter(e => e.id !== id)); };
+            const deleteEvento = (id) => {
+                const ev = eventos.find(e => e.id === id);
+                if (ev?.horaInicio && ev?.horaFin) {
+                    if (!confirm('⚠️ ATENCIÓN\n\nEste evento tiene horario registrado y afectará el cálculo de horas trabajadas.\n\n¿Confirmás que querés eliminarlo?')) return;
+                } else {
+                    if (!confirm('¿Eliminar este evento?')) return;
+                }
+                setEventos(prev => prev.filter(e => e.id !== id));
+            };
 
             // Colores
             const bg = darkMode ? 'bg-slate-900' : 'bg-slate-50';
@@ -3533,6 +3527,7 @@ ${invoice.items.map(item => `
                             </div>
                             <div className="flex gap-2 flex-wrap">
                                 {canEdit && <button onClick={() => openNew()} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">+ Nuevo evento</button>}
+                                <button onClick={() => setView('horas')} className={`px-3 py-2 rounded-lg text-sm font-medium ${view === 'horas' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'}`}>⏱ Seguimiento de horas</button>
                                 <button onClick={() => setShowConfigModal(true)} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>⚙️ Configuración</button>
                             </div>
                         </div>
@@ -3547,10 +3542,7 @@ ${invoice.items.map(item => `
                                         {v === 'dia' ? 'Día' : v === 'semana' ? 'Semana' : 'Mes'}
                                     </button>
                                 ))}
-                                <button onClick={() => setView('horas')}
-                                    className={`px-3 py-1.5 text-xs font-semibold transition-colors ${view === 'horas' ? 'bg-blue-600 text-white' : darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
-                                    ⏱ Horas
-                                </button>
+
                             </div>
                             {/* Navegación */}
                             <div className="flex items-center gap-2">
@@ -3709,287 +3701,266 @@ ${invoice.items.map(item => `
 
                         {/* ── VISTA HORAS ── */}
                         {view === 'horas' && (() => {
-                            // Helpers de período según frecuenciaPago del empleado
-                            const getPeriodos = (emp) => {
-                                const freq = emp.frecuenciaPago || 'semanal';
-                                const ahora = new Date();
-                                const periodos = [];
-                                if (freq === 'semanal') {
-                                    for (let w = 7; w >= 0; w--) {
-                                        const lunes = new Date(ahora);
-                                        const dow = lunes.getDay() === 0 ? 6 : lunes.getDay() - 1;
-                                        lunes.setDate(lunes.getDate() - dow - w * 7);
-                                        const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
-                                        periodos.push({ label: `Sem ${toISO(lunes)} — ${toISO(domingo)}`, desde: toISO(lunes), hasta: toISO(domingo) });
-                                    }
-                                } else if (freq === 'quincenal') {
-                                    for (let q = 5; q >= 0; q--) {
-                                        const base = new Date(ahora.getFullYear(), ahora.getMonth() - Math.floor(q/2), 1);
-                                        const es2da = (q % 2 === 0);
-                                        const desde = new Date(base.getFullYear(), base.getMonth(), es2da ? 16 : 1);
-                                        const hasta = new Date(base.getFullYear(), base.getMonth() + (es2da ? 1 : 0), es2da ? 0 : 15);
-                                        periodos.push({ label: `${toISO(desde)} — ${toISO(hasta)}`, desde: toISO(desde), hasta: toISO(hasta) });
-                                    }
-                                } else {
-                                    for (let m = 5; m >= 0; m--) {
-                                        const d = new Date(ahora.getFullYear(), ahora.getMonth() - m, 1);
-                                        const hasta = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-                                        periodos.push({ label: `${MESES[d.getMonth()]} ${d.getFullYear()}`, desde: toISO(d), hasta: toISO(hasta) });
-                                    }
-                                }
-                                return periodos.reverse();
+                            // ── Estado filtros ───────────────────────────────
+                            // (usar estados del componente padre)
+                            const hoy = new Date();
+                            const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                            
+                            // Calcular horas de calendario en rango
+                            const horasCalEnRango = (empId, desde, hasta) => {
+                                return eventos.filter(ev => 
+                                    String(ev.empleadoId) === String(empId) &&
+                                    ev.horaInicio && ev.horaFin &&
+                                    ev.fecha >= desde && ev.fecha <= hasta
+                                ).reduce((s, ev) => {
+                                    const [h1,m1] = ev.horaInicio.split(':').map(Number);
+                                    const [h2,m2] = ev.horaFin.split(':').map(Number);
+                                    const mins = (h2*60+m2)-(h1*60+m1);
+                                    return s + (mins > 0 ? mins/60 : 0);
+                                }, 0);
                             };
 
-                            const empsFiltrados = empleados.filter(e => e.activo && (horasFiltroEmp === 'todos' || String(e.id) === horasFiltroEmp));
-
-                            // Calcular horas de eventos del calendario para un período
-                            const horasDeEventos = (empId, desde, hasta) => {
-                                const evs = eventos.filter(ev => String(ev.empleadoId) === String(empId) && ev.tipo === 'turno' && ev.horaInicio && ev.horaFin);
-                                let total = 0;
-                                const rango = [];
-                                let d = new Date(desde + 'T12:00:00');
-                                const fin = new Date(hasta + 'T12:00:00');
-                                while (d <= fin) { rango.push(toISO(d)); d.setDate(d.getDate() + 1); }
-                                rango.forEach(dateStr => {
-                                    evs.forEach(ev => {
-                                        let match = false;
-                                        if (ev.fechaFin) match = dateStr >= ev.fecha && dateStr <= ev.fechaFin;
-                                        else if (ev.esRecurrente && ev.diasRecurrencia?.length) match = ev.diasRecurrencia.includes(new Date(dateStr+'T12:00:00').getDay());
-                                        else match = ev.fecha === dateStr;
-                                        if (match) {
-                                            const [h1,m1] = ev.horaInicio.split(':').map(Number);
-                                            const [h2,m2] = ev.horaFin.split(':').map(Number);
-                                            total += ((h2*60+m2)-(h1*60+m1))/60;
-                                        }
-                                    });
-                                });
-                                return Math.round(total * 10) / 10;
+                            // Calcular horas manuales en rango
+                            const horasManualesEnRango = (empId, desde, hasta) => {
+                                return registrosHoras.filter(r =>
+                                    String(r.empleadoId) === String(empId) &&
+                                    r.fecha >= desde && r.fecha <= hasta
+                                ).reduce((s,r) => s + (parseFloat(r.horasNormales)||0) + (parseFloat(r.horasExtras)||0) + (parseFloat(r.horasFeriado)||0), 0);
                             };
 
-                            // Cargar horas desde evento del día
-                            const cargarDesdeEvento = (emp, desde, hasta) => {
-                                const rango = [];
-                                let d = new Date(desde + 'T12:00:00');
-                                while (d <= new Date(hasta + 'T12:00:00')) { rango.push(toISO(d)); d.setDate(d.getDate()+1); }
-                                let hNorm = 0;
-                                rango.forEach(dateStr => {
-                                    eventos.filter(ev => String(ev.empleadoId)===String(emp.id) && ev.tipo==='turno' && ev.horaInicio && ev.horaFin).forEach(ev => {
-                                        let match = ev.fechaFin ? dateStr>=ev.fecha&&dateStr<=ev.fechaFin : ev.esRecurrente&&ev.diasRecurrencia?.length ? ev.diasRecurrencia.includes(new Date(dateStr+'T12:00:00').getDay()) : ev.fecha===dateStr;
-                                        if (match) { const [h1,m1]=ev.horaInicio.split(':').map(Number); const [h2,m2]=ev.horaFin.split(':').map(Number); hNorm+=((h2*60+m2)-(h1*60+m1))/60; }
-                                    });
-                                });
-                                setHorasForm({ empleadoId: String(emp.id), fecha: desde, horasNormales: Math.round(hNorm*10)/10, horasExtras: '', horasFeriado: '', notas: `Importado del calendario (${desde} — ${hasta})`, fromEvento: true });
-                                setEditingHoras(null);
-                                setShowHorasModal(true);
-                            };
-
-                            const registrosDePeriodo = (empId, desde, hasta) =>
-                                registrosHoras.filter(r => String(r.empleadoId)===String(empId) && r.fecha>=desde && r.fecha<=hasta);
+                            const empsFiltrados2 = empleados.filter(e => e.activo && (horasFiltroEmp === 'todos' || String(e.id) === horasFiltroEmp));
+                            const desdeStr = horasDesde || toISO(primerDiaMes);
+                            const hastaStr = horasHasta || toISO(hoy);
 
                             return (
                                 <div>
-                                    {/* Header */}
+                                    {/* Header con filtros */}
                                     <div className="flex flex-wrap items-center gap-3 mb-4">
+                                        <button onClick={() => setView('semana')} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'} flex items-center gap-1`}>← Volver</button>
                                         <select value={horasFiltroEmp} onChange={e => setHorasFiltroEmp(e.target.value)}
                                             className={`px-3 py-1.5 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}>
                                             <option value="todos">Todos los empleados</option>
                                             {empleados.filter(e=>e.activo).map(e => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}
                                         </select>
-                                        {canEdit && <button onClick={() => { setEditingHoras(null); setHorasForm({ empleadoId: empleados[0]?.id||'', fecha: toISO(new Date()), horasNormales:'', horasExtras:'', horasFeriado:'', notas:'', fromEvento:false }); setShowHorasModal(true); }}
-                                            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">+ Cargar horas</button>}
+                                        <div className="flex items-center gap-2">
+                                            <label className={`text-xs ${sub}`}>Desde</label>
+                                            <input type="date" value={horasDesde} onChange={e => setHorasDesde(e.target.value)}
+                                                className={`px-2 py-1.5 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}/>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label className={`text-xs ${sub}`}>Hasta</label>
+                                            <input type="date" value={horasHasta} onChange={e => setHorasHasta(e.target.value)}
+                                                className={`px-2 py-1.5 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}/>
+                                        </div>
+                                        <button onClick={() => { setHorasDesde(toISO(primerDiaMes)); setHorasHasta(toISO(hoy)); }}
+                                            className={`px-3 py-1.5 text-xs rounded-lg ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>Este mes</button>
+                                        {canEdit && <button onClick={() => {
+                                            setEditingHoras(null);
+                                            const primerEmp = empleados.find(e => e.activo);
+                                            setHorasForm({ empleadoId: horasFiltroEmp !== 'todos' ? horasFiltroEmp : (primerEmp ? String(primerEmp.id) : ''), fecha: toISO(hoy), horasNormales:'', horasExtras:'', horasFeriado:'', notas:'', fromEvento:false });
+                                            setShowHorasModal(true);
+                                        }} className="ml-auto px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium">+ Cargar horas</button>}
                                     </div>
 
-                                    {/* Por empleado */}
+                                    {/* Tarjetas por empleado */}
                                     <div className="space-y-4">
-                                        {empsFiltrados.map((emp, ei) => {
-                                            const color = COLORES_EMP[ei % COLORES_EMP.length];
-                                            const freq = emp.frecuenciaPago || 'semanal';
-                                            const freqLabel = freq==='semanal'?'Semanal':freq==='quincenal'?'Quincenal':'Mensual';
-                                            const periodos = getPeriodos(emp);
+                                        {empsFiltrados2.map((emp, ei) => {
+                                            const color = COLORES_EMP[empleados.findIndex(e=>e.id===emp.id) % COLORES_EMP.length];
+                                            const hCal = horasCalEnRango(emp.id, desdeStr, hastaStr);
+                                            const hMan = horasManualesEnRango(emp.id, desdeStr, hastaStr);
+                                            const hTotal = hCal + hMan;
+
+                                            // Eventos del rango con horario
+                                            const evsConHorario = eventos.filter(ev =>
+                                                String(ev.empleadoId) === String(emp.id) &&
+                                                ev.horaInicio && ev.horaFin &&
+                                                ev.fecha >= desdeStr && ev.fecha <= hastaStr
+                                            ).sort((a,b) => b.fecha.localeCompare(a.fecha));
+
+                                            // Registros manuales del rango
+                                            const regsManual = registrosHoras.filter(r =>
+                                                String(r.empleadoId) === String(emp.id) &&
+                                                r.fecha >= desdeStr && r.fecha <= hastaStr
+                                            ).sort((a,b) => b.fecha.localeCompare(a.fecha));
 
                                             return (
                                                 <div key={emp.id} className={`rounded-xl border ${card}`}>
-                                                    <div className={`px-4 py-3 border-b flex items-center gap-2 ${darkMode?'border-slate-700':'border-slate-200'}`} style={{borderLeftColor:color, borderLeftWidth:4}}>
+                                                    {/* Header del empleado */}
+                                                    <button onClick={() => setExpandedHorasEmps(prev => ({...prev, [emp.id]: !prev[emp.id]}))}
+                                                        className="w-full px-4 py-3 flex items-center gap-3 text-left"
+                                                        style={{borderLeftColor:color, borderLeftWidth:4}}>
                                                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{backgroundColor:color}}/>
                                                         <span className={`font-bold text-sm ${txt}`}>{emp.nombre} {emp.apellido}</span>
-                                                        <span className={`text-xs px-2 py-0.5 rounded-full ml-1 ${darkMode?'bg-slate-700 text-slate-400':'bg-slate-100 text-slate-500'}`}>{freqLabel}</span>
-                                                        {canEdit && <button onClick={() => cargarDesdeEvento(emp, periodos[0].hasta, periodos[0].hasta)}
-                                                            className={`ml-auto text-xs px-2 py-1 rounded ${darkMode?'bg-slate-700 text-slate-300 hover:bg-slate-600':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                                                            📅 Importar del calendario
-                                                        </button>}
-                                                    </div>
+                                                        <div className="ml-auto flex items-center gap-3">
+                                                            {hCal > 0 && <span className={`text-xs ${sub}`}>📅 {hCal.toFixed(1)}h cal.</span>}
+                                                            {hMan > 0 && <span className={`text-xs ${sub}`}>✏️ {hMan.toFixed(1)}h manual</span>}
+                                                            <span className={`text-sm font-bold ${hTotal>0?(darkMode?'text-blue-400':'text-blue-600'):sub}`}>{hTotal>0?hTotal.toFixed(1)+'h total':'—'}</span>
+                                                            <svg className={`w-4 h-4 ${sub} transition-transform ${expandedHorasEmps[emp.id]?'rotate-180':''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                                                        </div>
+                                                    </button>
 
-                                                    <div className="overflow-x-auto">
-                                                        <table className="w-full min-w-[520px]">
-                                                            <thead>
-                                                                <tr className={darkMode?'bg-slate-750':'bg-slate-50'}>
-                                                                    <th className={`px-3 py-2 text-left text-xs font-semibold ${sub}`}>Período</th>
-                                                                    <th className={`px-3 py-2 text-right text-xs font-semibold ${sub}`}>Normales</th>
-                                                                    <th className={`px-3 py-2 text-right text-xs font-semibold ${sub}`}>Extras</th>
-                                                                    <th className={`px-3 py-2 text-right text-xs font-semibold ${sub}`}>Feriado</th>
-                                                                    <th className={`px-3 py-2 text-right text-xs font-semibold ${sub}`}>Total</th>
-                                                                    <th className={`px-3 py-2 text-right text-xs font-semibold ${sub}`}>Cal.</th>
-                                                                    {canEdit && <th className="px-3 py-2 w-16"/>}
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {periodos.map((p, pi) => {
-                                                                    const regs = registrosDePeriodo(emp.id, p.desde, p.hasta);
-                                                                    const hNorm = regs.reduce((s,r)=>s+(parseFloat(r.horasNormales)||0),0);
-                                                                    const hExtra = regs.reduce((s,r)=>s+(parseFloat(r.horasExtras)||0),0);
-                                                                    const hFeriado = regs.reduce((s,r)=>s+(parseFloat(r.horasFeriado)||0),0);
-                                                                    const hTotal = hNorm+hExtra+hFeriado;
-                                                                    const hCal = horasDeEventos(emp.id, p.desde, p.hasta);
-                                                                    const hayDatos = hTotal > 0;
-                                                                    return (
-                                                                        <tr key={pi} className={`border-t ${darkMode?'border-slate-700 hover:bg-slate-700/40':'border-slate-100 hover:bg-slate-50'} ${!hayDatos?'opacity-50':''}`}>
-                                                                            <td className={`px-3 py-2 text-xs ${txt}`}>{p.label}</td>
-                                                                            <td className={`px-3 py-2 text-right text-xs font-mono ${hayDatos?txt:sub}`}>{hNorm>0?hNorm+'h':'—'}</td>
-                                                                            <td className={`px-3 py-2 text-right text-xs font-mono ${hExtra>0?'text-amber-500':sub}`}>{hExtra>0?'+'+hExtra+'h':'—'}</td>
-                                                                            <td className={`px-3 py-2 text-right text-xs font-mono ${hFeriado>0?'text-purple-500':sub}`}>{hFeriado>0?hFeriado+'h':'—'}</td>
-                                                                            <td className={`px-3 py-2 text-right text-xs font-bold ${hTotal>0?(darkMode?'text-blue-400':'text-blue-600'):sub}`}>{hTotal>0?hTotal+'h':'—'}</td>
-                                                                            <td className={`px-3 py-2 text-right text-xs ${hCal>0?(darkMode?'text-slate-400':'text-slate-400'):sub}`}>{hCal>0?hCal+'h':'—'}</td>
-                                                                            {canEdit && <td className="px-2 py-2 text-right">
-                                                                                <button onClick={() => {
-                                                                                    setEditingHoras(null);
-                                                                                    setHorasForm({ empleadoId: String(emp.id), fecha: p.desde, horasNormales:'', horasExtras:'', horasFeriado:'', notas:'', fromEvento:false });
-                                                                                    setShowHorasModal(true);
-                                                                                }} className={`text-xs px-1.5 py-0.5 rounded ${darkMode?'bg-slate-700 text-slate-400 hover:text-white':'bg-slate-100 text-slate-500 hover:text-slate-700'}`}>+</button>
-                                                                            </td>}
-                                                                        </tr>
-                                                                    );
-                                                                })}
-                                                            </tbody>
-                                                            <tfoot>
-                                                                <tr className={`border-t-2 ${darkMode?'border-slate-600':'border-slate-300'}`}>
-                                                                    <td className={`px-3 py-2 text-xs font-bold ${txt}`}>Total acumulado</td>
-                                                                    {['horasNormales','horasExtras','horasFeriado'].map(k => {
-                                                                        const tot = registrosHoras.filter(r=>String(r.empleadoId)===String(emp.id)).reduce((s,r)=>s+(parseFloat(r[k])||0),0);
-                                                                        return <td key={k} className={`px-3 py-2 text-right text-xs font-bold ${txt}`}>{tot>0?tot+'h':'—'}</td>;
-                                                                    })}
-                                                                    <td className={`px-3 py-2 text-right text-xs font-bold text-blue-500`}>
-                                                                        {registrosHoras.filter(r=>String(r.empleadoId)===String(emp.id)).reduce((s,r)=>s+(parseFloat(r.horasNormales)||0)+(parseFloat(r.horasExtras)||0)+(parseFloat(r.horasFeriado)||0),0)+'h'}
-                                                                    </td>
-                                                                    <td colSpan={canEdit?2:1}/>
-                                                                </tr>
-                                                            </tfoot>
-                                                        </table>
-                                                    </div>
-
-                                                    {/* Detalle de registros */}
-                                                    {registrosHoras.filter(r=>String(r.empleadoId)===String(emp.id)).length > 0 && (
-                                                        <div className={`px-4 pb-3 border-t ${darkMode?'border-slate-700':'border-slate-100'}`}>
-                                                            <p className={`text-xs font-semibold mt-2 mb-1.5 ${sub}`}>Registros cargados</p>
-                                                            <div className="space-y-1">
-                                                                {registrosHoras.filter(r=>String(r.empleadoId)===String(emp.id)).sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5).map(r => (
-                                                                    <div key={r.id} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${darkMode?'bg-slate-700/50':'bg-slate-50'}`}>
-                                                                        <span className={sub}>{fmtDate(r.fecha)}</span>
-                                                                        {parseFloat(r.horasNormales)>0&&<span className={txt}>🕐 {r.horasNormales}h</span>}
-                                                                        {parseFloat(r.horasExtras)>0&&<span className="text-amber-500">+{r.horasExtras}h extra</span>}
-                                                                        {parseFloat(r.horasFeriado)>0&&<span className="text-purple-500">{r.horasFeriado}h feriado</span>}
-                                                                        {r.notas&&<span className={`${sub} truncate`}>{r.notas}</span>}
-                                                                        {canEdit&&<button onClick={()=>{setEditingHoras(r);setHorasForm({...r});setShowHorasModal(true);}} className="ml-auto text-blue-400 hover:text-blue-300">✏️</button>}
-                                                                        {canEdit&&<button onClick={()=>{if(confirm('¿Eliminar?'))setRegistrosHoras(prev=>prev.filter(x=>x.id!==r.id));}} className="text-red-400 hover:text-red-300">✕</button>}
+                                                    {/* Detalle expandido */}
+                                                    {expandedHorasEmps[emp.id] && (
+                                                        <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}>
+                                                            
+                                                            {/* Eventos del calendario */}
+                                                            {evsConHorario.length > 0 && (
+                                                                <div className="px-4 py-3">
+                                                                    <p className={`text-xs font-semibold mb-2 ${sub}`}>📅 Del calendario</p>
+                                                                    <div className="space-y-1">
+                                                                        {evsConHorario.map(ev => {
+                                                                            const [h1,m1] = ev.horaInicio.split(':').map(Number);
+                                                                            const [h2,m2] = ev.horaFin.split(':').map(Number);
+                                                                            const mins = (h2*60+m2)-(h1*60+m1);
+                                                                            const hs = mins > 0 ? (mins/60).toFixed(1)+'h' : null;
+                                                                            const tipo = { label: getTipoLabel(ev.tipo), color: getTipoColor(ev.tipo) };
+                                                                            const d = new Date(ev.fecha+'T12:00:00');
+                                                                            const fechaLabel = d.toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'});
+                                                                            return (
+                                                                                <div key={ev.id} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${darkMode?'bg-slate-700/50':'bg-slate-50'}`}>
+                                                                                    <span className={`${sub} w-24 shrink-0`}>{fechaLabel}</span>
+                                                                                    {tipo && <span className="px-1.5 py-0.5 rounded text-white text-xs shrink-0" style={{backgroundColor:tipo.color}}>{tipo.label}</span>}
+                                                                                    <span className={sub}>{ev.horaInicio}–{ev.horaFin}</span>
+                                                                                    {ev.ubicacion && <span className={sub}>📍{ev.ubicacion}</span>}
+                                                                                    {hs && <span className={`ml-auto font-bold ${darkMode?'text-blue-400':'text-blue-600'}`}>{hs}</span>}
+                                                                                </div>
+                                                                            );
+                                                                        })}
                                                                     </div>
-                                                                ))}
-                                                            </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Horas manuales */}
+                                                            {regsManual.length > 0 && (
+                                                                <div className={`px-4 py-3 ${evsConHorario.length>0?`border-t ${darkMode?'border-slate-700':'border-slate-100'}`:''}` }>
+                                                                    <p className={`text-xs font-semibold mb-2 ${sub}`}>✏️ Carga manual</p>
+                                                                    <div className="space-y-1">
+                                                                        {regsManual.map(r => (
+                                                                            <div key={r.id} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${darkMode?'bg-slate-700/50':'bg-slate-50'}`}>
+                                                                                <span className={`${sub} w-24 shrink-0`}>{fmtDate(r.fecha)}</span>
+                                                                                {parseFloat(r.horasNormales)>0 && <span className={txt}>🕐 {r.horasNormales}h</span>}
+                                                                                {parseFloat(r.horasExtras)>0 && <span className="text-amber-500">+{r.horasExtras}h extra</span>}
+                                                                                {parseFloat(r.horasFeriado)>0 && <span className="text-purple-500">{r.horasFeriado}h feriado</span>}
+                                                                                {r.notas && <span className={`${sub} truncate flex-1`}>{r.notas}</span>}
+                                                                                {canEdit && <button onClick={()=>{setEditingHoras(r);setHorasForm({...r});setShowHorasModal(true);}} className="ml-auto text-blue-400 hover:text-blue-300 shrink-0">✏️</button>}
+                                                                                {canEdit && <button onClick={()=>{if(confirm('¿Eliminar este registro?'))setRegistrosHoras(prev=>prev.filter(x=>x.id!==r.id));}} className="text-red-400 hover:text-red-300 shrink-0">✕</button>}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {evsConHorario.length === 0 && regsManual.length === 0 && (
+                                                                <div className="px-4 py-3">
+                                                                    <p className={`text-xs ${sub}`}>Sin registros en este período</p>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
                                             );
                                         })}
                                     </div>
-
-                                    {/* Modal cargar horas */}
-                                    {showHorasModal && (
-                                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                                            <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`}>
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <h3 className={`font-bold text-base ${txt}`}>{editingHoras ? 'Editar registro' : 'Cargar horas'}</h3>
-                                                    <button onClick={() => setShowHorasModal(false)} className={`p-1.5 rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
-                                                    </button>
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${sub}`}>Empleado *</label>
-                                                        <select value={horasForm.empleadoId} onChange={e => setHorasForm({...horasForm, empleadoId: e.target.value})} className={inp}>
-                                                            <option value="">Seleccionar...</option>
-                                                            {empleados.filter(e=>e.activo).map(e => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha del registro *</label>
-                                                        <input type="date" value={horasForm.fecha} onChange={e => setHorasForm({...horasForm, fecha: e.target.value})} className={inp} />
-                                                    </div>
-                                                    {horasForm.fromEvento && (
-                                                        <div className={`text-xs px-3 py-2 rounded-lg ${darkMode?'bg-blue-900/30 text-blue-300':'bg-blue-50 text-blue-600'}`}>
-                                                            📅 Horas importadas del calendario. Podés ajustarlas.
-                                                        </div>
-                                                    )}
-                                                    <div className="grid grid-cols-3 gap-3">
-                                                        <div>
-                                                            <label className={`block text-xs font-medium mb-1 ${sub}`}>Normales (h)</label>
-                                                            <input type="number" min="0" step="0.5" value={horasForm.horasNormales} onChange={e => setHorasForm({...horasForm, horasNormales: e.target.value})} className={inp} placeholder="0" />
-                                                        </div>
-                                                        <div>
-                                                            <label className={`block text-xs font-medium mb-1 text-amber-500`}>Extras (h)</label>
-                                                            <input type="number" min="0" step="0.5" value={horasForm.horasExtras} onChange={e => setHorasForm({...horasForm, horasExtras: e.target.value})} className={inp} placeholder="0" />
-                                                        </div>
-                                                        <div>
-                                                            <label className={`block text-xs font-medium mb-1 text-purple-500`}>Feriado (h)</label>
-                                                            <input type="number" min="0" step="0.5" value={horasForm.horasFeriado} onChange={e => setHorasForm({...horasForm, horasFeriado: e.target.value})} className={inp} placeholder="0" />
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${sub}`}>Notas</label>
-                                                        <input type="text" value={horasForm.notas} onChange={e => setHorasForm({...horasForm, notas: e.target.value})} className={inp} placeholder="Observaciones..." />
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-2 mt-4">
-                                                    <button onClick={() => setShowHorasModal(false)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-white':'bg-slate-100 text-slate-700'}`}>Cancelar</button>
-                                                    <button onClick={() => {
-                                                        if (!horasForm.empleadoId || !horasForm.fecha) return;
-                                                        if (editingHoras) {
-                                                            setRegistrosHoras(prev => prev.map(r => r.id===editingHoras.id ? {...horasForm, id:r.id} : r));
-                                                        } else {
-                                                            setRegistrosHoras(prev => [...prev, {...horasForm, id: Date.now()}]);
-                                                        }
-                                                        setShowHorasModal(false);
-                                                    }} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">💾 Guardar</button>
-                                                </div>
-                                                {editingHoras && (
-                                                    <div className={`mt-3 pt-3 border-t ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                                        <button onClick={() => { if(confirm('¿Eliminar?')) { setRegistrosHoras(prev=>prev.filter(r=>r.id!==editingHoras.id)); setShowHorasModal(false); }}}
-                                                            className={`w-full py-2 rounded-lg text-sm font-medium ${darkMode?'bg-red-900/30 text-red-400 hover:bg-red-900/50':'bg-red-50 text-red-600 hover:bg-red-100'}`}>
-                                                            🗑️ Eliminar registro
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             );
                         })()}
 
+
+                                {/* Modal cargar horas */}
+                                {showHorasModal && (
+                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                                        <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`}>
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className={`font-bold text-base ${txt}`}>{editingHoras ? 'Editar registro' : 'Cargar horas'}</h3>
+                                                <button onClick={() => setShowHorasModal(false)} className={`p-1.5 rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                                                </button>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className={`block text-xs font-medium mb-1 ${sub}`}>Empleado *</label>
+                                                    <select value={horasForm.empleadoId} onChange={e => setHorasForm({...horasForm, empleadoId: e.target.value})} className={inp}>
+                                                        <option value="">Seleccionar...</option>
+                                                        {empleados.filter(e=>e.activo).map(e => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha del registro *</label>
+                                                    <input type="date" value={horasForm.fecha} onChange={e => setHorasForm({...horasForm, fecha: e.target.value})} className={inp} />
+                                                </div>
+                                                {horasForm.fromEvento && (
+                                                    <div className={`text-xs px-3 py-2 rounded-lg ${darkMode?'bg-blue-900/30 text-blue-300':'bg-blue-50 text-blue-600'}`}>
+                                                        📅 Horas importadas del calendario. Podés ajustarlas.
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div>
+                                                        <label className={`block text-xs font-medium mb-1 ${sub}`}>Normales (h)</label>
+                                                        <input type="number" min="0" step="0.5" value={horasForm.horasNormales} onChange={e => setHorasForm({...horasForm, horasNormales: e.target.value})} className={inp} placeholder="0" />
+                                                    </div>
+                                                    <div>
+                                                        <label className={`block text-xs font-medium mb-1 text-amber-500`}>Extras (h)</label>
+                                                        <input type="number" min="0" step="0.5" value={horasForm.horasExtras} onChange={e => setHorasForm({...horasForm, horasExtras: e.target.value})} className={inp} placeholder="0" />
+                                                    </div>
+                                                    <div>
+                                                        <label className={`block text-xs font-medium mb-1 text-purple-500`}>Feriado (h)</label>
+                                                        <input type="number" min="0" step="0.5" value={horasForm.horasFeriado} onChange={e => setHorasForm({...horasForm, horasFeriado: e.target.value})} className={inp} placeholder="0" />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className={`block text-xs font-medium mb-1 ${sub}`}>Notas</label>
+                                                    <input type="text" value={horasForm.notas} onChange={e => setHorasForm({...horasForm, notas: e.target.value})} className={inp} placeholder="Observaciones..." />
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2 mt-4">
+                                                <button onClick={() => setShowHorasModal(false)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-white':'bg-slate-100 text-slate-700'}`}>Cancelar</button>
+                                                <button onClick={() => {
+                                                    if (!horasForm.empleadoId || !horasForm.fecha) return;
+                                                    if (editingHoras) {
+                                                        setRegistrosHoras(prev => prev.map(r => r.id===editingHoras.id ? {...horasForm, id:r.id} : r));
+                                                    } else {
+                                                        setRegistrosHoras(prev => [...prev, {...horasForm, id: Date.now()}]);
+                                                    }
+                                                    setShowHorasModal(false);
+                                                    setView('horas');
+                                                }} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">💾 Guardar</button>
+                                            </div>
+                                            {editingHoras && (
+                                                <div className={`mt-3 pt-3 border-t ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                                    <button onClick={() => { if(confirm('¿Eliminar?')) { setRegistrosHoras(prev=>prev.filter(r=>r.id!==editingHoras.id)); setShowHorasModal(false); }}}
+                                                        className={`w-full py-2 rounded-lg text-sm font-medium ${darkMode?'bg-red-900/30 text-red-400 hover:bg-red-900/50':'bg-red-50 text-red-600 hover:bg-red-100'}`}>
+                                                        🗑️ Eliminar registro
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                         {/* ── Leyenda empleados ── */}
                         {empleados.filter(e => e.activo).length > 0 && (
-                            <div className={`mt-4 rounded-xl border p-3 flex flex-wrap gap-2 ${card}`}>
-                                {empleados.filter(e => e.activo).map((emp, i) => (
-                                    <div key={emp.id} className="flex items-center gap-1.5">
-                                        <div className="w-3 h-3 rounded-full shrink-0" style={{backgroundColor: COLORES_EMP[i % COLORES_EMP.length]}}/>
-                                        <span className={`text-xs ${sub}`}>{emp.nombre} {emp.apellido}</span>
-                                    </div>
-                                ))}
-                                <div className={`ml-auto flex gap-3`}>
-                                    {Object.entries(TIPOS).map(([k,v]) => (
-                                        <div key={k} className="flex items-center gap-1">
-                                            <div className="w-2 h-2 rounded-sm shrink-0" style={{backgroundColor: v.color}}/>
-                                            <span className={`text-xs ${sub}`}>{v.label}</span>
+                            <div className={`mt-4 rounded-xl border ${card}`}>
+                                <button onClick={() => setShowLeyenda(v => !v)} className={`w-full flex items-center gap-2 px-3 py-2 text-left`}>
+                                    <span className={`text-xs font-semibold ${sub}`}>Referencias</span>
+                                    <svg className={`w-3 h-3 ml-auto ${sub} transition-transform ${showLeyenda ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                                </button>
+                                {showLeyenda && (
+                                    <div className="px-3 pb-3 flex flex-wrap gap-2">
+                                        {empleados.filter(e => e.activo).map((emp, i) => (
+                                            <div key={emp.id} className="flex items-center gap-1.5">
+                                                <div className="w-3 h-3 rounded-full shrink-0" style={{backgroundColor: COLORES_EMP[i % COLORES_EMP.length]}}/>
+                                                <span className={`text-xs ${sub}`}>{emp.nombre} {emp.apellido}</span>
+                                            </div>
+                                        ))}
+                                        <div className="ml-auto flex gap-3">
+                                            {Object.entries(TIPOS).map(([k,v]) => (
+                                                <div key={k} className="flex items-center gap-1">
+                                                    <div className="w-2 h-2 rounded-sm shrink-0" style={{backgroundColor: v.color}}/>
+                                                    <span className={`text-xs ${sub}`}>{v.label}</span>
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -4002,7 +3973,14 @@ ${invoice.items.map(item => `
                                 const dias = getDiasMes().filter(Boolean);
                                 return dias.map(d => toISO(d));
                             };
-                            const rango = getRangoDias();
+                            // Para el resumen: siempre los próximos 7 días desde hoy
+                            const hoyResumen = new Date();
+                            const rangoResumen = Array.from({length:7}, (_,k) => {
+                                const d = new Date(hoyResumen);
+                                d.setDate(hoyResumen.getDate() + k);
+                                return toISO(d);
+                            });
+                            const rango = rangoResumen;
                             const label = view === 'dia' ? 'este día' : view === 'semana' ? 'esta semana' : 'este mes';
 
                             // Eventos en el rango (sin filtros de usuario/ubicación para el resumen)
@@ -4046,20 +4024,121 @@ ${invoice.items.map(item => `
                             if (empIds.length === 0 && ubiKeys.length === 0) return null;
 
                             return (
-                                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="mt-4 grid grid-cols-1 gap-4">
                                     {/* Por empleado */}
                                     {empIds.length > 0 && (
-                                        <div className={`rounded-xl border p-4 ${card}`}>
-                                            <div className="flex flex-wrap items-center gap-2 mb-3">
-                                                <h3 className={`text-sm font-bold ${txt}`}>👤 Por empleado — {label}</h3>
-                                                <div className="relative ml-auto">
-                                                    <svg className="absolute left-2 top-1.5 w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                                    <input type="text" value={searchResumen} onChange={e => setSearchResumen(e.target.value)}
-                                                        placeholder="Buscar..." className={`pl-6 pr-2 py-1 text-xs border rounded-lg w-32 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'border-slate-300 placeholder-slate-400'}`} />
-                                                </div>
+                                        <div className={`rounded-xl border ${card}`}>
+                                            <button onClick={() => setShowEmpResumen(v => !v)} className={`w-full flex flex-wrap items-center gap-2 p-4 text-left`}>
+                                                <h3 className={`text-sm font-bold ${txt}`}>👤 Tu trabajo los próximos 7 días</h3>
+                                                <svg className={`w-4 h-4 ml-auto ${sub} transition-transform ${showEmpResumen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                                            </button>
+                                            {/* Siempre mostrar card del usuario logueado */}
+                                            {(() => {
+                                                const yoId = empIds.find(id => currentUser && (
+                                                    `${porEmpleado[id].emp.nombre} ${porEmpleado[id].emp.apellido}`.toLowerCase().includes((currentUser.name||'').toLowerCase()) ||
+                                                    String(porEmpleado[id].emp.id) === String(currentUser.id)
+                                                ));
+                                                if (!yoId) return null;
+                                                const r = porEmpleado[yoId];
+                                                const i = empleados.findIndex(e => String(e.id) === String(yoId));
+                                                const color = COLORES_EMP[i % COLORES_EMP.length];
+                                                // Eventos del próximo 7 días para el usuario
+                                                const evsYo = rango.flatMap(dateStr =>
+                                                    eventos.filter(ev => {
+                                                        if (String(ev.empleadoId) !== String(yoId)) return false;
+                                                        if (ev.fechaFin) return dateStr >= ev.fecha && dateStr <= ev.fechaFin;
+                                                        if (ev.esRecurrente && ev.diasRecurrencia?.length) return ev.diasRecurrencia.includes(new Date(dateStr+'T12:00:00').getDay());
+                                                        return ev.fecha === dateStr;
+                                                    }).map(ev => ({...ev, _dateStr: dateStr}))
+                                                ).filter((ev,idx,arr) => arr.findIndex(e=>e.id===ev.id&&e._dateStr===ev._dateStr)===idx)
+                                                .sort((a,b) => a._dateStr.localeCompare(b._dateStr));
+                                                const mesSel = empVerMes[yoId];
+                                                const hoyMes = new Date();
+                                                const rangoYo = (mesSel !== undefined && mesSel !== '')
+                                                    ? Array.from({length: new Date(hoyMes.getFullYear(), parseInt(mesSel)+1, 0).getDate()}, (_,k) => {
+                                                        const d = new Date(hoyMes.getFullYear(), parseInt(mesSel), k+1);
+                                                        return toISO(d);
+                                                      })
+                                                    : rango;
+                                                const evsYoFiltrados = rangoYo.flatMap(dateStr =>
+                                                    eventos.filter(ev => {
+                                                        if (String(ev.empleadoId) !== String(yoId)) return false;
+                                                        if (ev.fechaFin) return dateStr >= ev.fecha && dateStr <= ev.fechaFin;
+                                                        if (ev.esRecurrente && ev.diasRecurrencia?.length) return ev.diasRecurrencia.includes(new Date(dateStr+'T12:00:00').getDay());
+                                                        return ev.fecha === dateStr;
+                                                    }).map(ev => ({...ev, _dateStr: dateStr}))
+                                                ).filter((ev,idx,arr) => arr.findIndex(e=>e.id===ev.id&&e._dateStr===ev._dateStr)===idx)
+                                                .sort((a,b) => a._dateStr.localeCompare(b._dateStr));
+                                                return (
+                                                    <div className="px-4 pb-4">
+                                                        <div className={`rounded-xl border-l-4 p-4 ${darkMode ? 'bg-blue-900/40 ring-1 ring-blue-500' : 'bg-blue-50 ring-1 ring-blue-400'}`} style={{borderLeftColor: color}}>
+                                                            <div className="flex items-center gap-2 mb-3">
+                                                                <div className="w-3 h-3 rounded-full shrink-0" style={{backgroundColor: color}}/>
+                                                                <p className={`text-sm font-bold ${txt}`}>{r.emp.nombre} {r.emp.apellido}</p>
+                                                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-600 text-white">Vos</span>
+                                                                <select value={empVerMes[yoId] || ''} onChange={e => setEmpVerMes(prev => ({...prev, [yoId]: e.target.value}))}
+                                                                    className={`ml-auto text-xs px-2 py-1 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-slate-200':'bg-white border-slate-200 text-slate-600'}`}>
+                                                                    <option value="">Próximos 7 días</option>
+                                                                    {Array.from({length:12},(_,k)=>k).map(k => {
+                                                                        const d = new Date(new Date().getFullYear(), k, 1);
+                                                                        return <option key={k} value={k}>{d.toLocaleDateString('es-AR',{month:'long'})}</option>;
+                                                                    })}
+                                                                </select>
+                                                            </div>
+                                                            {evsYoFiltrados.length === 0 ? (
+                                                                <p className={`text-xs ${sub}`}>Sin eventos en los próximos 7 días</p>
+                                                            ) : (
+                                                                <div className="space-y-2">
+                                                                    {evsYoFiltrados.map((ev, evi) => {
+                                                                        const tipo = { label: getTipoLabel(ev.tipo), color: getTipoColor(ev.tipo) };
+                                                                        const d = new Date(ev._dateStr+'T12:00:00');
+                                                                        const esHoy = ev._dateStr === toISO(new Date());
+                                                                        const fechaLabel = esHoy ? 'Hoy' : d.toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'});
+                                                                        const horas = (() => {
+                                                                            if (!ev.horaInicio||!ev.horaFin) return null;
+                                                                            const [h1,m1]=ev.horaInicio.split(':').map(Number);
+                                                                            const [h2,m2]=ev.horaFin.split(':').map(Number);
+                                                                            const mins=(h2*60+m2)-(h1*60+m1);
+                                                                            return mins>0?`${Math.floor(mins/60)}h${mins%60>0?mins%60+'m':''}`:null;
+                                                                        })();
+                                                                        // Color de fondo según tipo
+                                                                        const bgEvento = (() => {
+                                                                            if (esHoy) return darkMode ? 'bg-blue-900/60 border border-blue-500' : 'bg-blue-50 border border-blue-300';
+                                                                            return darkMode ? 'bg-slate-700/50' : 'bg-white border border-slate-100';
+                                                                        })();
+                                                                        return (
+                                                                            <div key={evi} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${bgEvento}`}>
+                                                                                {/* Badge de tipo con color */}
+                                                                                <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white shrink-0"
+                                                                                    style={{backgroundColor: tipo.color}}>
+                                                                                    {tipo.label}
+                                                                                </span>
+                                                                                <span className={`text-xs font-semibold shrink-0 ${esHoy?(darkMode?'text-blue-300':'text-blue-700'):sub}`}>{fechaLabel}</span>
+                                                                                {ev.ubicacion && <span className={`text-xs ${sub}`}>📍 {ev.ubicacion}</span>}
+                                                                                {ev.horaInicio && <span className={`text-xs ${sub}`}>{ev.horaInicio}{ev.horaFin?' – '+ev.horaFin:''}</span>}
+                                                                                {horas && <span className={`ml-auto text-xs font-bold ${darkMode?'text-emerald-400':'text-emerald-600'}`}>{horas}</span>}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+                                            {showEmpResumen && (
+                                            <div className="px-4 pb-4">
+                                            <div className="relative mb-3">
+                                                <svg className="absolute left-2 top-1.5 w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                                <input type="text" value={searchResumen} onChange={e => setSearchResumen(e.target.value)}
+                                                    placeholder="Buscar..." className={`pl-6 pr-2 py-1 text-xs border rounded-lg w-32 ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'border-slate-300 placeholder-slate-400'}`} />
                                             </div>
                                             <div className="space-y-3">
-                                                {empIds.filter(id => {
+                                                {[...empIds].sort((a, b) => {
+                                                    const aEsYo = currentUser && (`${porEmpleado[a].emp.nombre} ${porEmpleado[a].emp.apellido}`.toLowerCase().includes((currentUser.name||'').toLowerCase()) || String(porEmpleado[a].emp.id) === String(currentUser.id));
+                                                    const bEsYo = currentUser && (`${porEmpleado[b].emp.nombre} ${porEmpleado[b].emp.apellido}`.toLowerCase().includes((currentUser.name||'').toLowerCase()) || String(porEmpleado[b].emp.id) === String(currentUser.id));
+                                                    return aEsYo ? -1 : bEsYo ? 1 : 0;
+                                                }).filter(id => {
                                                     if (!searchResumen.trim()) return true;
                                                     const r = porEmpleado[id];
                                                     return `${r.emp.nombre} ${r.emp.apellido}`.toLowerCase().includes(searchResumen.toLowerCase());
@@ -4108,41 +4187,64 @@ ${invoice.items.map(item => `
                                                         if (ubicsSem.length > 0) msgs.push({ icon:'📍', text:ubicsSem.join(', '), color: darkMode?'text-slate-400':'text-slate-500', bg: darkMode?'bg-slate-700/30':'bg-slate-50' });
                                                     }
 
+                                                    // Eventos del período visible ordenados por fecha
+                                                    const evsDelEmp = evsRango.filter(ev => String(ev.empleadoId) === String(id))
+                                                        .sort((a,b) => a.fecha.localeCompare(b.fecha));
                                                     return (
                                                         <div key={id} className={`rounded-lg border-l-4 p-3 transition-all ${esLogueado ? (darkMode ? 'bg-blue-900/40 ring-1 ring-blue-500' : 'bg-blue-50 ring-1 ring-blue-400') : (darkMode ? 'bg-slate-700/40' : 'bg-slate-50')}`} style={{borderLeftColor: color}}>
                                                             <div className="flex items-center gap-2 mb-2">
                                                                 <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{backgroundColor: color}}/>
                                                                 <p className={`text-xs font-bold ${txt}`}>{r.emp.nombre} {r.emp.apellido}</p>
-                                                                {esLogueado && <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-600 text-white">Tú</span>}
+                                                                {esLogueado && <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-600 text-white">Vos</span>}
                                                             </div>
-                                                            {/* Stats del período visible */}
-                                                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-2">
-                                                                {r.turnos > 0 && <span className={`text-xs ${sub}`}>🕐 {r.turnos} turno{r.turnos!==1?'s':''}</span>}
-                                                                {r.vacaciones > 0 && <span className="text-xs text-green-600">🌴 {r.vacaciones} vac.</span>}
-                                                                {r.ausencias > 0 && <span className="text-xs text-red-500">❌ {r.ausencias} aus.</span>}
-                                                                {r.otros > 0 && <span className={`text-xs ${sub}`}>📌 {r.otros}</span>}
-                                                                {r.ubics.length > 0 && <span className={`text-xs ${sub}`}>📍 {r.ubics.join(', ')}</span>}
-                                                            </div>
-                                                            {/* Notificaciones de semana actual */}
+                                                            {/* Detalle por día */}
                                                             <div className="space-y-1">
-                                                                {msgs.map((m,mi) => (
-                                                                    <div key={mi} className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${m.bg} ${m.color} ${esLogueado ? 'py-1.5 text-sm' : ''}`}>
-                                                                        <span>{m.icon}</span>
-                                                                        <span>{m.text}</span>
-                                                                    </div>
-                                                                ))}
+                                                                {evsDelEmp.length === 0 && (
+                                                                    <p className={`text-xs ${sub}`}>Sin eventos en este período</p>
+                                                                )}
+                                                                {evsDelEmp.map((ev, evi) => {
+                                                                    const tipo = tiposEvento.find(t => t.id === ev.tipo) || { label: ev.tipo, color: '#94a3b8' };
+                                                                    const horas = (() => {
+                                                                        if (!ev.horaInicio || !ev.horaFin) return null;
+                                                                        const [h1,m1] = ev.horaInicio.split(':').map(Number);
+                                                                        const [h2,m2] = ev.horaFin.split(':').map(Number);
+                                                                        const mins = (h2*60+m2)-(h1*60+m1);
+                                                                        return mins > 0 ? `${Math.floor(mins/60)}h${mins%60>0?mins%60+'m':''}` : null;
+                                                                    })();
+                                                                    const fechaLabel = (() => {
+                                                                        const d = new Date(ev.fecha + 'T12:00:00');
+                                                                        return d.toLocaleDateString('es-AR', {weekday:'short', day:'numeric', month:'short'});
+                                                                    })();
+                                                                    return (
+                                                                        <div key={evi} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${darkMode?'bg-slate-700/50':'bg-white'}`}>
+                                                                            <div className="w-2 h-2 rounded-full shrink-0" style={{backgroundColor: tipo.color}}/>
+                                                                            <span className={`${sub} w-20 shrink-0`}>{fechaLabel}</span>
+                                                                            <span className={`font-medium ${txt} flex-1`}>{tipo.label}</span>
+                                                                            {ev.ubicacion && <span className={`${sub}`}>📍 {ev.ubicacion}</span>}
+                                                                            {ev.horaInicio && <span className={`${sub}`}>{ev.horaInicio}{ev.horaFin?'–'+ev.horaFin:''}</span>}
+                                                                            {horas && <span className={`font-semibold ${darkMode?'text-blue-400':'text-blue-600'}`}>{horas}</span>}
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
                                                     );
                                                 })}
                                             </div>
+                                            </div>
+                                            )}
                                         </div>
                                     )}
 
                                     {/* Por ubicación */}
                                     {ubiKeys.length > 0 && (
-                                        <div className={`rounded-xl border p-4 ${card}`}>
-                                            <h3 className={`text-sm font-bold mb-3 ${txt}`}>📍 Por ubicación — {label}</h3>
+                                        <div className={`rounded-xl border ${card}`}>
+                                            <button onClick={() => setShowUbicResumen(v => !v)} className="w-full flex items-center gap-2 p-4 text-left">
+                                                <h3 className={`text-sm font-bold ${txt}`}>📍 Por ubicación — {label}</h3>
+                                                <svg className={`w-4 h-4 ml-auto ${sub} transition-transform ${showUbicResumen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                                            </button>
+                                            {showUbicResumen && (
+                                            <div className="px-4 pb-4">
                                             <div className="space-y-2">
                                                 {ubiKeys.map(u => {
                                                     const r = porUbicacion[u];
@@ -4160,6 +4262,8 @@ ${invoice.items.map(item => `
                                                     );
                                                 })}
                                             </div>
+                                            </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
