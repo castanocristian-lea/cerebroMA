@@ -89,6 +89,7 @@
                 { ls: 'cajaFacturasPlaneadas', table: 'cash_planning',     type: 'val',   key: 'facturasPlaneadas' },
                 { ls: 'cajaAsignaciones',      table: 'cash_planning',     type: 'val',   key: 'asignaciones' },
                 { ls: 'cajaSueldosPlaneados',  table: 'cash_planning',     type: 'val',   key: 'sueldosPlaneados' },
+                { ls: 'cajaGastosPlaneados',   table: 'cash_planning',     type: 'val',   key: 'gastosPlaneados' },
                 { ls: 'prestamosData',         table: 'app_config',        type: 'val',   key: 'prestamos' },
             ];
             for (const m of maps) {
@@ -203,6 +204,10 @@
                 set('cajaFacturasPlaneadas',   cashFP.data?.data || []);
                 set('cajaAsignaciones',        cashAs.data?.data || {});
                 set('cajaSueldosPlaneados',    cashSP.data?.data || []);
+
+                // gastosPlaneados
+                const gastosR = await _sb.from('cash_planning').select('data').eq('id','gastosPlaneados').maybeSingle();
+                if (gastosR.data?.data) localStorage.setItem('cajaGastosPlaneados', JSON.stringify(gastosR.data.data));
 
                 // Préstamos
                 set('prestamosData',  prestamos.data?.data || []);
@@ -6406,7 +6411,7 @@ ${invoice.items.map(item => `
 
             const saveFondos = (list) => { setFondos(list); localStorage.setItem('cajaFondos', JSON.stringify(list)); dbUpsertOne('cash_planning','fondos',list); };
             const saveLugares = (list) => { setLugares(list); localStorage.setItem('cajaLugares', JSON.stringify(list)); dbUpsertOne('cash_planning','lugares',list); };
-            const saveGastos = (list) => { setGastos(list); localStorage.setItem('cajaGastosPlaneados', JSON.stringify(list)); };
+            const saveGastos = (list) => { setGastos(list); localStorage.setItem('cajaGastosPlaneados', JSON.stringify(list)); dbUpsertOne('cash_planning', 'gastosPlaneados', list); };
             const saveAcreditaciones = (list) => { setAcreditaciones(list); localStorage.setItem('cajaAcreditaciones', JSON.stringify(list)); dbUpsertOne('cash_planning','acreditaciones',list); };
             const openNewAcreditacion = () => { setEditingAcreditacion(null); setAcreditacionForm({ origen: '', fecha: new Date().toISOString().split('T')[0], monto: '', moneda: 'CZK', notas: '' }); setShowAcreditacionModal(true); };
             const openEditAcreditacion = (a) => { setEditingAcreditacion(a); setAcreditacionForm({ origen: a.origen, fecha: a.fecha, monto: String(a.monto), moneda: a.moneda, notas: a.notas||'' }); setShowAcreditacionModal(true); };
@@ -7542,7 +7547,7 @@ ${invoice.items.map(item => `
                 const saved = localStorage.getItem('cajaRubrosCosto');
                 return saved ? JSON.parse(saved) : DEFAULT_TIPOS_COSTO;
             });
-            useEffect(() => { localStorage.setItem('cajaRubrosCosto', JSON.stringify(tiposCosto)); }, [tiposCosto]);
+            useEffect(() => { localStorage.setItem('cajaRubrosCosto', JSON.stringify(tiposCosto)); dbUpsertOne('cash_planning', 'rubrosCosto', tiposCosto); }, [tiposCosto]);
             useEffect(() => {
                 localStorage.setItem('cashNotes', JSON.stringify(cashNotes));
                 if (cashNotes.length > 0) dbSetArray('cash_notes', cashNotes);
