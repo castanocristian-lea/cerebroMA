@@ -26,7 +26,7 @@
             return data.map(r => r.data);
         }
         async function dbGetKey(table, key) {
-            const { data, error } = await _sb.from(table).select('data').eq('id', key).single();
+            const { data, error } = await _sb.from(table).select('data').eq('id', key).maybeSingle();
             if (error) return null;
             return data?.data ?? null;
         }
@@ -91,6 +91,7 @@
                 { ls: 'cajaSueldosPlaneados',  table: 'cash_planning',     type: 'val',   key: 'sueldosPlaneados' },
                 { ls: 'cajaGastosPlaneados',   table: 'cash_planning',     type: 'val',   key: 'gastosPlaneados' },
                 { ls: 'prestamosData',         table: 'app_config',        type: 'val',   key: 'prestamos' },
+                { ls: 'miCerebroTareas',       table: 'app_config',        type: 'val',   key: 'miCerebroTareas' },
             ];
             for (const m of maps) {
                 const raw = localStorage.getItem(m.ls);
@@ -208,6 +209,9 @@
                 // gastosPlaneados
                 const gastosR = await _sb.from('cash_planning').select('data').eq('id','gastosPlaneados').maybeSingle();
                 if (gastosR.data?.data) localStorage.setItem('cajaGastosPlaneados', JSON.stringify(gastosR.data.data));
+                // miCerebroTareas
+                const mcR = await _sb.from('app_config').select('data').eq('id','miCerebroTareas').maybeSingle();
+                if (mcR.data?.data) localStorage.setItem('miCerebroTareas', JSON.stringify(mcR.data.data));
 
                 // Préstamos
                 set('prestamosData',  prestamos.data?.data || []);
@@ -228,15 +232,18 @@
         });
 
         async function init() {
-            // Si se acaba de importar un backup, migrar primero
+            // Migración pendiente (después de importar backup)
             if (localStorage.getItem('__pendingMigration') === '1') {
                 await migrarLocalStorage();
                 localStorage.removeItem('__pendingMigration');
             }
-            // SIEMPRE precargar desde Supabase (es la fuente de verdad)
-            await precargarDesdeSupabase();
-            window.__supabaseReady = true;
-            window.__resolveSupabase();
+            // Precargar desde Supabase en background
+            precargarDesdeSupabase().then(() => {
+                window.__supabaseReady = true;
+                window.__resolveSupabase();
+                // Notificar a React que los datos están listos
+                window.dispatchEvent(new CustomEvent('supabase-loaded'));
+            });
         }
         init();
     </script>
@@ -1285,6 +1292,58 @@ ${invoice.items.map(item => `
             const [userInput, setUserInput] = useState('');
             const [pinInput, setPinInput] = useState('');
             const [showPassword, setShowPassword] = useState(false);
+            const [supabaseReady, setSupabaseReady] = useState(window.__supabaseReady || false);
+            const [ocultarBannerVencidas, setOcultarBannerVencidas] = useState(false);
+            const [notifKey, setNotifKey] = useState(0);
+            const refreshNotifs = React.useCallback(() => setNotifKey(k => k+1), []);
+
+            useEffect(() => {
+                if (window.__supabaseReady) { setSupabaseReady(true); refreshNotifs(); return; }
+                const handler = () => { setSupabaseReady(true); refreshNotifs(); };
+                window.addEventListener('supabase-loaded', handler);
+                return () => window.removeEventListener('supabase-loaded', handler);
+            }, []);
+
+            // Escuchar eventos de actualización de tareas
+            useEffect(() => {
+                const handler = () => refreshNotifs();
+                window.addEventListener('tareasVistasUpdate', handler);
+                window.addEventListener('tareasUpdate', handler);
+                window.addEventListener('chatUpdate', handler);
+                return () => {
+                    window.removeEventListener('tareasVistasUpdate', handler);
+                    window.removeEventListener('tareasUpdate', handler);
+                    window.removeEventListener('chatUpdate', handler);
+                };
+            }, []);
+
+            // Polling cada 60s para sincronizar tareas desde Supabase
+            useEffect(() => {
+                if (!currentUser) return;
+                const poll = setInterval(async () => {
+                    try {
+                        const r = await window._sb?.from('app_config').select('data').eq('id','miCerebroTareas').maybeSingle();
+                        if (r?.data?.data) {
+                            localStorage.setItem('miCerebroTareas', JSON.stringify(r.data.data));
+                            refreshNotifs();
+                        }
+                    } catch(e) {}
+                }, 30000);
+                return () => clearInterval(poll);
+            }, [currentUser]);
+
+            // Leer tareas actualizadas reactivamente
+            const tareasActuales = React.useMemo(() => {
+                try { return JSON.parse(localStorage.getItem('miCerebroTareas') || '[]'); } catch(e) { return []; }
+            }, [notifKey]);
+            const tareasVistasActuales = React.useMemo(() => {
+                try { return JSON.parse(localStorage.getItem('miCerebroTareasVistas') || '[]'); } catch(e) { return []; }
+            }, [notifKey]);
+            const chatVistosActuales = React.useMemo(() => {
+                try { return JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}'); } catch(e) { return {}; }
+            }, [notifKey]);
+
+
             const [bioAvailable, setBioAvailable] = useState(false);
             const [bioRegistered, setBioRegistered] = useState(false);
             const [bioLoading, setBioLoading] = useState(false);
@@ -1416,12 +1475,15 @@ ${invoice.items.map(item => `
                 };
             }, [isUnlocked, autoLogoutMinutes]);
             const [editingModuleOrder, setEditingModuleOrder] = useState(false);
+
             const [moduleSearch, setModuleSearch] = useState('');
+            const [expandedModules, setExpandedModules] = useState({});
+            const toggleModuleExpand = (id, e) => { if(e) e.stopPropagation(); setExpandedModules(prev => ({...prev, [id]: !prev[id]})); };
             
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'stock'];
+            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'stock', 'cocina', 'micerebro'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
@@ -1462,11 +1524,15 @@ ${invoice.items.map(item => `
             
             const moveModule = (index, direction) => {
                 const newOrder = [...moduleOrder];
-                const targetIndex = index + direction;
+                let targetIndex;
+                if (direction === 'up') targetIndex = index - 3;
+                else if (direction === 'down') targetIndex = index + 3;
+                else targetIndex = index + direction;
                 if (targetIndex < 0 || targetIndex >= newOrder.length) return;
                 [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
                 saveModuleOrder(newOrder);
             };
+            const moveModuleRow = (index, dir) => moveModule(index, dir);
             
             // Sistema de auditoría
             const logAccess = (moduleName) => {
@@ -1669,6 +1735,9 @@ ${invoice.items.map(item => `
             };
             
             const t = translations[currentLanguage] || translations['es'];
+            const systemUsers = React.useMemo(() => {
+                try { return JSON.parse(localStorage.getItem('systemUsers') || '[]'); } catch(e) { return []; }
+            }, [currentUser]);
             
             const changeLanguage = (lang) => {
                 setCurrentLanguage(lang);
@@ -1870,6 +1939,7 @@ ${invoice.items.map(item => `
                 setActiveModule('home');
                 setUserInput('');
                 setPinInput('');
+                setOcultarBannerVencidas(false);
             };
 
             const handleChangePin = () => {
@@ -2230,6 +2300,120 @@ ${invoice.items.map(item => `
                     </div>
                     
                     
+                    {/* Banner tareas compartidas nuevas */}
+                    {(() => {
+                        try {
+                            const tt = tareasActuales;
+                            const vistas = tareasVistasActuales;
+                            const nuevas = tt.filter(t =>
+                                !t.completada &&
+                                String(t.autorId) !== String(currentUser?.id) &&
+                                (t.compartidoCon||[]).includes(String(currentUser?.id)) &&
+                                !vistas.includes(t.id)
+                            );
+                            if (!nuevas.length) return null;
+                            return (
+                                <div className="flex items-center gap-3 px-4 py-2.5"
+                                    style={{background:'linear-gradient(90deg, #d97706, #b45309)', color:'white'}}>
+                                    <span className="text-lg shrink-0">🤝</span>
+                                    <p className="text-sm font-medium flex-1">
+                                        <strong>{nuevas[0]?.autorNombre?.split(' ')[0]}</strong> te compartió {nuevas.length > 1 ? `${nuevas.length} tareas` : `"${nuevas[0]?.titulo}"`}
+                                    </p>
+                                    <button onClick={() => {
+                                        const ids = nuevas.map(t => t.id);
+                                        const yaVistas = JSON.parse(localStorage.getItem('miCerebroTareasVistas') || '[]');
+                                        localStorage.setItem('miCerebroTareasVistas', JSON.stringify([...new Set([...yaVistas, ...ids])]));
+                                        setActiveModule('micerebro');
+                                    }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
+                                    <button onClick={() => {
+                                        const ids = nuevas.map(t => t.id);
+                                        const yaVistas = JSON.parse(localStorage.getItem('miCerebroTareasVistas') || '[]');
+                                        localStorage.setItem('miCerebroTareasVistas', JSON.stringify([...new Set([...yaVistas, ...ids])]));
+                                        window.dispatchEvent(new Event('tareasVistasUpdate'));
+                                    }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
+                                </div>
+                            );
+                        } catch(e) { return null; }
+                    })()}
+
+                    {/* Banner tareas vencidas */}
+                    {!ocultarBannerVencidas && (() => {
+                        try {
+                            const tt = tareasActuales;
+                            const hoyB = new Date(); hoyB.setHours(0,0,0,0);
+                            const venc = tt.filter(t => {
+                                if (!t.vencimiento || t.completada) return false;
+                                if (new Date(t.vencimiento + 'T12:00:00') >= hoyB) return false;
+                                // Autor siempre ve su vencimiento
+                                if (String(t.autorId) === String(currentUser?.id)) return true;
+                                // Compartido: solo si el autor eligió compartir el aviso
+                                if ((t.compartidoCon||[]).includes(String(currentUser?.id)) && t.compartirVencimiento) return true;
+                                return false;
+                            });
+                            if (!venc.length) return null;
+                            return (
+                                <div onClick={() => setActiveModule('micerebro')}
+                                    className="cursor-pointer flex items-center gap-3 px-4 py-2.5"
+                                    style={{background: 'linear-gradient(90deg, #dc2626, #b91c1c)', color: 'white'}}>
+                                    <span className="text-lg shrink-0">🧠</span>
+                                    <p className="text-sm font-medium flex-1">
+                                        Tenés <strong>{venc.length}</strong> tarea{venc.length !== 1 ? 's' : ''} vencida{venc.length !== 1 ? 's' : ''} en Mi Cerebro
+                                        {venc[0]?.titulo ? ` — "${venc[0].titulo}"` : ''}
+                                    </p>
+                                    <button onClick={() => setActiveModule('micerebro')} className="text-xs opacity-80 hover:opacity-100 shrink-0">Ver →</button>
+                                    <button onClick={e => { e.stopPropagation(); setOcultarBannerVencidas(true); }} className="ml-1 w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/20 opacity-70 hover:opacity-100 shrink-0 text-sm" title="Cerrar hasta próximo login">✕</button>
+                                </div>
+                            );
+                        } catch(e) { return null; }
+                    })()}
+
+                    {/* Banner notas nuevas */}
+                    {(() => {
+                        if (!currentUser) return null;
+                        const uid = String(currentUser.id);
+                        const tt = tareasActuales;
+                        const vistos = chatVistosActuales;
+                        let totalNew = 0;
+                        const conNotas = [];
+                        tt.forEach(t => {
+                            if (!t.chat || !t.chat.length) return;
+                            if (t.completada) return;  // ignorar tareas completadas
+                            const esAutor = String(t.autorId) === uid;
+                            const esCompartida = (t.compartidoCon||[]).includes(uid);
+                            if (!esAutor && !esCompartida) return;
+                            const vistoHasta = vistos[String(t.id)] || 0;
+                            const nuevas = t.chat.filter(m => m.ts > vistoHasta && String(m.autorId) !== uid);
+                            if (nuevas.length > 0) {
+                                totalNew += nuevas.length;
+                                conNotas.push(t);
+                            }
+                        });
+                        if (!conNotas.length) return null;
+                        return (
+                            <div className="flex items-center gap-3 px-4 py-2.5"
+                                style={{background:'linear-gradient(90deg, #7c3aed, #6d28d9)', color:'white'}}>
+                                <span className="text-lg shrink-0">📝</span>
+                                <p className="text-sm font-medium flex-1">
+                                    Hay <strong>{totalNew}</strong> nota{totalNew>1?'s':''} nueva{totalNew>1?'s':''} en {conNotas.length > 1 ? 'tus tareas' : `"${conNotas[0]?.titulo}"`}
+                                </p>
+                                <button onClick={() => setActiveModule('micerebro')}
+                                    className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                    style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
+                                <button onClick={() => {
+                                    const nuevosVistos = {...vistos};
+                                    conNotas.forEach(t => { nuevosVistos[String(t.id)] = Date.now(); });
+                                    localStorage.setItem('miCerebroChatVistos', JSON.stringify(nuevosVistos));
+                                    refreshNotifs();
+                                }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                    style={{background:'rgba(255,255,255,0.2)'}}>Ya lo leí ✓</button>
+                            </div>
+                        );
+                    })()}
+
+
+
                     {/* Contenido principal */}
                     {activeModule === 'home' && (
                         <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -2349,8 +2533,26 @@ ${invoice.items.map(item => `
                                     navigate: 'stock',
                                     color: 'amber',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-amber-400' : 'text-amber-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
-                                    title: 'Manejo de Stock',
+                                    title: 'Almacén',
                                     desc: 'Control de inventario y stock',
+                                    detail: 'Módulo en construcción. Próximamente disponible.',
+                                },
+                                cocina: {
+                                    permission: 'apps',
+                                    navigate: 'cocina',
+                                    color: 'orange',
+                                    icon: <svg className={`w-8 h-8 ${darkMode ? 'text-orange-400' : 'text-orange-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+                                    title: 'Gestión de Cocina',
+                                    desc: 'Gestión y organización de cocina',
+                                    detail: 'Módulo en construcción. Próximamente disponible.',
+                                },
+                                micerebro: {
+                                    permission: 'apps',
+                                    navigate: 'micerebro',
+                                    color: 'purple',
+                                    icon: <span className="text-3xl group-hover:brightness-0 group-hover:invert transition-all">🧠</span>,
+                                    title: 'Mi Cerebro',
+                                    desc: 'Tu espacio personal de notas e ideas',
                                     detail: 'Módulo en construcción. Próximamente disponible.',
                                 },
                             };
@@ -2381,48 +2583,85 @@ ${invoice.items.map(item => `
                             });
 
                             return (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6" style={{gridAutoRows: '1fr'}}>
                                 {visibleModules.map((key, index) => {
                                     const mod = allModules[key];
                                     const colors = colorMap[mod.color];
                                     return (
-                                        <div key={key} className="relative">
+                                        <div key={key} className="relative h-full flex flex-col">
                                             {/* Botones de orden — solo en modo edición */}
                                             {editingModuleOrder && (
                                                 <div className="absolute -top-3 right-2 z-10 flex gap-1">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); moveModule(visibleModules.indexOf(key), -1); }}
                                                         disabled={index === 0}
-                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${
-                                                            index === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'
-                                                        }`}
-                                                        title="Mover arriba / izquierda"
-                                                    >←</button>
+                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${index === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
+                                                        title="Mover izquierda">←</button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); moveModule(visibleModules.indexOf(key), 'up'); }}
+                                                        disabled={index < 3}
+                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${index < 3 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
+                                                        title="Mover arriba">↑</button>
                                                     <span className={`w-6 h-7 flex items-center justify-center text-xs font-bold ${darkMode ? 'text-slate-300' : 'text-slate-500'}`}>{index + 1}</span>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); moveModule(visibleModules.indexOf(key), 'down'); }}
+                                                        disabled={index >= visibleModules.length - 3}
+                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${index >= visibleModules.length - 3 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
+                                                        title="Mover abajo">↓</button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); moveModule(visibleModules.indexOf(key), 1); }}
                                                         disabled={index === visibleModules.length - 1}
-                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${
-                                                            index === visibleModules.length - 1 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'
-                                                        }`}
-                                                        title="Mover abajo / derecha"
-                                                    >→</button>
+                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${index === visibleModules.length - 1 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
+                                                        title="Mover derecha">→</button>
                                                 </div>
                                             )}
+                                            {(() => {
+                                                    if (mod.id !== 'micerebro') return null;
+                                                    try {
+                                                        const tt = JSON.parse(localStorage.getItem('miCerebroTareas') || '[]');
+                                                        const hoyB = new Date(); hoyB.setHours(0,0,0,0);
+                                                        const n = tt.filter(t =>
+                                                            !t.completada &&
+                                                            t.vencimiento &&
+                                                            new Date(t.vencimiento + 'T12:00:00') < hoyB &&
+                                                            (String(t.autorId) === String(currentUser?.id) || (t.compartidoCon||[]).includes(String(currentUser?.id)))
+                                                        ).length;
+                                                        if (!n) return null;
+                                                        return (
+                                                            <div key="badge" style={{position:'absolute', top:'-8px', right:'-8px', zIndex:30,
+                                                                background:'#ef4444', color:'white', borderRadius:'50%',
+                                                                minWidth:'22px', height:'22px', display:'flex', alignItems:'center',
+                                                                justifyContent:'center', fontSize:'11px', fontWeight:'bold',
+                                                                boxShadow:'0 2px 8px rgba(0,0,0,0.3)', padding:'0 4px'}}>
+                                                                {n > 9 ? '9+' : n}
+                                                            </div>
+                                                        );
+                                                    } catch(e) { return null; }
+                                                })()}
                                             <button
                                                 onClick={() => !editingModuleOrder && navigateToModule(mod.navigate)}
-                                                className={`w-full ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border-2 p-6 ${!editingModuleOrder ? `${colors.border} hover:shadow-lg` : 'border-dashed border-emerald-400'} transition-all text-left group ${editingModuleOrder ? 'cursor-default' : ''}`}
+                                                className={`w-full h-full ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} rounded-xl shadow-sm border-2 p-4 ${!editingModuleOrder ? `${colors.border} hover:shadow-md` : 'border-dashed border-emerald-400'} transition-all text-left group ${editingModuleOrder ? 'cursor-default' : ''} relative flex flex-col`}
                                             >
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <div className={`p-3 ${colors.bg} rounded-lg ${!editingModuleOrder ? colors.hover : ''} transition-colors`}>
+                                                {/* Badge tareas vencidas Mi Cerebro */}
+
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`p-2.5 ${colors.bg} rounded-lg ${!editingModuleOrder ? colors.hover : ''} transition-colors shrink-0`}>
                                                         {mod.icon}
                                                     </div>
-                                                    <div>
-                                                        <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{mod.title}</h3>
-                                                        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{mod.desc}</p>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className={`text-base font-bold ${darkMode ? 'text-white' : 'text-slate-900'} truncate`}>{mod.title}</h3>
+                                                        <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'} truncate`}>{mod.desc}</p>
                                                     </div>
+                                                    {!editingModuleOrder && (
+                                                        <button onClick={(e) => { e.stopPropagation(); toggleModuleExpand(mod.id); }}
+                                                            className={`shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-all ${darkMode?'hover:bg-slate-700 text-slate-500':'hover:bg-slate-100 text-slate-400'}`}>
+                                                            <svg className={`w-3.5 h-3.5 transition-transform ${expandedModules[mod.id] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{mod.detail}</p>
+                                                {expandedModules[mod.id] && (
+                                                    <p className={`text-xs mt-3 ${darkMode ? 'text-slate-400' : 'text-slate-600'} leading-relaxed`}>{mod.detail}</p>
+                                                )}
                                             </button>
                                         </div>
                                     );
@@ -2548,6 +2787,23 @@ ${invoice.items.map(item => `
                     )}
 
                     {/* Módulo: Seguimiento de Préstamos */}
+                    {activeModule === 'cocina' && (
+                        <div className={`min-h-screen flex flex-col items-center justify-center ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                            <div className="text-center max-w-md px-6">
+                                <button onClick={() => setActiveModule('home')} className={`mb-8 flex items-center gap-1 text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>
+                                <div className="text-7xl mb-6">👨‍🍳</div>
+                                <h1 className={`text-2xl font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-800'}`}>Gestión de Cocina</h1>
+                                <p className={`text-base mb-2 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>Gestión y organización de cocina</p>
+                                <div className={`mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${darkMode ? 'bg-orange-900/40 text-orange-400 border border-orange-700' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
+                                    🚧 En construcción
+                                </div>
+                                <p className={`mt-4 text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Este módulo estará disponible próximamente.</p>
+                            </div>
+                        </div>
+                    )}
+                    {activeModule === 'micerebro' && (
+                        <MiCerebroModule darkMode={darkMode} currentUser={currentUser} systemUsers={systemUsers} onBack={() => setActiveModule('home')} />
+                    )}
                     {activeModule === 'stock' && (
                         <div className={`min-h-screen flex flex-col items-center justify-center ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
                             <div className="text-center max-w-md px-6">
@@ -5455,7 +5711,7 @@ ${invoice.items.map(item => `
                 }
             };
             
-            const t = translations[language];
+            const t = translations[language] || translations['es'] || {};
             
             // Si no tiene acceso
             if (!canRead) {
@@ -5744,7 +6000,7 @@ ${invoice.items.map(item => `
                 }
             };
             
-            const t = translations[language];
+            const t = translations[language] || translations['es'] || {};
             
             // Si no tiene acceso de lectura, mostrar mensaje
             if (!canRead) {
@@ -21298,14 +21554,356 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         };
 
         // Esperar a que Supabase precargue antes de renderizar
+
+        // ══════════════════════════════════════════════════════════════════
+        // MI CEREBRO — Gestor de tareas personal con compartir y vencimientos
+        // ══════════════════════════════════════════════════════════════════
+        const MiCerebroModule = ({ darkMode, currentUser, systemUsers, onBack }) => {
+            const [tareas, setTareas] = React.useState(() => {
+                try { return JSON.parse(localStorage.getItem('miCerebroTareas') || '[]'); } catch(e) { return []; }
+            });
+            const [showModal, setShowModal] = React.useState(false);
+            const [editingTarea, setEditingTarea] = React.useState(null);
+            const [form, setForm] = React.useState({ titulo: '', descripcion: '', vencimiento: '', prioridad: 'media', compartidoCon: [], compartirVencimiento: false });
+            const [chatTarea, setChatTarea] = React.useState(null);
+            const [chatMsg, setChatMsg] = React.useState('');
+            const [chatVistos, setChatVistos] = React.useState(() => {
+                try { return JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}'); } catch(e) { return {}; }
+            });
+
+            // Al montar, sincronizar tareas desde Supabase
+            React.useEffect(() => {
+                const sync = async () => {
+                    try {
+                        const r = await window._sb?.from('app_config').select('data').eq('id','miCerebroTareas').maybeSingle();
+                        if (r?.data?.data) {
+                            const remoto = r.data.data;
+                            localStorage.setItem('miCerebroTareas', JSON.stringify(remoto));
+                            setTareas(remoto);
+                            window.dispatchEvent(new Event('tareasUpdate'));
+                        }
+                    } catch(e) {}
+                };
+                sync();
+            }, []);
+
+            const saveTareas = (lista) => {
+                setTareas(lista);
+                localStorage.setItem('miCerebroTareas', JSON.stringify(lista));
+                dbUpsertOne('app_config', 'miCerebroTareas', lista);
+                window.dispatchEvent(new Event('tareasUpdate'));
+            };
+
+            const marcarChatVisto = (tareaId) => {
+                const nuevos = {...chatVistos, [String(tareaId)]: Date.now()};
+                setChatVistos(nuevos);
+                localStorage.setItem('miCerebroChatVistos', JSON.stringify(nuevos));
+                window.dispatchEvent(new Event('chatUpdate'));
+            };
+
+            const enviarMensaje = () => {
+                if (!chatMsg.trim() || !chatTarea) return;
+                const msg = { id: Date.now(), ts: Date.now(), autorId: String(currentUser?.id), autorNombre: `${currentUser?.name} ${currentUser?.lastname||''}`.trim(), texto: chatMsg.trim() };
+                const lista = tareas.map(t => t.id === chatTarea.id ? {...t, chat: [...(t.chat||[]), msg]} : t);
+                saveTareas(lista);
+                setChatMsg('');
+                setChatTarea(lista.find(t => t.id === chatTarea.id));
+            };
+
+            const mensajesNuevos = (tarea) => {
+                if (!tarea.chat || !tarea.chat.length) return 0;
+                const vistoHasta = chatVistos[String(tarea.id)] || 0;
+                return tarea.chat.filter(m => m.ts > vistoHasta && String(m.autorId) !== String(currentUser?.id)).length;
+            };
+
+            const toggleCompletar = (id) => {
+                const tarea = tareas.find(t => t.id === id);
+                saveTareas(tareas.map(t => t.id === id ? { ...t, completada: !t.completada, completadaEl: !t.completada ? new Date().toISOString() : null } : t));
+                if (tarea && !tarea.completada) {
+                    const vistos = JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}');
+                    delete vistos[String(id)];
+                    localStorage.setItem('miCerebroChatVistos', JSON.stringify(vistos));
+                    window.dispatchEvent(new Event('chatUpdate'));
+                }
+            };
+
+            const eliminarTarea = (id) => {
+                if (!confirm('¿Eliminar esta tarea?')) return;
+                saveTareas(tareas.filter(t => t.id !== id));
+                const vistos = JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}');
+                delete vistos[String(id)];
+                localStorage.setItem('miCerebroChatVistos', JSON.stringify(vistos));
+                window.dispatchEvent(new Event('chatUpdate'));
+            };
+
+            const openNew = () => {
+                setEditingTarea(null);
+                setForm({ titulo: '', descripcion: '', vencimiento: '', prioridad: 'media', compartidoCon: [], compartirVencimiento: false });
+                setShowModal(true);
+            };
+            const openEdit = (t) => {
+                setEditingTarea(t);
+                setForm({ titulo: t.titulo, descripcion: t.descripcion||'', vencimiento: t.vencimiento||'', prioridad: t.prioridad||'media', compartidoCon: t.compartidoCon||[], compartirVencimiento: t.compartirVencimiento||false });
+                setShowModal(true);
+            };
+            const saveTarea = () => {
+                if (!form.titulo.trim()) return;
+                if (editingTarea) {
+                    saveTareas(tareas.map(t => t.id === editingTarea.id ? {...t, ...form} : t));
+                } else {
+                    saveTareas([...tareas, { id: Date.now(), ...form, autorId: String(currentUser?.id), autorNombre: `${currentUser?.name} ${currentUser?.lastname||''}`.trim(), completada: false, creadaEl: new Date().toISOString() }]);
+                }
+                setShowModal(false);
+            };
+
+            const uid = String(currentUser?.id);
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+            const fmtVenc = (v) => {
+                if (!v) return null;
+                const d = new Date(v + 'T12:00:00');
+                const diff = Math.round((d - hoy) / 86400000);
+                if (diff < 0) return { label: `Vencida hace ${Math.abs(diff)}d`, cls: 'text-red-500 bg-red-50 dark:bg-red-900/20' };
+                if (diff === 0) return { label: 'Vence hoy', cls: 'text-orange-500 bg-orange-50' };
+                if (diff === 1) return { label: 'Mañana', cls: 'text-amber-500 bg-amber-50' };
+                return { label: `${diff}d`, cls: darkMode ? 'text-slate-400' : 'text-slate-500' };
+            };
+
+            const prioColor = { alta: 'bg-red-500', media: 'bg-amber-400', baja: 'bg-slate-400' };
+            const txt = darkMode ? 'text-white' : 'text-slate-800';
+            const sub = darkMode ? 'text-slate-400' : 'text-slate-500';
+            const otrosUsuarios = (systemUsers||[]).filter(u => String(u.id) !== uid && u.activo !== false);
+
+            // Separar tareas en 3 grupos
+            const misActivas = tareas.filter(t => String(t.autorId) === uid && !t.completada && !(t.compartidoCon||[]).length);
+            const misCompartidas = tareas.filter(t => String(t.autorId) === uid && !t.completada && (t.compartidoCon||[]).length > 0);
+            const compartConmigo = tareas.filter(t => String(t.autorId) !== uid && (t.compartidoCon||[]).includes(uid) && !t.completada);
+            const completadas = tareas.filter(t => (String(t.autorId) === uid || (t.compartidoCon||[]).includes(uid)) && t.completada);
+
+            const TareaCard = ({ tarea, esPropia, mostrarDe = false }) => {
+                const venc = fmtVenc(tarea.vencimiento);
+                const pc = prioColor[tarea.prioridad] || prioColor.media;
+                const notasN = mensajesNuevos(tarea);
+                const ultimaNota = tarea.chat && tarea.chat.length > 0 ? tarea.chat[tarea.chat.length - 1] : null;
+                return (
+                    <div className={`rounded-xl border p-3 flex flex-col gap-2 ${tarea.completada ? 'opacity-50' : ''} ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        {/* Header tarea */}
+                        <div className="flex items-start gap-2">
+                            <button onClick={() => toggleCompletar(tarea.id)}
+                                className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${tarea.completada ? 'bg-purple-600 border-purple-600' : (darkMode ? 'border-slate-600 hover:border-purple-500' : 'border-slate-300 hover:border-purple-500')}`}>
+                                {tarea.completada && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${pc}`}/>
+                                    <p className={`text-sm font-semibold ${txt} ${tarea.completada?'line-through':''} truncate`}>{tarea.titulo}</p>
+                                </div>
+                                {tarea.descripcion && <p className={`text-xs mt-0.5 ${sub} truncate`}>{tarea.descripcion}</p>}
+                                {mostrarDe && <p className={`text-xs ${sub}`}>De: <span className="font-medium">{tarea.autorNombre?.split(' ')[0]}</span></p>}
+                            </div>
+                            {/* Acciones */}
+                            <div className="flex items-center gap-1 shrink-0">
+                                {venc && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${venc.cls}`}>{venc.label}</span>}
+                                {tarea.completada
+                                    ? <button onClick={() => toggleCompletar(tarea.id)} className={`text-xs px-1.5 py-0.5 rounded ${darkMode?'bg-slate-700 text-slate-400':'bg-slate-100 text-slate-500'}`}>↩</button>
+                                    : <>
+                                        {esPropia && <button onClick={() => openEdit(tarea)} className={`p-1 rounded ${darkMode?'hover:bg-slate-700 text-slate-500':'hover:bg-slate-100 text-slate-400'}`}>✏️</button>}
+                                        {esPropia && <button onClick={() => eliminarTarea(tarea.id)} className={`p-1 rounded ${darkMode?'hover:bg-red-900/30 text-slate-500':'hover:bg-red-50 text-slate-400'}`}>🗑️</button>}
+                                    </>
+                                }
+                            </div>
+                        </div>
+
+                        {/* Notas: última nota visible + botón */}
+                        <div className={`border-t pt-2 ${darkMode?'border-slate-700':'border-slate-100'}`}>
+                            {ultimaNota && (
+                                <div className={`text-xs px-2 py-1.5 rounded-lg mb-1.5 ${darkMode?'bg-slate-700/60':'bg-slate-50'}`}>
+                                    <span className={`font-semibold ${String(ultimaNota.autorId)===uid?(darkMode?'text-purple-400':'text-purple-600'):sub}`}>
+                                        {String(ultimaNota.autorId)===uid?'Vos':ultimaNota.autorNombre?.split(' ')[0]}:
+                                    </span>
+                                    <span className={` ml-1 ${txt}`}>{ultimaNota.texto.length > 60 ? ultimaNota.texto.slice(0,60)+'…' : ultimaNota.texto}</span>
+                                </div>
+                            )}
+                            <button onClick={() => setChatTarea(tarea)}
+                                className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${notasN > 0 ? 'bg-purple-600 text-white font-medium' : darkMode?'bg-slate-700/60 text-slate-400 hover:bg-slate-700':'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
+                                <span>📝</span>
+                                <span>{notasN > 0 ? `${notasN} nota${notasN>1?'s':''} nueva${notasN>1?'s':''}` : ultimaNota ? `${tarea.chat.length} nota${tarea.chat.length>1?'s':''}` : 'Agregar nota'}</span>
+                                {notasN > 0 && <span className="ml-auto bg-white/30 text-white text-xs font-bold px-1 rounded">{notasN}</span>}
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
+
+            const Columna = ({ titulo, emoji, color, tareas: ts, esPropia, mostrarDe = false, extra = null }) => (
+                <div className={`flex flex-col rounded-2xl border-2 ${darkMode?'border-slate-700 bg-slate-800/50':'border-slate-200 bg-slate-50'} min-h-0`}>
+                    <div className={`px-4 py-3 border-b flex items-center gap-2 shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                        <span className="text-lg">{emoji}</span>
+                        <h2 className={`text-sm font-bold ${color}`}>{titulo}</h2>
+                        <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-white text-slate-600 border border-slate-200'}`}>{ts.length}</span>
+                        {extra}
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                        {ts.length === 0 && <p className={`text-xs text-center py-6 ${sub}`}>Sin tareas</p>}
+                        {ts.map(t => <TareaCard key={t.id} tarea={t} esPropia={esPropia} mostrarDe={mostrarDe}/>)}
+                        {completadas.length > 0 && esPropia && mostrarDe === false && (
+                            <details className="mt-2">
+                                <summary className={`text-xs cursor-pointer ${sub} hover:text-slate-700`}>Ver {completadas.length} completada{completadas.length>1?'s':''}</summary>
+                                <div className="mt-2 space-y-2">
+                                    {completadas.map(t => <TareaCard key={t.id} tarea={t} esPropia={String(t.autorId)===uid} mostrarDe={String(t.autorId)!==uid}/>)}
+                                </div>
+                            </details>
+                        )}
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className={`min-h-screen flex flex-col ${darkMode?'bg-slate-900':'bg-slate-50'}`}>
+                    {/* Header */}
+                    <div className={`border-b px-4 py-3 flex items-center gap-3 shrink-0 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                        <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Menú</button>
+                        <span className="text-xl">🧠</span>
+                        <h1 className={`text-base font-bold ${txt}`}>Mi Cerebro</h1>
+                        <button onClick={openNew} className="ml-auto px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">+ Nueva tarea</button>
+                    </div>
+
+                    {/* 3 columnas */}
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 min-h-0" style={{minHeight:'calc(100vh - 57px)'}}>
+                        <Columna
+                            titulo="Mis tareas" emoji="📋"
+                            color={darkMode?'text-white':'text-slate-800'}
+                            tareas={misActivas} esPropia={true}
+                            extra={<button onClick={openNew} className={`ml-2 text-xs px-2 py-0.5 rounded-lg ${darkMode?'bg-slate-700 text-slate-300 hover:bg-slate-600':'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>+</button>}
+                        />
+                        <Columna
+                            titulo="Mis tareas compartidas" emoji="📤"
+                            color={darkMode?'text-blue-400':'text-blue-700'}
+                            tareas={misCompartidas} esPropia={true}
+                        />
+                        <Columna
+                            titulo="Compartidas conmigo" emoji="🤝"
+                            color={darkMode?'text-amber-400':'text-amber-700'}
+                            tareas={compartConmigo} esPropia={false} mostrarDe={true}
+                        />
+                    </div>
+
+                    {/* Modal nueva/editar tarea */}
+                    {showModal && (
+                        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                            <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-5 max-h-[90vh] overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`}>
+                                <h2 className={`text-sm font-bold mb-4 ${txt}`}>{editingTarea?'Editar tarea':'Nueva tarea'}</h2>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className={`text-xs font-semibold ${sub}`}>Título *</label>
+                                        <input type="text" value={form.titulo} onChange={e => setForm(f=>({...f,titulo:e.target.value}))}
+                                            className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`} placeholder="¿Qué necesitás hacer?"/>
+                                    </div>
+                                    <div>
+                                        <label className={`text-xs font-semibold ${sub}`}>Descripción</label>
+                                        <textarea value={form.descripcion} onChange={e => setForm(f=>({...f,descripcion:e.target.value}))} rows={2}
+                                            className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm resize-none ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`} placeholder="Detalles opcionales..."/>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className={`text-xs font-semibold ${sub}`}>Vencimiento</label>
+                                            <input type="date" value={form.vencimiento} onChange={e => setForm(f=>({...f,vencimiento:e.target.value}))}
+                                                className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}/>
+                                        </div>
+                                        <div>
+                                            <label className={`text-xs font-semibold ${sub}`}>Prioridad</label>
+                                            <select value={form.prioridad} onChange={e => setForm(f=>({...f,prioridad:e.target.value}))}
+                                                className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}>
+                                                <option value="alta">🔴 Alta</option>
+                                                <option value="media">🟡 Media</option>
+                                                <option value="baja">⚪ Baja</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    {otrosUsuarios.length > 0 && (
+                                        <div>
+                                            <label className={`text-xs font-semibold ${sub}`}>Compartir con</label>
+                                            <div className="mt-1 flex flex-wrap gap-2">
+                                                {otrosUsuarios.map(u => (
+                                                    <button key={u.id} onClick={() => setForm(f=>({...f,compartidoCon:f.compartidoCon.includes(String(u.id))?f.compartidoCon.filter(id=>id!==String(u.id)):[...f.compartidoCon,String(u.id)]}))}
+                                                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${form.compartidoCon.includes(String(u.id))?'bg-purple-600 text-white border-purple-600':darkMode?'bg-slate-700 text-slate-300 border-slate-600':'bg-white text-slate-600 border-slate-300'}`}>
+                                                        {u.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {form.compartidoCon.length > 0 && (
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <button type="button" onClick={() => setForm(f=>({...f,compartirVencimiento:!f.compartirVencimiento}))}
+                                                        className={`w-4 h-4 rounded border-2 flex items-center justify-center ${form.compartirVencimiento?'bg-purple-600 border-purple-600':darkMode?'border-slate-500':'border-slate-300'}`}>
+                                                        {form.compartirVencimiento && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+                                                    </button>
+                                                    <span className={`text-xs ${sub}`}>Compartir aviso de vencimiento</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={() => setShowModal(false)} className={`flex-1 py-2 rounded-lg text-sm ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>Cancelar</button>
+                                    <button onClick={saveTarea} className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">💾 Guardar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Notas */}
+                    {chatTarea && (
+                        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                            <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md flex flex-col max-h-[85vh] ${darkMode?'bg-slate-800':'bg-white'}`}>
+                                <div className={`flex items-center gap-3 px-4 py-3 border-b shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm font-bold truncate ${txt}`}>📝 {chatTarea.titulo}</p>
+                                        <p className={`text-xs ${sub}`}>Notas de progreso</p>
+                                    </div>
+                                    <button onClick={() => { marcarChatVisto(chatTarea.id); setChatTarea(null); }}
+                                        className={`text-xs px-2 py-1.5 rounded-lg font-medium mr-1 ${darkMode?'bg-slate-700 text-slate-300 hover:bg-green-900/40 hover:text-green-300':'bg-slate-100 text-slate-600 hover:bg-green-100 hover:text-green-700'}`}>Ya lo leí ✓</button>
+                                    <button onClick={() => setChatTarea(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0" style={{minHeight:'200px'}}>
+                                    {(!chatTarea.chat || chatTarea.chat.length === 0) && (
+                                        <p className={`text-xs text-center py-8 ${sub}`}>Sin notas aún. Agregá la primera.</p>
+                                    )}
+                                    {(chatTarea.chat||[]).map(msg => {
+                                        const esMio = String(msg.autorId) === uid;
+                                        const fecha = new Date(msg.ts).toLocaleDateString('es-AR', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+                                        return (
+                                            <div key={msg.id} className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border-l-4 ${esMio
+                                                ? darkMode?'bg-purple-900/30 border-purple-500':'bg-purple-50 border-purple-400'
+                                                : darkMode?'bg-slate-700/50 border-slate-500':'bg-slate-50 border-slate-300'}`}>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        <span className={`text-xs font-semibold ${esMio?(darkMode?'text-purple-300':'text-purple-700'):sub}`}>{esMio?'Vos':msg.autorNombre?.split(' ')[0]}</span>
+                                                        <span className={`text-xs ${sub}`}>{fecha}</span>
+                                                    </div>
+                                                    <p className={`text-sm ${txt}`}>{msg.texto}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <div className={`flex gap-2 p-3 border-t shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                    <input type="text" value={chatMsg} onChange={e => setChatMsg(e.target.value)}
+                                        onKeyDown={e => e.key==='Enter' && !e.shiftKey && enviarMensaje()}
+                                        placeholder="Agregá una nota de progreso..."
+                                        className={`flex-1 px-3 py-2 border rounded-xl text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white placeholder-slate-500':'border-slate-300'}`}/>
+                                    <button onClick={enviarMensaje} disabled={!chatMsg.trim()}
+                                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-xl text-sm font-medium">→</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+
         async function arrancarApp() {
-            // Esperar a la Promise global de Supabase (con fallback de 10s)
-            if (window.__supabaseReadyPromise) {
-                await Promise.race([
-                    window.__supabaseReadyPromise,
-                    new Promise(resolve => setTimeout(resolve, 10000))
-                ]);
-            }
+            // Mostrar React inmediatamente — la precarga de Supabase corre en background
             ReactDOM.render(<Malagestion />, document.getElementById('root'));
         }
         arrancarApp();
