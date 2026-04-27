@@ -1285,6 +1285,98 @@ ${invoice.items.map(item => `
             const [userInput, setUserInput] = useState('');
             const [pinInput, setPinInput] = useState('');
             const [showPassword, setShowPassword] = useState(false);
+            const [bioAvailable, setBioAvailable] = useState(false);
+            const [bioRegistered, setBioRegistered] = useState(false);
+            const [bioLoading, setBioLoading] = useState(false);
+            const [bioError, setBioError] = useState('');
+
+            // Verificar disponibilidad de biometría al montar
+            useEffect(() => {
+                if (window.PublicKeyCredential) {
+                    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+                        .then(available => setBioAvailable(available));
+                }
+                // Verificar si ya hay credencial registrada
+                const cred = localStorage.getItem('cerebroma_bio_cred');
+                setBioRegistered(!!cred);
+            }, []);
+
+            // Registrar biometría para un usuario
+            const registrarBiometria = async (user) => {
+                if (!window.PublicKeyCredential) return;
+                setBioLoading(true);
+                setBioError('');
+                try {
+                    const challenge = new Uint8Array(32);
+                    crypto.getRandomValues(challenge);
+                    const userId = new TextEncoder().encode(String(user.id));
+                    const credential = await navigator.credentials.create({
+                        publicKey: {
+                            challenge,
+                            rp: { name: 'CerebroMA', id: window.location.hostname },
+                            user: { id: userId, name: user.username || user.name, displayName: user.name },
+                            pubKeyCredParams: [
+                                { type: 'public-key', alg: -7 },
+                                { type: 'public-key', alg: -257 }
+                            ],
+                            authenticatorSelection: {
+                                authenticatorAttachment: 'platform',
+                                userVerification: 'required'
+                            },
+                            timeout: 60000,
+                        }
+                    });
+                    // Guardar credencial e info del usuario
+                    localStorage.setItem('cerebroma_bio_cred', JSON.stringify({
+                        credId: Array.from(new Uint8Array(credential.rawId)),
+                        userId: user.id,
+                        userName: user.name
+                    }));
+                    setBioRegistered(true);
+                    alert('✅ Biometría registrada exitosamente. La próxima vez podés usar Face ID / huella.');
+                } catch(e) {
+                    setBioError('No se pudo registrar la biometría.');
+                } finally {
+                    setBioLoading(false);
+                }
+            };
+
+            // Autenticar con biometría
+            const loginConBiometria = async () => {
+                if (!window.PublicKeyCredential) return;
+                setBioLoading(true);
+                setBioError('');
+                try {
+                    const storedCred = JSON.parse(localStorage.getItem('cerebroma_bio_cred') || 'null');
+                    if (!storedCred) { setBioError('No hay biometría registrada.'); setBioLoading(false); return; }
+                    const challenge = new Uint8Array(32);
+                    crypto.getRandomValues(challenge);
+                    const credId = new Uint8Array(storedCred.credId);
+                    await navigator.credentials.get({
+                        publicKey: {
+                            challenge,
+                            rpId: window.location.hostname,
+                            allowCredentials: [{ type: 'public-key', id: credId }],
+                            userVerification: 'required',
+                            timeout: 60000,
+                        }
+                    });
+                    // Autenticación exitosa — buscar usuario en systemUsers
+                    const users = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                    const user = users.find(u => String(u.id) === String(storedCred.userId));
+                    if (user) {
+                        setCurrentUser(user);
+                        localStorage.setItem('malagestion_current_user', JSON.stringify(user));
+                        setIsUnlocked(true);
+                    } else {
+                        setBioError('Usuario no encontrado. Usá el PIN.');
+                    }
+                } catch(e) {
+                    setBioError('Autenticación cancelada o fallida. Usá el PIN.');
+                } finally {
+                    setBioLoading(false);
+                }
+            };
             const [showUser, setShowUser] = useState(false);
             const [showPin, setShowPin] = useState(false);
             const [pinError, setPinError] = useState(false);
@@ -1902,6 +1994,32 @@ ${invoice.items.map(item => `
                                             style={{background:'linear-gradient(135deg, #6366f1, #06b6d4)'}}>
                                             {currentLanguage === 'cs' ? 'Přihlásit se' : currentLanguage === 'en' ? 'Login' : 'Ingresar'}
                                         </button>
+
+                                        {/* Biometría */}
+                                        {bioAvailable && bioRegistered && (
+                                            <div className="relative flex items-center gap-3 my-1">
+                                                <div className="flex-1 h-px" style={{background:'rgba(255,255,255,0.08)'}}/>
+                                                <span className="text-xs" style={{color:'#475569'}}>o</span>
+                                                <div className="flex-1 h-px" style={{background:'rgba(255,255,255,0.08)'}}/>
+                                            </div>
+                                        )}
+                                        {bioAvailable && bioRegistered && (
+                                            <button type="button" onClick={loginConBiometria} disabled={bioLoading}
+                                                className="w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-2 border"
+                                                style={{background:'rgba(255,255,255,0.04)', borderColor:'rgba(255,255,255,0.12)', color:'#cbd5e1'}}>
+                                                {bioLoading ? (
+                                                    <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"/>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+                                                        </svg>
+                                                        Face ID / Huella digital
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
+                                        {bioError && <p className="text-xs text-center mt-1" style={{color:'#f87171'}}>{bioError}</p>}
                                     </form>
 
                                     <p className="text-center text-xs mt-6" style={{color:'#334155'}}>CerebroMA © {new Date().getFullYear()}</p>
@@ -2010,144 +2128,96 @@ ${invoice.items.map(item => `
                                             
                                             {/* Dropdown Menu */}
                                             {showUserMenu && (
-                                                <div className={`absolute right-0 mt-2 w-72 max-w-[calc(100vw-1rem)] rounded-xl shadow-2xl z-50 ${
-                                                    darkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-200'
-                                                }`}>
-                                                    {/* Header con info del usuario */}
-                                                    <div className={`p-4 border-b ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                                                <div className={`absolute right-0 mt-2 w-64 rounded-2xl shadow-2xl z-50 overflow-hidden border
+                                                    ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}
+                                                    sm:right-0 max-w-[calc(100vw-1rem)]`}
+                                                    style={{backdropFilter:'blur(20px)'}}>
+
+                                                    {/* Header usuario */}
+                                                    <div className={`px-4 py-4 ${darkMode ? 'bg-gradient-to-br from-slate-800 to-slate-900' : 'bg-gradient-to-br from-slate-50 to-white'}`}>
                                                         <div className="flex items-center gap-3">
-                                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                                                                currentUser.role === 'admin' ? 'bg-red-100' :
-                                                                currentUser.role === 'manager' ? 'bg-blue-100' :
-                                                                currentUser.role === 'employee' ? 'bg-green-100' :
-                                                                'bg-slate-100'
-                                                            }`}>
-                                                                <span className="text-2xl">
-                                                                    {currentUser.role === 'admin' ? '👑' : 
-                                                                     currentUser.role === 'manager' ? '📊' :
-                                                                     currentUser.role === 'employee' ? '👤' : '👀'}
-                                                                </span>
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0 ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                                                                {currentUser?.role === 'admin' ? '👑' : '👤'}
                                                             </div>
-                                                            <div>
-                                                                <div className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                                                    {currentUser.name} {currentUser.lastname || ''}
-                                                                </div>
-                                                                <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                                    {currentUser.role === 'admin' ? t.admin : 
-                                                                     currentUser.role === 'manager' ? t.manager :
-                                                                     currentUser.role === 'employee' ? t.employee : t.viewer}
-                                                                </div>
+                                                            <div className="min-w-0">
+                                                                <p className={`text-sm font-bold truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>{currentUser?.name} {currentUser?.lastname || ''}</p>
+                                                                <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{currentUser?.role === 'admin' ? 'Administrador' : currentUser?.role}</p>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    
-                                                    {/* Selector de Idioma */}
-                                                    <div className={`p-4 border-b ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-                                                        <div className={`text-xs font-medium mb-2 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            {t.language}
-                                                        </div>
+
+                                                    {/* Separador */}
+                                                    <div className={`h-px ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}/>
+
+                                                    {/* Idioma — solo banderas */}
+                                                    <div className={`px-4 py-3 ${darkMode ? 'bg-slate-800/50' : 'bg-slate-50/50'}`}>
+                                                        <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Idioma</p>
                                                         <div className="flex gap-2">
-                                                            <button
-                                                                onClick={() => {
-                                                                    changeLanguage('es');
-                                                                    setShowUserMenu(false);
-                                                                }}
-                                                                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                                    currentLanguage === 'es' 
-                                                                        ? 'bg-blue-600 text-white' 
-                                                                        : darkMode
-                                                                            ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                                }`}
-                                                            >
-                                                                🇪🇸 Español
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    changeLanguage('en');
-                                                                    setShowUserMenu(false);
-                                                                }}
-                                                                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                                    currentLanguage === 'en' 
-                                                                        ? 'bg-blue-600 text-white' 
-                                                                        : darkMode
-                                                                            ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                                }`}
-                                                            >
-                                                                🇬🇧 English
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    changeLanguage('cz');
-                                                                    setShowUserMenu(false);
-                                                                }}
-                                                                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                                    currentLanguage === 'cz' 
-                                                                        ? 'bg-blue-600 text-white' 
-                                                                        : darkMode
-                                                                            ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                                }`}
-                                                            >
-                                                                🇨🇿 Čeština
-                                                            </button>
+                                                            {[['es','🇪🇸'],['en','🇬🇧'],['cs','🇨🇿']].map(([lang, flag]) => (
+                                                                <button key={lang} onClick={() => changeLanguage(lang)}
+                                                                    className={`w-10 h-10 rounded-xl text-xl transition-all ${currentLanguage === lang
+                                                                        ? 'ring-2 ring-indigo-500 scale-110 ' + (darkMode ? 'bg-indigo-900/50' : 'bg-indigo-50')
+                                                                        : darkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-white hover:bg-slate-100 border border-slate-200'}`}>
+                                                                    {flag}
+                                                                </button>
+                                                            ))}
                                                         </div>
                                                     </div>
-                                                    
-                                                    {/* Botón Cambiar PIN */}
-                                                    <div className={`px-2 pt-2 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-                                                        <button
-                                                            onClick={() => {
-                                                                setShowUserMenu(false);
-                                                                setChangePinForm({ current: '', new1: '', new2: '' });
-                                                                setChangePinError('');
-                                                                setChangePinSuccess(false);
-                                                                setShowChangePinModal(true);
-                                                            }}
-                                                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-100'}`}
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                                                            </svg>
-                                                            <span className="text-sm font-medium">Cambiar PIN</span>
+
+                                                    {/* Separador */}
+                                                    <div className={`h-px ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}/>
+
+                                                    {/* Acciones */}
+                                                    <div className="p-2 space-y-0.5">
+
+                                                        {/* Biometría */}
+                                                        {bioAvailable && (
+                                                            <button onClick={() => { setShowUserMenu(false); registrarBiometria(currentUser); }} disabled={bioLoading}
+                                                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left ${darkMode ? 'hover:bg-slate-700/70 text-slate-300' : 'hover:bg-slate-50 text-slate-700'}`}>
+                                                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${darkMode ? 'bg-indigo-900/60' : 'bg-indigo-50'}`}>
+                                                                    <svg className="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg>
+                                                                </div>
+                                                                <span className="text-sm">{bioRegistered ? 'Actualizar Face ID / Huella' : 'Registrar Face ID / Huella'}</span>
+                                                            </button>
+                                                        )}
+
+                                                        {/* Cambiar PIN */}
+                                                        <button onClick={() => { setShowUserMenu(false); setChangePinForm({ current: '', new1: '', new2: '' }); setChangePinError(''); setChangePinSuccess(false); setShowChangePinModal(true); }}
+                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left ${darkMode ? 'hover:bg-slate-700/70 text-slate-300' : 'hover:bg-slate-50 text-slate-700'}`}>
+                                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                                                            </div>
+                                                            <span className="text-sm">Cambiar PIN</span>
                                                         </button>
-                                                    </div>
 
-                                                    {/* Auto-logout */}
-                                                    <div className={`px-4 py-2.5 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-                                                        <div className={`text-xs font-medium mb-1.5 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                                            ⏱ Cierre automático (min)
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="number" min="1" max="360" step="1"
-                                                                value={autoLogoutMinutes || ''}
-                                                                onChange={e => {
-                                                                    const v = parseInt(e.target.value);
-                                                                    if (!e.target.value) { setAutoLogoutMinutes(0); return; }
-                                                                    if (v >= 1 && v <= 360) setAutoLogoutMinutes(v);
-                                                                }}
-                                                                placeholder="1–360"
-                                                                className={`w-20 px-2 py-1 border rounded-lg text-xs font-mono text-center ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-300 text-slate-800 placeholder-slate-400'}`}
-                                                            />
-                                                            <span className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                                                                {autoLogoutMinutes > 0 ? `Cierra en ${autoLogoutMinutes} min` : 'Desactivado'}
-                                                            </span>
+                                                        {/* Cierre automático */}
+                                                        <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                            </div>
+                                                            <span className="text-sm flex-1">Cierre auto</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <input type="number" min="1" max="360"
+                                                                    value={autoLogoutMinutes || ''}
+                                                                    onChange={e => { const v = parseInt(e.target.value); if (!e.target.value) { setAutoLogoutMinutes(0); return; } if (v >= 1 && v <= 360) setAutoLogoutMinutes(v); }}
+                                                                    placeholder="min"
+                                                                    className={`w-14 px-2 py-1 border rounded-lg text-xs text-center ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`}/>
+                                                                <span className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>min</span>
+                                                            </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* Botón Cerrar Sesión */}
+                                                    {/* Separador */}
+                                                    <div className={`h-px ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}/>
+
+                                                    {/* Cerrar sesión */}
                                                     <div className="p-2">
-                                                        <button
-                                                            onClick={() => {
-                                                                setShowUserMenu(false);
-                                                                handleLogout();
-                                                            }}
-                                                            className="w-full flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            <LogOut className="w-4 h-4" />
-                                                            <span className="text-sm font-medium">{t.logout}</span>
+                                                        <button onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left ${darkMode ? 'hover:bg-red-900/30 text-red-400' : 'hover:bg-red-50 text-red-500'}`}>
+                                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${darkMode ? 'bg-red-900/40' : 'bg-red-50'}`}>
+                                                                <LogOut className="w-3.5 h-3.5"/>
+                                                            </div>
+                                                            <span className="text-sm font-medium">{t.logout || 'Cerrar Sesión'}</span>
                                                         </button>
                                                     </div>
                                                 </div>
