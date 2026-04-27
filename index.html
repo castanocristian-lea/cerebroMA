@@ -6417,9 +6417,9 @@ ${invoice.items.map(item => `
                 setShowAcreditacionModal(false);
             };
             const deleteAcreditacion = (id) => { if (!confirm('¿Eliminar esta acreditación?')) return; saveAcreditaciones(acreditaciones.filter(a => a.id !== id)); };
-            const saveFacturasSeleccionadas = (list) => { setFacturasSeleccionadas(list); localStorage.setItem('cajaFacturasPlaneadas', JSON.stringify(list)); };
-            const saveAsignaciones = (obj) => { setAsignaciones(obj); localStorage.setItem('cajaAsignaciones', JSON.stringify(obj)); };
-            const saveSueldosSeleccionados = (list) => { setSueldosSeleccionados(list); localStorage.setItem('cajaSueldosPlaneados', JSON.stringify(list)); };
+            const saveFacturasSeleccionadas = (list) => { setFacturasSeleccionadas(list); localStorage.setItem('cajaFacturasPlaneadas', JSON.stringify(list)); dbUpsertOne('cash_planning', 'facturasPlaneadas', list); };
+            const saveAsignaciones = (obj) => { setAsignaciones(obj); localStorage.setItem('cajaAsignaciones', JSON.stringify(obj)); dbUpsertOne('cash_planning', 'asignaciones', obj); };
+            const saveSueldosSeleccionados = (list) => { setSueldosSeleccionados(list); localStorage.setItem('cajaSueldosPlaneados', JSON.stringify(list)); dbUpsertOne('cash_planning', 'sueldosPlaneados', list); };
             const toggleSueldo = (s) => {
                 const ya = sueldosSeleccionados.some(x => x.id === s.id);
                 if (ya) {
