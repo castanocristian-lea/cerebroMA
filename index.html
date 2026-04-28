@@ -6176,72 +6176,12 @@ ${invoice.items.map(item => `
             
             // Permisos predefinidos por rol
             const rolePermissions = {
-                superadmin: {
-                    accessType: 'full',
-                    permissions: {
-                        ventas: 'editor',
-                        proveedores: 'editor',
-                        sueldos: 'editor',
-                        caja: 'editor',
-                        apps: 'editor',
-                        config: 'editor'
-                    }
-                },
-                admin: {
-                    accessType: 'full',
-                    permissions: {
-                        ventas: 'editor',
-                        proveedores: 'editor',
-                        sueldos: 'editor',
-                        caja: 'editor',
-                        apps: 'editor',
-                        config: 'editor'
-                    }
-                },
-                manager: {
-                    accessType: 'full',
-                    permissions: {
-                        ventas: 'editor',
-                        proveedores: 'editor',
-                        sueldos: 'editor',
-                        caja: 'editor',
-                        apps: 'editor',
-                        config: 'read'
-                    }
-                },
-                employee: {
-                    accessType: 'custom',
-                    permissions: {
-                        ventas: 'editor',
-                        proveedores: 'read',
-                        sueldos: 'read',
-                        caja: 'editor',
-                        apps: 'read',
-                        config: 'none'
-                    }
-                },
-                viewer: {
-                    accessType: 'custom',
-                    permissions: {
-                        ventas: 'read',
-                        proveedores: 'read',
-                        sueldos: 'read',
-                        caja: 'read',
-                        apps: 'read',
-                        config: 'none'
-                    }
-                },
-                custom: {
-                    accessType: 'custom',
-                    permissions: {
-                        ventas: 'editor',
-                        proveedores: 'editor',
-                        sueldos: 'editor',
-                        caja: 'editor',
-                        apps: 'editor',
-                        config: 'none'
-                    }
-                }
+                superadmin: { accessType: 'full', permissions: {"ventas": "editor", "proveedores": "editor", "sueldos": "editor", "caja": "editor", "dashboard": "editor", "calendario": "editor", "stock": "editor", "cocina": "editor", "prestamos": "editor", "credenciales": "editor", "micerebro": "editor", "apps": "editor", "config": "editor"} },
+                admin:      { accessType: 'full', permissions: {"ventas": "editor", "proveedores": "editor", "sueldos": "editor", "caja": "editor", "dashboard": "editor", "calendario": "editor", "stock": "editor", "cocina": "editor", "prestamos": "editor", "credenciales": "editor", "micerebro": "editor", "apps": "editor", "config": "editor"} },
+                manager:    { accessType: 'full', permissions: {"ventas": "editor", "proveedores": "editor", "sueldos": "editor", "caja": "editor", "dashboard": "editor", "calendario": "editor", "stock": "editor", "cocina": "editor", "prestamos": "editor", "credenciales": "editor", "micerebro": "editor", "apps": "editor", "config": "read"} },
+                employee:   { accessType: 'custom', permissions: {"ventas": "editor", "proveedores": "none", "sueldos": "none", "caja": "editor", "dashboard": "none", "calendario": "none", "stock": "none", "cocina": "none", "prestamos": "none", "credenciales": "none", "micerebro": "editor", "apps": "none", "config": "none"} },
+                viewer:     { accessType: 'custom', permissions: {"ventas": "read", "proveedores": "none", "sueldos": "none", "caja": "read", "dashboard": "none", "calendario": "none", "stock": "none", "cocina": "none", "prestamos": "none", "credenciales": "none", "micerebro": "editor", "apps": "none", "config": "none"} },
+                custom:     { accessType: 'custom', permissions: {"ventas": "none", "proveedores": "none", "sueldos": "none", "caja": "none", "dashboard": "none", "calendario": "none", "stock": "none", "cocina": "none", "prestamos": "none", "credenciales": "none", "micerebro": "none", "apps": "none", "config": "none"} },
             };
             
             // Guardar usuarios en localStorage
@@ -6553,8 +6493,8 @@ ${invoice.items.map(item => `
                                                                 {currentUser?.role === 'superadmin' && user.role !== 'superadmin' && (
                                                                     <button
                                                                         onClick={() => {
-                                                                            const updated = systemUsers.map(u => u.id === user.id ? {...u, bloqueado: !u.bloqueado} : u);
-                                                                            setSystemUsers(updated);
+                                                                            const updated = users.map(u => u.id === user.id ? {...u, bloqueado: !u.bloqueado} : u);
+                                                                            setUsers(updated);
                                                                             localStorage.setItem('systemUsers', JSON.stringify(updated));
                                                                             dbSetArray('system_users', updated);
                                                                         }}
@@ -6755,110 +6695,48 @@ ${invoice.items.map(item => `
                                         </select>
                                         
                                         {/* Panel de Permisos Personalizados */}
-                                        {userForm.accessType === 'custom' && (
+                                        {userForm.accessType === 'custom' && (() => {
+                                            const ALL_MODULES = [
+                                                { key: 'ventas',      label: '💰 Facturador de Ventas' },
+                                                { key: 'proveedores', label: '📦 Proveedores' },
+                                                { key: 'sueldos',     label: '💵 Sueldos' },
+                                                { key: 'caja',        label: '💰 Caja Diaria' },
+                                                { key: 'dashboard',   label: '📊 Dashboard' },
+                                                { key: 'calendario',  label: '📅 Agenda / Calendario' },
+                                                { key: 'stock',       label: '📦 Almacén / Stock' },
+                                                { key: 'cocina',      label: '👨‍🍳 Gestión de Cocina' },
+                                                { key: 'prestamos',   label: '🏦 Préstamos' },
+                                                { key: 'credenciales',label: '🔗 Credenciales / Apps' },
+                                                { key: 'micerebro',   label: '🧠 Mi Cerebro' },
+                                                { key: 'apps',        label: '🔗 Aplicaciones Externas' },
+                                                { key: 'config',      label: '⚙️ Gestión de Usuarios' },
+                                            ];
+                                            return (
                                             <div className={`p-4 rounded-lg border-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}>
                                                 <h5 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                                                     🔐 {t.modulePermissions}
                                                 </h5>
-                                                
                                                 <div className="space-y-3">
-                                                    {/* Facturador de Ventas */}
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            💰 {t.salesInvoicing}
-                                                        </label>
-                                                        <select
-                                                            value={userForm.permissions.ventas}
-                                                            onChange={(e) => handlePermissionChange('ventas', e.target.value)}
-                                                            className={`w-full px-2 py-1.5 text-sm border rounded ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                                                        >
-                                                            <option value="none">🚫 {t.noAccess}</option>
-                                                            <option value="read">👁️ {t.readOnly}</option>
-                                                            <option value="editor">✏️ {t.editor}</option>
-                                                        </select>
-                                                    </div>
-                                                    
-                                                    {/* Proveedores */}
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            📦 {t.suppliers}
-                                                        </label>
-                                                        <select
-                                                            value={userForm.permissions.proveedores}
-                                                            onChange={(e) => handlePermissionChange('proveedores', e.target.value)}
-                                                            className={`w-full px-2 py-1.5 text-sm border rounded ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                                                        >
-                                                            <option value="none">🚫 {t.noAccess}</option>
-                                                            <option value="read">👁️ {t.readOnly}</option>
-                                                            <option value="editor">✏️ {t.editor}</option>
-                                                        </select>
-                                                    </div>
-                                                    
-                                                    {/* Sueldos */}
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            💵 {t.payroll}
-                                                        </label>
-                                                        <select
-                                                            value={userForm.permissions.sueldos}
-                                                            onChange={(e) => handlePermissionChange('sueldos', e.target.value)}
-                                                            className={`w-full px-2 py-1.5 text-sm border rounded ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                                                        >
-                                                            <option value="none">🚫 {t.noAccess}</option>
-                                                            <option value="read">👁️ {t.readOnly}</option>
-                                                            <option value="editor">✏️ {t.editor}</option>
-                                                        </select>
-                                                    </div>
-                                                    
-                                                    {/* Caja Diaria */}
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            💰 {t.cashRegister}
-                                                        </label>
-                                                        <select
-                                                            value={userForm.permissions.caja}
-                                                            onChange={(e) => handlePermissionChange('caja', e.target.value)}
-                                                            className={`w-full px-2 py-1.5 text-sm border rounded ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                                                        >
-                                                            <option value="none">🚫 {t.noAccess}</option>
-                                                            <option value="read">👁️ {t.readOnly}</option>
-                                                            <option value="editor">✏️ {t.editor}</option>
-                                                        </select>
-                                                    </div>
-                                                    
-                                                    {/* Aplicaciones Externas */}
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            🔗 {t.externalApps}
-                                                        </label>
-                                                        <select
-                                                            value={userForm.permissions.apps}
-                                                            onChange={(e) => handlePermissionChange('apps', e.target.value)}
-                                                            className={`w-full px-2 py-1.5 text-sm border rounded ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                                                        >
-                                                            <option value="none">🚫 {t.noAccess}</option>
-                                                            <option value="read">👁️ {t.readOnly}</option>
-                                                            <option value="editor">✏️ {t.editor}</option>
-                                                        </select>
-                                                    </div>
-                                                    
-                                                    {/* Configuración */}
-                                                    <div>
-                                                        <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            ⚙️ {t.settings}
-                                                        </label>
-                                                        <select
-                                                            value={userForm.permissions.config}
-                                                            onChange={(e) => handlePermissionChange('config', e.target.value)}
-                                                            className={`w-full px-2 py-1.5 text-sm border rounded ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                                                        >
-                                                            <option value="none">🚫 {t.noAccess}</option>
-                                                            <option value="read">👁️ {t.readOnly}</option>
-                                                            <option value="editor">✏️ {t.editor}</option>
-                                                        </select>
-                                                    </div>
+                                                    {ALL_MODULES.map(mod => (
+                                                        <div key={mod.key}>
+                                                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                                {mod.label}
+                                                            </label>
+                                                            <select
+                                                                value={userForm.permissions?.[mod.key] || 'none'}
+                                                                onChange={(e) => handlePermissionChange(mod.key, e.target.value)}
+                                                                className={`w-full px-2 py-1.5 text-sm border rounded ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
+                                                            >
+                                                                <option value="none">🚫 {t.noAccess}</option>
+                                                                <option value="read">👁️ {t.readOnly}</option>
+                                                                <option value="editor">✏️ {t.editor}</option>
+                                                            </select>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
+                                            );
+                                        })()}
                                         )}
                                     </div>
                                 </div>
