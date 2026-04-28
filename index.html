@@ -1297,6 +1297,12 @@ ${invoice.items.map(item => `
             const [notifKey, setNotifKey] = useState(0);
             const refreshNotifs = React.useCallback(() => setNotifKey(k => k+1), []);
 
+            // Ticker cada 5s para re-renderizar banners con datos frescos de localStorage
+            useEffect(() => {
+                const t = setInterval(() => setNotifKey(k => k+1), 5000);
+                return () => clearInterval(t);
+            }, []);
+
             useEffect(() => {
                 const cargarCompartidas = async () => {
                     try {
@@ -2377,13 +2383,12 @@ ${invoice.items.map(item => `
                     {/* Banner tareas compartidas nuevas */}
                     {(() => {
                         try {
-                            const tt = tareasActuales;
-                            const vistas = tareasVistasActuales;
-                            const nuevas = tt.filter(t =>
+                            const _u = String(currentUser?.id||'');
+                            const _comp = JSON.parse(localStorage.getItem(`miCerebroCompartidas_${_u}`)||'[]');
+                            const _vistas = JSON.parse(localStorage.getItem('miCerebroTareasVistas')||'[]').map(String);
+                            const nuevas = _comp.filter(t =>
                                 !t.completada &&
-                                String(t.autorId) !== String(currentUser?.id) &&
-                                (t.compartidoCon||[]).includes(String(currentUser?.id)) &&
-                                !vistas.map(String).includes(String(t.id))
+                                !_vistas.includes(String(t.id))
                             );
                             if (!nuevas.length) return null;
                             return (
@@ -2415,7 +2420,10 @@ ${invoice.items.map(item => `
                     {/* Banner tareas vencidas */}
                     {!ocultarBannerVencidas && (() => {
                         try {
-                            const tt = tareasActuales;
+                            const _u2 = String(currentUser?.id||'');
+                            const _propias2 = JSON.parse(localStorage.getItem(`miCerebroTareas_${_u2}`)||'[]');
+                            const _comp2 = JSON.parse(localStorage.getItem(`miCerebroCompartidas_${_u2}`)||'[]');
+                            const tt = [..._propias2, ..._comp2.filter(t=>!_propias2.find(p=>p.id===t.id))];
                             const hoyB = new Date(); hoyB.setHours(0,0,0,0);
                             const venc = tt.filter(t => {
                                 if (!t.vencimiento || t.completada) return false;
@@ -2449,8 +2457,9 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         const uid = String(currentUser.id);
-                        const tt = tareasActuales;
-                        const vistos = chatVistosActuales;
+                        const tt = [...JSON.parse(localStorage.getItem(`miCerebroTareas_${uid}`)||'[]'),
+                                    ...JSON.parse(localStorage.getItem(`miCerebroCompartidas_${uid}`)||'[]')];
+                        const vistos = JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}');
                         let totalNew = 0;
                         const conNotas = [];
                         tt.forEach(t => {
