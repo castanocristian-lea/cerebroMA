@@ -1355,10 +1355,27 @@ ${invoice.items.map(item => `
                     PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
                         .then(available => setBioAvailable(available));
                 }
-                // Verificar si ya hay credencial registrada
+                // Verificar si ya hay credencial en localStorage
                 const cred = localStorage.getItem('cerebroma_bio_cred');
-                setBioRegistered(!!cred);
+                if (cred) { setBioRegistered(true); return; }
+                // Si no hay en localStorage, buscar en Supabase usando el username ingresado
+                // (se re-verifica después del login si el usuario tiene cred en Supabase)
             }, []);
+
+            // Restaurar credencial desde Supabase al loguearse
+            useEffect(() => {
+                if (!currentUser) return;
+                const cred = localStorage.getItem('cerebroma_bio_cred');
+                if (cred) { setBioRegistered(true); return; }
+                // Buscar en Supabase
+                window._sb?.from('app_config').select('data').eq('id', 'bioCred_'+currentUser.id).maybeSingle()
+                    .then(r => {
+                        if (r?.data?.data) {
+                            localStorage.setItem('cerebroma_bio_cred', JSON.stringify(r.data.data));
+                            setBioRegistered(true);
+                        }
+                    }).catch(() => {});
+            }, [currentUser]);
 
             // Registrar biometría para un usuario
             const registrarBiometria = async (user) => {
@@ -1386,11 +1403,16 @@ ${invoice.items.map(item => `
                         }
                     });
                     // Guardar credencial e info del usuario
-                    localStorage.setItem('cerebroma_bio_cred', JSON.stringify({
+                    const credData = {
                         credId: Array.from(new Uint8Array(credential.rawId)),
                         userId: user.id,
                         userName: user.name
-                    }));
+                    };
+                    localStorage.setItem('cerebroma_bio_cred', JSON.stringify(credData));
+                    // También guardar en Supabase para persistir entre sesiones
+                    try {
+                        await window._sb?.from('app_config').upsert({ id: 'bioCred_'+user.id, data: credData });
+                    } catch(e) {}
                     setBioRegistered(true);
                     alert('✅ Biometría registrada exitosamente. La próxima vez podés usar Face ID / huella.');
                 } catch(e) {
@@ -2028,7 +2050,19 @@ ${invoice.items.map(item => `
                                                 <input
                                                     type={showPassword ? 'text' : 'password'}
                                                     value={userInput}
-                                                    onChange={e => setUserInput(e.target.value)}
+                                                    onChange={async e => {
+                                                        setUserInput(e.target.value);
+                                                        if (e.target.value.length >= 3 && !localStorage.getItem('cerebroma_bio_cred')) {
+                                                            try {
+                                                                const users = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                                                                const u = users.find(x => (x.username||x.name||'').toLowerCase().startsWith(e.target.value.toLowerCase()));
+                                                                if (u) {
+                                                                    const r = await window._sb?.from('app_config').select('data').eq('id','bioCred_'+u.id).maybeSingle();
+                                                                    if (r?.data?.data) { localStorage.setItem('cerebroma_bio_cred', JSON.stringify(r.data.data)); setBioRegistered(true); }
+                                                                }
+                                                            } catch(e2) {}
+                                                        }
+                                                    }}
                                                     placeholder="••••••"
                                                     autoComplete="username"
                                                     className="w-full px-4 py-3.5 rounded-xl text-white text-sm outline-none transition-all border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
@@ -21570,16 +21604,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [chatVistos, setChatVistos] = React.useState(() => {
                 try { return JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}'); } catch(e) { return {}; }
             });
+            const [showCompletadas, setShowCompletadas] = React.useState(false);
+            const [busqueda, setBusqueda] = React.useState('');
 
-            // Al montar, sincronizar tareas desde Supabase
             React.useEffect(() => {
                 const sync = async () => {
                     try {
                         const r = await window._sb?.from('app_config').select('data').eq('id','miCerebroTareas').maybeSingle();
                         if (r?.data?.data) {
-                            const remoto = r.data.data;
-                            localStorage.setItem('miCerebroTareas', JSON.stringify(remoto));
-                            setTareas(remoto);
+                            localStorage.setItem('miCerebroTareas', JSON.stringify(r.data.data));
+                            setTareas(r.data.data);
                             window.dispatchEvent(new Event('tareasUpdate'));
                         }
                     } catch(e) {}
@@ -21611,18 +21645,18 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             };
 
             const mensajesNuevos = (tarea) => {
-                if (!tarea.chat || !tarea.chat.length) return 0;
+                if (!tarea.chat?.length) return 0;
                 const vistoHasta = chatVistos[String(tarea.id)] || 0;
                 return tarea.chat.filter(m => m.ts > vistoHasta && String(m.autorId) !== String(currentUser?.id)).length;
             };
 
             const toggleCompletar = (id) => {
                 const tarea = tareas.find(t => t.id === id);
-                saveTareas(tareas.map(t => t.id === id ? { ...t, completada: !t.completada, completadaEl: !t.completada ? new Date().toISOString() : null } : t));
+                saveTareas(tareas.map(t => t.id === id ? {...t, completada: !t.completada, completadaEl: !t.completada ? new Date().toISOString() : null} : t));
                 if (tarea && !tarea.completada) {
-                    const vistos = JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}');
-                    delete vistos[String(id)];
-                    localStorage.setItem('miCerebroChatVistos', JSON.stringify(vistos));
+                    const v = JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}');
+                    delete v[String(id)];
+                    localStorage.setItem('miCerebroChatVistos', JSON.stringify(v));
                     window.dispatchEvent(new Event('chatUpdate'));
                 }
             };
@@ -21630,15 +21664,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const eliminarTarea = (id) => {
                 if (!confirm('¿Eliminar esta tarea?')) return;
                 saveTareas(tareas.filter(t => t.id !== id));
-                const vistos = JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}');
-                delete vistos[String(id)];
-                localStorage.setItem('miCerebroChatVistos', JSON.stringify(vistos));
+                const v = JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}');
+                delete v[String(id)];
+                localStorage.setItem('miCerebroChatVistos', JSON.stringify(v));
                 window.dispatchEvent(new Event('chatUpdate'));
             };
 
-            const openNew = () => {
+            const openNew = (compartidoCon = []) => {
                 setEditingTarea(null);
-                setForm({ titulo: '', descripcion: '', vencimiento: '', prioridad: 'media', compartidoCon: [], compartirVencimiento: false });
+                setForm({ titulo: '', descripcion: '', vencimiento: '', prioridad: 'media', compartidoCon, compartirVencimiento: false });
                 setShowModal(true);
             };
             const openEdit = (t) => {
@@ -21658,105 +21692,96 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             const uid = String(currentUser?.id);
             const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const txt = darkMode ? 'text-white' : 'text-slate-800';
+            const sub = darkMode ? 'text-slate-400' : 'text-slate-500';
+            const otrosUsuarios = (systemUsers||[]).filter(u => String(u.id) !== uid && u.activo !== false);
 
             const fmtVenc = (v) => {
                 if (!v) return null;
                 const d = new Date(v + 'T12:00:00');
                 const diff = Math.round((d - hoy) / 86400000);
-                if (diff < 0) return { label: `Vencida hace ${Math.abs(diff)}d`, cls: 'text-red-500 bg-red-50 dark:bg-red-900/20' };
-                if (diff === 0) return { label: 'Vence hoy', cls: 'text-orange-500 bg-orange-50' };
-                if (diff === 1) return { label: 'Mañana', cls: 'text-amber-500 bg-amber-50' };
-                return { label: `${diff}d`, cls: darkMode ? 'text-slate-400' : 'text-slate-500' };
+                if (diff < 0) return { label: `Vencida hace ${Math.abs(diff)}d`, bg: 'bg-red-500', text: 'text-white' };
+                if (diff === 0) return { label: 'Vence hoy', bg: 'bg-orange-500', text: 'text-white' };
+                if (diff === 1) return { label: 'Mañana', bg: 'bg-amber-400', text: 'text-white' };
+                return { label: `${diff}d`, bg: darkMode ? 'bg-slate-700' : 'bg-slate-100', text: sub };
             };
 
-            const prioColor = { alta: 'bg-red-500', media: 'bg-amber-400', baja: 'bg-slate-400' };
-            const txt = darkMode ? 'text-white' : 'text-slate-800';
-            const sub = darkMode ? 'text-slate-400' : 'text-slate-500';
-            const otrosUsuarios = (systemUsers||[]).filter(u => String(u.id) !== uid && u.activo !== false);
+            const prioColors = { alta: '#E24B4A', media: '#EF9F27', baja: '#888780' };
+            const prioBadge = {
+                alta:  { bg: 'bg-red-500',    text: 'text-white',  label: '🔴 Alta' },
+                media: { bg: 'bg-amber-400',  text: 'text-white',  label: '🟡 Media' },
+                baja:  { bg: 'bg-slate-400',  text: 'text-white',  label: '⚪ Baja' },
+            };
 
-            // Separar tareas en 3 grupos
-            const misActivas = tareas.filter(t => String(t.autorId) === uid && !t.completada && !(t.compartidoCon||[]).length);
-            const misCompartidas = tareas.filter(t => String(t.autorId) === uid && !t.completada && (t.compartidoCon||[]).length > 0);
-            const compartConmigo = tareas.filter(t => String(t.autorId) !== uid && (t.compartidoCon||[]).includes(uid) && !t.completada);
-            const completadas = tareas.filter(t => (String(t.autorId) === uid || (t.compartidoCon||[]).includes(uid)) && t.completada);
+            const matchBusqueda = (t) => {
+                if (!busqueda.trim()) return true;
+                const q = busqueda.toLowerCase();
+                return (t.titulo||'').toLowerCase().includes(q) ||
+                       (t.descripcion||'').toLowerCase().includes(q) ||
+                       (t.chat||[]).some(m => m.texto.toLowerCase().includes(q));
+            };
+            const misActivas = tareas.filter(t => String(t.autorId) === uid && !t.completada && !(t.compartidoCon||[]).length && matchBusqueda(t));
+            const misCompartidas = tareas.filter(t => String(t.autorId) === uid && !t.completada && (t.compartidoCon||[]).length > 0 && matchBusqueda(t));
+            const compartConmigo = tareas.filter(t => String(t.autorId) !== uid && (t.compartidoCon||[]).includes(uid) && !t.completada && matchBusqueda(t));
+            const completadas = tareas.filter(t => (String(t.autorId) === uid || (t.compartidoCon||[]).includes(uid)) && t.completada && matchBusqueda(t));
 
-            const TareaCard = ({ tarea, esPropia, mostrarDe = false }) => {
+            const TareaCard = ({ tarea, esPropia, mostrarDe }) => {
                 const venc = fmtVenc(tarea.vencimiento);
-                const pc = prioColor[tarea.prioridad] || prioColor.media;
                 const notasN = mensajesNuevos(tarea);
-                const ultimaNota = tarea.chat && tarea.chat.length > 0 ? tarea.chat[tarea.chat.length - 1] : null;
+                const ultimaNota = tarea.chat?.length ? tarea.chat[tarea.chat.length - 1] : null;
+                const pc = prioColors[tarea.prioridad] || prioColors.media;
                 return (
-                    <div className={`rounded-xl border p-3 flex flex-col gap-2 ${tarea.completada ? 'opacity-50' : ''} ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                        {/* Header tarea */}
+                    <div className={`rounded-xl border p-3 flex flex-col gap-2 ${darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-200'}`}
+                        style={{borderLeft: `3px solid ${pc}`}}>
+                        {/* Título y acciones */}
+                        {/* Badge prioridad */}
+                        <div className="flex items-center gap-1.5 mb-2">
+                            {(() => { const pb = prioBadge[tarea.prioridad]||prioBadge.baja; return <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${pb.bg} ${pb.text}`}>{pb.label}</span>; })()}
+                            {venc && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${venc.bg} ${venc.text}`}>{venc.label}</span>}
+                        </div>
                         <div className="flex items-start gap-2">
                             <button onClick={() => toggleCompletar(tarea.id)}
-                                className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${tarea.completada ? 'bg-purple-600 border-purple-600' : (darkMode ? 'border-slate-600 hover:border-purple-500' : 'border-slate-300 hover:border-purple-500')}`}>
+                                className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${tarea.completada ? 'bg-purple-600 border-purple-600' : darkMode ? 'border-slate-600 hover:border-purple-500' : 'border-slate-300 hover:border-purple-500'}`}>
                                 {tarea.completada && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
                             </button>
                             <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${pc}`}/>
-                                    <p className={`text-sm font-semibold ${txt} ${tarea.completada?'line-through':''} truncate`}>{tarea.titulo}</p>
-                                </div>
-                                {tarea.descripcion && <p className={`text-xs mt-0.5 ${sub} truncate`}>{tarea.descripcion}</p>}
+                                <p className={`text-sm font-semibold ${txt} ${tarea.completada ? 'line-through opacity-60' : ''} truncate`}>{tarea.titulo}</p>
                                 {mostrarDe && <p className={`text-xs ${sub}`}>De: <span className="font-medium">{tarea.autorNombre?.split(' ')[0]}</span></p>}
+                                {tarea.descripcion && <p className={`text-xs mt-0.5 ${sub} truncate`}>{tarea.descripcion}</p>}
                             </div>
-                            {/* Acciones */}
                             <div className="flex items-center gap-1 shrink-0">
-                                {venc && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${venc.cls}`}>{venc.label}</span>}
-                                {tarea.completada
-                                    ? <button onClick={() => toggleCompletar(tarea.id)} className={`text-xs px-1.5 py-0.5 rounded ${darkMode?'bg-slate-700 text-slate-400':'bg-slate-100 text-slate-500'}`}>↩</button>
-                                    : <>
-                                        {esPropia && <button onClick={() => openEdit(tarea)} className={`p-1 rounded ${darkMode?'hover:bg-slate-700 text-slate-500':'hover:bg-slate-100 text-slate-400'}`}>✏️</button>}
-                                        {esPropia && <button onClick={() => eliminarTarea(tarea.id)} className={`p-1 rounded ${darkMode?'hover:bg-red-900/30 text-slate-500':'hover:bg-red-50 text-slate-400'}`}>🗑️</button>}
-                                    </>
-                                }
+                                {!tarea.completada && esPropia && <button onClick={() => openEdit(tarea)} className={`p-1 rounded text-xs ${darkMode?'hover:bg-slate-700 text-slate-500':'hover:bg-slate-100 text-slate-400'}`}>✏️</button>}
+                                {!tarea.completada && esPropia && <button onClick={() => eliminarTarea(tarea.id)} className={`p-1 rounded text-xs ${darkMode?'hover:bg-red-900/30 text-slate-500':'hover:bg-red-50 text-slate-400'}`}>🗑️</button>}
+                                {tarea.completada && <button onClick={() => toggleCompletar(tarea.id)} className={`text-xs px-1.5 py-0.5 rounded ${darkMode?'bg-slate-700 text-slate-400':'bg-slate-100 text-slate-500'}`}>↩</button>}
                             </div>
                         </div>
 
-                        {/* Notas: última nota visible + botón */}
+                        {/* Última nota + botón notas */}
                         <div className={`border-t pt-2 ${darkMode?'border-slate-700':'border-slate-100'}`}>
-                            {ultimaNota && (
-                                <div className={`text-xs px-2 py-1.5 rounded-lg mb-1.5 ${darkMode?'bg-slate-700/60':'bg-slate-50'}`}>
-                                    <span className={`font-semibold ${String(ultimaNota.autorId)===uid?(darkMode?'text-purple-400':'text-purple-600'):sub}`}>
-                                        {String(ultimaNota.autorId)===uid?'Vos':ultimaNota.autorNombre?.split(' ')[0]}:
-                                    </span>
-                                    <span className={` ml-1 ${txt}`}>{ultimaNota.texto.length > 60 ? ultimaNota.texto.slice(0,60)+'…' : ultimaNota.texto}</span>
+                            {ultimaNota && !tarea.completada && (
+                                <div className={`text-xs px-2 py-1.5 rounded-lg mb-1.5 italic ${darkMode?'bg-slate-700/50 text-slate-300':'bg-slate-50 text-slate-600'}`}
+                                    style={{borderLeft: `2px solid ${String(ultimaNota.autorId)===uid ? '#7F77DD' : '#888780'}`}}>
+                                    <span className="not-italic font-medium" style={{color: String(ultimaNota.autorId)===uid ? '#7F77DD' : undefined}}>
+                                        {String(ultimaNota.autorId)===uid ? 'Vos' : ultimaNota.autorNombre?.split(' ')[0]}:
+                                    </span>{' '}
+                                    {ultimaNota.texto.length > 55 ? ultimaNota.texto.slice(0,55)+'…' : ultimaNota.texto}
                                 </div>
                             )}
                             <button onClick={() => setChatTarea(tarea)}
-                                className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${notasN > 0 ? 'bg-purple-600 text-white font-medium' : darkMode?'bg-slate-700/60 text-slate-400 hover:bg-slate-700':'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
+                                className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-all font-medium ${notasN > 0 ? 'bg-purple-600 text-white' : darkMode ? 'bg-slate-700/60 text-slate-400 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
                                 <span>📝</span>
-                                <span>{notasN > 0 ? `${notasN} nota${notasN>1?'s':''} nueva${notasN>1?'s':''}` : ultimaNota ? `${tarea.chat.length} nota${tarea.chat.length>1?'s':''}` : 'Agregar nota'}</span>
-                                {notasN > 0 && <span className="ml-auto bg-white/30 text-white text-xs font-bold px-1 rounded">{notasN}</span>}
+                                <span>{notasN > 0 ? `${notasN} nota${notasN>1?'s':''} nueva${notasN>1?'s':''}` : tarea.chat?.length ? `${tarea.chat.length} nota${tarea.chat.length>1?'s':''}` : 'Agregar nota'}</span>
                             </button>
                         </div>
                     </div>
                 );
             };
 
-            const Columna = ({ titulo, emoji, color, tareas: ts, esPropia, mostrarDe = false, extra = null }) => (
-                <div className={`flex flex-col rounded-2xl border-2 ${darkMode?'border-slate-700 bg-slate-800/50':'border-slate-200 bg-slate-50'} min-h-0`}>
-                    <div className={`px-4 py-3 border-b flex items-center gap-2 shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                        <span className="text-lg">{emoji}</span>
-                        <h2 className={`text-sm font-bold ${color}`}>{titulo}</h2>
-                        <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-white text-slate-600 border border-slate-200'}`}>{ts.length}</span>
-                        {extra}
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                        {ts.length === 0 && <p className={`text-xs text-center py-6 ${sub}`}>Sin tareas</p>}
-                        {ts.map(t => <TareaCard key={t.id} tarea={t} esPropia={esPropia} mostrarDe={mostrarDe}/>)}
-                        {completadas.length > 0 && esPropia && mostrarDe === false && (
-                            <details className="mt-2">
-                                <summary className={`text-xs cursor-pointer ${sub} hover:text-slate-700`}>Ver {completadas.length} completada{completadas.length>1?'s':''}</summary>
-                                <div className="mt-2 space-y-2">
-                                    {completadas.map(t => <TareaCard key={t.id} tarea={t} esPropia={String(t.autorId)===uid} mostrarDe={String(t.autorId)!==uid}/>)}
-                                </div>
-                            </details>
-                        )}
-                    </div>
-                </div>
-            );
+            const colHeaders = [
+                { titulo: 'Mis tareas', emoji: '📋', count: misActivas.length, headerBg: '#534AB7', headerText: '#EEEDFE', tareas: misActivas, esPropia: true, mostrarDe: false, onAdd: () => openNew() },
+                { titulo: 'Compartidas por mí', emoji: '📤', count: misCompartidas.length, headerBg: '#185FA5', headerText: '#E6F1FB', tareas: misCompartidas, esPropia: true, mostrarDe: false, onAdd: null },
+                { titulo: 'Compartidas conmigo', emoji: '🤝', count: compartConmigo.length, headerBg: '#854F0B', headerText: '#FAEEDA', tareas: compartConmigo, esPropia: false, mostrarDe: true, onAdd: null },
+            ];
 
             return (
                 <div className={`min-h-screen flex flex-col ${darkMode?'bg-slate-900':'bg-slate-50'}`}>
@@ -21765,30 +21790,62 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Menú</button>
                         <span className="text-xl">🧠</span>
                         <h1 className={`text-base font-bold ${txt}`}>Mi Cerebro</h1>
-                        <button onClick={openNew} className="ml-auto px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">+ Nueva tarea</button>
+                        <button onClick={() => openNew()} className="ml-auto px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">+ Nueva tarea</button>
                     </div>
 
-                    {/* 3 columnas */}
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 min-h-0" style={{minHeight:'calc(100vh - 57px)'}}>
-                        <Columna
-                            titulo="Mis tareas" emoji="📋"
-                            color={darkMode?'text-white':'text-slate-800'}
-                            tareas={misActivas} esPropia={true}
-                            extra={<button onClick={openNew} className={`ml-2 text-xs px-2 py-0.5 rounded-lg ${darkMode?'bg-slate-700 text-slate-300 hover:bg-slate-600':'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>+</button>}
-                        />
-                        <Columna
-                            titulo="Mis tareas compartidas" emoji="📤"
-                            color={darkMode?'text-blue-400':'text-blue-700'}
-                            tareas={misCompartidas} esPropia={true}
-                        />
-                        <Columna
-                            titulo="Compartidas conmigo" emoji="🤝"
-                            color={darkMode?'text-amber-400':'text-amber-700'}
-                            tareas={compartConmigo} esPropia={false} mostrarDe={true}
-                        />
+                    {/* Buscador */}
+                    <div className={`px-4 pt-3 pb-2 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                        <div className="relative">
+                            <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${sub}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                                placeholder="Buscar en tareas, descripciones y notas..."
+                                className={`w-full pl-9 pr-4 py-2 border rounded-xl text-sm ${darkMode?'bg-slate-800 border-slate-700 text-white placeholder-slate-500':'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}/>
+                            {busqueda && <button onClick={() => setBusqueda('')} className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${sub} hover:text-slate-700`}>✕</button>}
+                        </div>
+                        {busqueda && <p className={`text-xs mt-1.5 ${sub}`}>{misActivas.length + misCompartidas.length + compartConmigo.length + completadas.length} resultado{(misActivas.length+misCompartidas.length+compartConmigo.length+completadas.length)!==1?'s':''}</p>}
                     </div>
 
-                    {/* Modal nueva/editar tarea */}
+                    {/* 3 columnas kanban */}
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+                        {colHeaders.map((col, ci) => (
+                            <div key={ci} className={`flex flex-col rounded-2xl overflow-hidden border ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                {/* Header de color */}
+                                <div className="flex items-center gap-2 px-4 py-3 shrink-0" style={{background: col.headerBg}}>
+                                    <span className="text-base">{col.emoji}</span>
+                                    <p className="text-sm font-semibold m-0" style={{color: col.headerText}}>{col.titulo}</p>
+                                    <span className="ml-auto text-2xl font-bold" style={{color: 'rgba(255,255,255,0.9)'}}>{col.count}</span>
+                                    {col.onAdd && (
+                                        <button onClick={col.onAdd} className="w-6 h-6 rounded-full flex items-center justify-center text-lg font-bold hover:bg-white/20 transition-colors" style={{color:'rgba(255,255,255,0.8)'}}>+</button>
+                                    )}
+                                </div>
+                                {/* Tareas */}
+                                <div className={`flex-1 p-3 space-y-2 overflow-y-auto ${darkMode?'bg-slate-800/50':'bg-slate-50/50'}`}>
+                                    {col.tareas.length === 0 && (
+                                        <p className={`text-xs text-center py-8 ${sub}`}>Sin tareas</p>
+                                    )}
+                                    {col.tareas.map(t => <TareaCard key={t.id} tarea={t} esPropia={col.esPropia} mostrarDe={col.mostrarDe}/>)}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Completadas colapsables */}
+                    {completadas.length > 0 && (
+                        <div className="px-4 pb-4">
+                            <button onClick={() => setShowCompletadas(v => !v)}
+                                className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ${darkMode?'bg-slate-800 text-slate-400 hover:text-white':'bg-white text-slate-500 hover:text-slate-700 border border-slate-200'}`}>
+                                <svg className={`w-3 h-3 transition-transform ${showCompletadas?'rotate-180':''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                                {showCompletadas ? 'Ocultar' : 'Ver'} {completadas.length} tarea{completadas.length>1?'s':''} completada{completadas.length>1?'s':''}
+                            </button>
+                            {showCompletadas && (
+                                <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                                    {completadas.map(t => <TareaCard key={t.id} tarea={t} esPropia={String(t.autorId)===uid} mostrarDe={String(t.autorId)!==uid}/>)}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Modal nueva/editar */}
                     {showModal && (
                         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                             <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-5 max-h-[90vh] overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`}>
@@ -21865,16 +21922,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <button onClick={() => setChatTarea(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0" style={{minHeight:'200px'}}>
-                                    {(!chatTarea.chat || chatTarea.chat.length === 0) && (
-                                        <p className={`text-xs text-center py-8 ${sub}`}>Sin notas aún. Agregá la primera.</p>
-                                    )}
+                                    {(!chatTarea.chat?.length) && <p className={`text-xs text-center py-8 ${sub}`}>Sin notas aún. Agregá la primera.</p>}
                                     {(chatTarea.chat||[]).map(msg => {
                                         const esMio = String(msg.autorId) === uid;
                                         const fecha = new Date(msg.ts).toLocaleDateString('es-AR', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
                                         return (
-                                            <div key={msg.id} className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border-l-4 ${esMio
-                                                ? darkMode?'bg-purple-900/30 border-purple-500':'bg-purple-50 border-purple-400'
-                                                : darkMode?'bg-slate-700/50 border-slate-500':'bg-slate-50 border-slate-300'}`}>
+                                            <div key={msg.id} className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border-l-4 ${esMio ? darkMode?'bg-purple-900/30 border-purple-500':'bg-purple-50 border-purple-400' : darkMode?'bg-slate-700/50 border-slate-500':'bg-slate-50 border-slate-300'}`}>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-0.5">
                                                         <span className={`text-xs font-semibold ${esMio?(darkMode?'text-purple-300':'text-purple-700'):sub}`}>{esMio?'Vos':msg.autorNombre?.split(' ')[0]}</span>
