@@ -7016,7 +7016,7 @@ ${invoice.items.map(item => `
             const [asignaciones, setAsignaciones] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaAsignaciones') || '{}'); } catch(e) { return {}; } }); // factura esperando método de pago
             const [showGastoModal, setShowGastoModal] = React.useState(false);
             const [editingGasto, setEditingGasto] = React.useState(null);
-            const [gastoForm, setGastoForm] = React.useState({ nombre: '', monto: '', moneda: 'CZK', notas: '', metodoPago: 'BANK' });
+            const [gastoForm, setGastoForm] = React.useState({ nombre: '', monto: '', moneda: 'CZK', notas: '', metodoPago: '' });
 
             const saveFondos = (list) => { setFondos(list); localStorage.setItem('cajaFondos', JSON.stringify(list)); dbUpsertOne('cash_planning','fondos',list); };
             const saveLugares = (list) => { setLugares(list); localStorage.setItem('cajaLugares', JSON.stringify(list)); dbUpsertOne('cash_planning','lugares',list); };
@@ -7088,10 +7088,11 @@ ${invoice.items.map(item => `
                 saveLugares(lugares.filter(x => x !== l));
             };
             const openNewGasto = () => { setEditingGasto(null); setGastoForm({ nombre: '', monto: '', moneda: 'CZK', notas: '' }); setShowGastoModal(true); };
-            const openEditGasto = (g) => { setEditingGasto(g); setGastoForm({ nombre: g.nombre, monto: String(g.monto), moneda: g.moneda, notas: g.notas || '', metodoPago: g.metodoPago || 'BANK' }); setShowGastoModal(true); };
+            const openEditGasto = (g) => { setEditingGasto(g); setGastoForm({ nombre: g.nombre, monto: String(g.monto), moneda: g.moneda, notas: g.notas || '', metodoPago: g.metodoPago || '' }); setShowGastoModal(true); };
             const saveGasto = () => {
                 if (!gastoForm.nombre.trim() || !gastoForm.monto) return alert('Completá nombre y monto');
-                const item = { id: editingGasto ? editingGasto.id : Date.now(), nombre: gastoForm.nombre.trim(), monto: parseFloat(gastoForm.monto), moneda: gastoForm.moneda, notas: gastoForm.notas, metodoPago: gastoForm.metodoPago || 'BANK' };
+                if (!gastoForm.metodoPago) return alert('Seleccioná el método de pago');
+                const item = { id: editingGasto ? editingGasto.id : Date.now(), nombre: gastoForm.nombre.trim(), monto: parseFloat(gastoForm.monto), moneda: gastoForm.moneda, notas: gastoForm.notas, metodoPago: gastoForm.metodoPago };
                 saveGastos(editingGasto ? gastos.map(g => g.id === editingGasto.id ? item : g) : [...gastos, item]);
                 setShowGastoModal(false);
             };
@@ -7586,8 +7587,9 @@ ${invoice.items.map(item => `
                                         </select>
                                     </div>
                                 </div>
-                                <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Método de pago</label>
-                                    <select className={inp} value={gastoForm.metodoPago || 'BANK'} onChange={e => setGastoForm({...gastoForm, metodoPago: e.target.value})}>
+                                <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Método de pago *</label>
+                                    <select className={`${inp} ${!gastoForm.metodoPago ? (darkMode?'text-slate-500':'text-slate-400') : ''}`} value={gastoForm.metodoPago || ''} onChange={e => setGastoForm({...gastoForm, metodoPago: e.target.value})}>
+                                        <option value="" disabled>— Seleccioná método —</option>
                                         <option value="BANK">🏦 Banco</option>
                                         <option value="CASH">💵 Efectivo</option>
                                         <option value="ATM">🏧 Retiro cajero</option>
@@ -8123,7 +8125,7 @@ ${invoice.items.map(item => `
                 dia: new Date().getDate(),
                 mes: new Date().toLocaleString('es-ES', {month: 'long'}).toUpperCase(),
                 tipoCosto: '',
-                origen: 'BANK',
+                origen: '',
                 proveedor: '',
                 salarioEmpleado: '',
                 nroFactura: '',
@@ -8244,7 +8246,7 @@ ${invoice.items.map(item => `
                     dia: new Date().getDate(),
                     mes: new Date().toLocaleString('es-ES', {month: 'long'}).toUpperCase(),
                     tipoCosto: '',
-                    origen: 'BANK',
+                    origen: '',
                     proveedor: '',
                     salarioEmpleado: '',
                     nroFactura: '',
@@ -8827,6 +8829,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Guardar transacción (crear o editar)
             const saveTransaction = () => {
+                if (!formData.origen) { alert('Seleccioná el origen: Banco o Efectivo'); return; }
+                if (!formData.tipoCosto) { alert('Seleccioná el Tipo de Costo'); return; }
                 const fechaDate = formData.fecha ? new Date(formData.fecha + 'T12:00:00') : new Date();
                 const diaCalc = formData.fecha ? fechaDate.getDate() : formData.dia;
                 const mesCalc = formData.fecha
@@ -9126,6 +9130,77 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         )}
                     </div>
                     
+                    {/* Banner: aviso si no hay ingreso del día o días anteriores */}
+                    {(() => {
+                        const allTx = Object.values(transactions).flat();
+                        const hoy = new Date(); hoy.setHours(0,0,0,0);
+                        const hoyStr = hoy.toISOString().slice(0,10);
+
+                        // Dias anteriores sin ingreso (máx 30 días atrás, desde la primera tx)
+                        const fechas = allTx.map(t => t.fecha).filter(Boolean).sort();
+                        const primerDia = fechas[0] ? new Date(fechas[0]+'T12:00:00') : hoy;
+                        const diasSinIngreso = [];
+                        const cursor = new Date(primerDia); cursor.setHours(0,0,0,0);
+                        while (cursor <= hoy) {
+                            const fs = cursor.toISOString().slice(0,10);
+                            const tieneIngreso = allTx.some(t => t.fecha === fs && t.tipoCosto === 'INGRESOS' && t.monto > 0);
+                            if (!tieneIngreso) diasSinIngreso.push(fs);
+                            cursor.setDate(cursor.getDate()+1);
+                        }
+
+                        if (!diasSinIngreso.length) return null;
+
+                        const esHoy = (fs) => fs === hoyStr;
+                        const fmtFecha = (fs) => {
+                            const d = new Date(fs+'T12:00:00');
+                            return esHoy(fs)
+                                ? `hoy (${d.toLocaleDateString('es-AR',{weekday:'long'})})`
+                                : d.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
+                        };
+
+                        const soloHoy = diasSinIngreso.length === 1 && diasSinIngreso[0] === hoyStr;
+                        const hayPasados = diasSinIngreso.some(f => f !== hoyStr);
+                        const bgColor = hayPasados ? 'linear-gradient(90deg,#7f1d1d,#991b1b)' : 'linear-gradient(90deg,#166534,#15803d)';
+
+                        return (
+                            <div className="mb-2" style={{background: bgColor, color:'white'}}>
+                                {diasSinIngreso.length === 1 ? (
+                                    <div className="flex items-center gap-3 px-4 py-2.5">
+                                        <span className="text-lg shrink-0">⚠️</span>
+                                        <p className="text-sm font-medium flex-1">
+                                            Sin ingreso registrado el {fmtFecha(diasSinIngreso[0])}
+                                        </p>
+                                        {esHoy(diasSinIngreso[0]) && (
+                                            <button onClick={openIngresoModal} className="text-xs px-3 py-1 rounded-lg font-medium shrink-0" style={{background:'rgba(255,255,255,0.2)'}}>
+                                                + Cargar ingreso
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="px-4 py-2.5">
+                                        <div className="flex items-center gap-3 mb-1.5">
+                                            <span className="text-lg shrink-0">⚠️</span>
+                                            <p className="text-sm font-bold flex-1">
+                                                {diasSinIngreso.length} días sin ingreso registrado
+                                            </p>
+                                            <button onClick={openIngresoModal} className="text-xs px-3 py-1 rounded-lg font-medium shrink-0" style={{background:'rgba(255,255,255,0.2)'}}>
+                                                + Cargar hoy
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5 pl-8">
+                                            {diasSinIngreso.slice(0,7).map(fs => (
+                                                <span key={fs} className="text-xs px-2 py-0.5 rounded-full" style={{background:'rgba(255,255,255,0.15)'}}>
+                                                    {new Date(fs+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'})}
+                                                </span>
+                                            ))}
+                                            {diasSinIngreso.length > 7 && <span className="text-xs opacity-70">+{diasSinIngreso.length-7} más</span>}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
                     {/* VISTA: PLANEACIÓN Y AHORRO */}
                     {viewMode === 'planeacion' && (
                         <div>
@@ -10079,26 +10154,30 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 className={`w-full px-2 py-1.5 border rounded-lg text-xs ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`} />
                                         </div>
                                         <div>
-                                            <label className={`block text-xs font-medium mb-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Tipo de Costo</label>
+                                            <label className={`block text-xs font-medium mb-0.5 ${!formData.tipoCosto ? 'text-red-500' : darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                Tipo de Costo {!formData.tipoCosto && <span className="text-red-500">*</span>}
+                                            </label>
                                             <select value={formData.tipoCosto}
                                                 onChange={e => setFormData({...formData, tipoCosto: e.target.value})}
-                                                className={`w-full px-2 py-1.5 border rounded-lg text-xs ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`}>
+                                                className={`w-full px-2 py-1.5 border rounded-lg text-xs ${!formData.tipoCosto ? 'border-red-400 ring-1 ring-red-400' : ''} ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`}>
                                                 <option value="">{language==="en"?"Select...":language==="cs"?"Vyberte...":"Seleccionar..."}</option>
                                                 {tiposCosto.filter(t => t !== 'INGRESOS').map(t => <option key={t} value={t}>{t}</option>)}
                                             </select>
                                         </div>
                                     </div>
 
-                                    {/* Origen */}
+                                    {/* Origen — obligatorio */}
                                     <div>
-                                        <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Origen</label>
-                                        <div className="flex gap-2">
+                                        <label className={`block text-xs font-medium mb-1 ${!formData.origen ? 'text-red-500' : darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                            Origen {!formData.origen && <span className="text-red-500">*</span>}
+                                        </label>
+                                        <div className={`flex gap-2 p-1 rounded-lg ${!formData.origen ? 'ring-1 ring-red-400' : ''}`}>
                                             {[['BANK','🏦 Banco'],['CASH','💵 Efectivo']].map(([val, label]) => (
                                                 <button key={val} onClick={() => setFormData({...formData, origen: val})}
                                                     className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                                                         formData.origen === val
                                                             ? val === 'BANK' ? 'bg-blue-600 text-white border-blue-600' : 'bg-green-600 text-white border-green-600'
-                                                            : darkMode ? 'border-slate-600 text-slate-400' : 'border-slate-300 text-slate-500'
+                                                            : darkMode ? 'border-slate-600 text-slate-400 hover:border-slate-500' : 'border-slate-300 text-slate-500 hover:border-slate-400'
                                                     }`}>
                                                     {label}
                                                 </button>
