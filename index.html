@@ -1527,10 +1527,23 @@ ${invoice.items.map(item => `
             const [showPin, setShowPin] = useState(false);
             const [pinError, setPinError] = useState(false);
             const [bloqueadoError, setBloqueadoError] = useState(false);
+            const [intentosFallidos, setIntentosFallidos] = useState({});
+            const [showSecLoginModal, setShowSecLoginModal] = useState(false);
+            const [secLoginUser, setSecLoginUser] = useState(null);
+            const [secLoginRespuesta, setSecLoginRespuesta] = useState('');
+            const [secLoginError, setSecLoginError] = useState('');
+            const [mostrarPregunta, setMostrarPregunta] = useState(false);
+            const [usuarioPregunta, setUsuarioPregunta] = useState(null);
+            const [respuestInput, setRespuestInput] = useState('');
+            const [respuestaError, setRespuestaError] = useState(false);
             const [currentUser, setCurrentUser] = useState(null);
             const [activeModule, setActiveModule] = useState('home');
             const [showUserMenu, setShowUserMenu] = useState(false);
             const [showChangePinModal, setShowChangePinModal] = useState(false);
+            const [showSecurityModal, setShowSecurityModal] = useState(false);
+            const [securityForm, setSecurityForm] = useState({ pin: '', pregunta: '', respuesta: '' });
+            const [securityError, setSecurityError] = useState('');
+            const [securitySuccess, setSecuritySuccess] = useState(false);
             const [changePinForm, setChangePinForm] = useState({ current: '', new1: '', new2: '' });
             const [changePinError, setChangePinError] = useState('');
             const [changePinSuccess, setChangePinSuccess] = useState(false);
@@ -1840,7 +1853,8 @@ ${invoice.items.map(item => `
             // Función para verificar permisos del usuario actual
             const hasPermission = (module, requiredLevel = 'read') => {
                 if (!currentUser) return false;
-                
+                // Admin y superadmin tienen acceso total siempre
+                if (currentUser.role === 'admin' || currentUser.role === 'superadmin') return true;
                 // Usuarios sin permisos definidos (antiguos) = acceso total
                 if (!currentUser.permissions) return true;
                 
@@ -2015,6 +2029,8 @@ ${invoice.items.map(item => `
                 if (user.pin === pinInput) {
                     const userConTs = {...user, loginTs: Date.now()};
                     setCurrentUser(userConTs);
+                    // Resetear intentos fallidos al loguearse bien
+                    setIntentosFallidos(prev => { const n={...prev}; delete n[String(user.id)]; return n; });
                     localStorage.setItem('malagestion_current_user', JSON.stringify(userConTs));
                     // Migrar tareas viejas a clave por usuario si es necesario
                     const tareasViejas = localStorage.getItem('miCerebroTareas');
@@ -2030,12 +2046,87 @@ ${invoice.items.map(item => `
                     if (user.language) setCurrentLanguage(user.language);
                     setAutoLogoutMinutes(user.autoLogoutMinutes !== undefined ? user.autoLogoutMinutes : 5);
                 } else {
-                    setPinError(true);
-                    setTimeout(() => setPinError(false), 2000);
+                    // PIN incorrecto
+                    if (user.role === 'superadmin') {
+                        const userId = String(user.id);
+                        const nuevosIntentos = (intentosFallidos[userId] || 0) + 1;
+                        setIntentosFallidos(prev => ({...prev, [userId]: nuevosIntentos}));
+                        setPinInput('');
+                        if (nuevosIntentos >= 3 && user.preguntaSeguridad && user.respuestaSeguridad) {
+                            // Mostrar pregunta de seguridad (sin bloquear)
+                            setUsuarioPregunta(user);
+                            setMostrarPregunta(true);
+                            setRespuestInput('');
+                        } else {
+                            const restantes = Math.max(0, 3 - nuevosIntentos);
+                            setPinError(restantes > 0 ? restantes : '⚠️ Demasiados intentos');
+                            setTimeout(() => setPinError(false), 2000);
+                        }
+                        return;
+                    }
+                    const userId = String(user.id);
+                    const nuevosIntentos = (intentosFallidos[userId] || 0) + 1;
+                    setIntentosFallidos(prev => ({...prev, [userId]: nuevosIntentos}));
                     setPinInput('');
+                    if (nuevosIntentos >= 2) {
+                        // Mostrar pregunta de seguridad si tiene una configurada
+                        if (user.preguntaSeguridad && user.respuestaSeguridad) {
+                            setUsuarioPregunta(user);
+                            setMostrarPregunta(true);
+                            setRespuestInput('');
+                        } else {
+                            // Sin pregunta configurada → bloquear directamente al 3er intento
+                            if (nuevosIntentos >= 3) {
+                                const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
+                                    .map(u => String(u.id) === userId ? {...u, bloqueado: true} : u);
+                                localStorage.setItem('systemUsers', JSON.stringify(todos));
+                                dbSetArray('system_users', todos);
+                                setBloqueadoError(true);
+                                setTimeout(() => setBloqueadoError(false), 5000);
+                            } else {
+                                setPinError(3 - nuevosIntentos);
+                                setTimeout(() => setPinError(false), 2000);
+                            }
+                        }
+                    } else {
+                        setPinError(3 - nuevosIntentos);
+                        setTimeout(() => setPinError(false), 2000);
+                    }
                 }
             };
             
+            const verificarRespuesta = () => {
+                if (!usuarioPregunta) return;
+                const correcta = respuestInput.toLowerCase().trim() === (usuarioPregunta.respuestaSeguridad||'').toLowerCase().trim();
+                if (correcta) {
+                    // Respuesta correcta — permitir un intento más de PIN
+                    setMostrarPregunta(false);
+                    setUsuarioPregunta(null);
+                    setRespuestInput('');
+                    setRespuestaError(false);
+                    setIntentosFallidos(prev => ({...prev, [String(usuarioPregunta.id)]: 1}));
+                } else {
+                    // Incorrecta → bloquear (excepto superadmin)
+                    if (usuarioPregunta.role === 'superadmin') {
+                        setRespuestaError(true);
+                        setMostrarPregunta(false);
+                        setUsuarioPregunta(null);
+                        setRespuestInput('');
+                        setIntentosFallidos(prev => ({...prev, [String(usuarioPregunta.id)]: 0}));
+                        return;
+                    }
+                    const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
+                        .map(u => String(u.id) === String(usuarioPregunta.id) ? {...u, bloqueado: true} : u);
+                    localStorage.setItem('systemUsers', JSON.stringify(todos));
+                    dbSetArray('system_users', todos);
+                    setMostrarPregunta(false);
+                    setUsuarioPregunta(null);
+                    setRespuestInput('');
+                    setBloqueadoError(true);
+                    setTimeout(() => setBloqueadoError(false), 5000);
+                }
+            };
+
             const handleLogout = () => {
                 setIsUnlocked(false);
                 setCurrentUser(null);
@@ -2128,7 +2219,9 @@ ${invoice.items.map(item => `
                                 {pinError && (
                                             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/40 border border-red-700/50">
                                                 <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                                <p className="text-xs text-red-300">Usuario o PIN incorrecto</p>
+                                                <p className="text-xs text-red-300">
+                                                    PIN incorrecto.{typeof pinError === 'number' ? ` Te quedan ${pinError} intento${pinError !== 1 ? 's' : ''}.` : ''}
+                                                </p>
                                             </div>
                                         )}
                                         <div>
@@ -2185,6 +2278,25 @@ ${invoice.items.map(item => `
                                             style={{background:'linear-gradient(135deg, #6366f1, #06b6d4)'}}>
                                             {currentLanguage === 'cs' ? 'Přihlásit se' : currentLanguage === 'en' ? 'Login' : 'Ingresar'}
                                         </button>
+
+                                        {/* Pregunta de seguridad */}
+                                        {mostrarPregunta && usuarioPregunta && (
+                                            <div className="mt-2 p-4 rounded-xl border border-amber-500/40" style={{background:'rgba(217,119,6,0.1)'}}>
+                                                <p className="text-xs font-semibold text-amber-400 mb-1">🔐 Pregunta de seguridad</p>
+                                                <p className="text-sm text-white mb-3">{usuarioPregunta.preguntaSeguridad}</p>
+                                                <input type="text" value={respuestInput} onChange={e => setRespuestInput(e.target.value)}
+                                                    onKeyDown={e => { if (e.key === 'Enter') verificarRespuesta(); }}
+                                                    placeholder="Tu respuesta..." autoFocus
+                                                    className="w-full px-3 py-2 rounded-lg text-sm text-white border border-amber-500/40 mb-2"
+                                                    style={{background:'rgba(0,0,0,0.3)'}}/>
+                                                {respuestaError && <p className="text-xs text-red-400 mb-2">Respuesta incorrecta. Cuenta bloqueada.</p>}
+                                                <div className="flex gap-2">
+                                                    <button onClick={verificarRespuesta} className="flex-1 py-2 rounded-lg text-sm font-medium text-white" style={{background:'#d97706'}}>Confirmar</button>
+                                                    <button onClick={() => { setMostrarPregunta(false); setUsuarioPregunta(null); setRespuestInput(''); }}
+                                                        className="px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white">Cancelar</button>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Biometría */}
                                         {bioAvailable && bioRegistered && (
@@ -2379,6 +2491,15 @@ ${invoice.items.map(item => `
                                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
                                                             </div>
                                                             <span className="text-sm">Cambiar PIN</span>
+                                                        </button>
+
+                                                        {/* Pregunta de seguridad */}
+                                                        <button onClick={() => { setShowUserMenu(false); setSecurityForm({ pin: '', pregunta: currentUser?.preguntaSeguridad || '', respuesta: '' }); setSecurityError(''); setSecuritySuccess(false); setShowSecurityModal(true); }}
+                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-left ${darkMode ? 'hover:bg-slate-700/70 text-slate-300' : 'hover:bg-slate-50 text-slate-700'}`}>
+                                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                            </div>
+                                                            <span className="text-sm">Pregunta de seguridad</span>
                                                         </button>
 
                                                         {/* Cierre automático */}
@@ -2628,7 +2749,7 @@ ${invoice.items.map(item => `
                                     detail: t.settingsDetail,
                                 },
                                 prestamos: {
-                                    permission: 'apps',
+                                    permission: 'prestamos',
                                     navigate: 'prestamos',
                                     color: 'teal',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-teal-400' : 'text-teal-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
@@ -2637,7 +2758,7 @@ ${invoice.items.map(item => `
                                     detail: t.prestamosDetail,
                                 },
                                 credenciales: {
-                                    permission: 'apps',
+                                    permission: 'credenciales',
                                     navigate: 'credenciales',
                                     color: 'indigo',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
@@ -2646,7 +2767,7 @@ ${invoice.items.map(item => `
                                     detail: 'Registro de usuarios, contraseñas y accesos para referencia interna.',
                                 },
                                 calendario: {
-                                    permission: 'apps',
+                                    permission: 'calendario',
                                     navigate: 'calendario',
                                     color: 'blue',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-blue-400' : 'text-blue-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
@@ -2655,7 +2776,7 @@ ${invoice.items.map(item => `
                                     detail: 'Agenda con vistas diaria, semanal y mensual por empleado y ubicación.',
                                 },
                                 stock: {
-                                    permission: 'apps',
+                                    permission: 'stock',
                                     navigate: 'stock',
                                     color: 'amber',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-amber-400' : 'text-amber-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
@@ -2664,7 +2785,7 @@ ${invoice.items.map(item => `
                                     detail: 'Módulo en construcción. Próximamente disponible.',
                                 },
                                 cocina: {
-                                    permission: 'apps',
+                                    permission: 'cocina',
                                     navigate: 'cocina',
                                     color: 'orange',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-orange-400' : 'text-orange-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
@@ -2673,7 +2794,7 @@ ${invoice.items.map(item => `
                                     detail: 'Módulo en construcción. Próximamente disponible.',
                                 },
                                 micerebro: {
-                                    permission: 'apps',
+                                    permission: 'micerebro',
                                     navigate: 'micerebro',
                                     color: 'purple',
                                     icon: <span className="text-3xl group-hover:brightness-0 group-hover:invert transition-all">🧠</span>,
@@ -2719,25 +2840,25 @@ ${invoice.items.map(item => `
                                             {editingModuleOrder && (
                                                 <div className="absolute -top-3 right-2 z-10 flex gap-1">
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); moveModule(visibleModules.indexOf(key), -1); }}
-                                                        disabled={index === 0}
-                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${index === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
+                                                        onClick={(e) => { e.stopPropagation(); moveModule(moduleOrder.indexOf(key), -1); }}
+                                                        disabled={moduleOrder.indexOf(key) === 0}
+                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${moduleOrder.indexOf(key) === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
                                                         title="Mover izquierda">←</button>
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); moveModule(visibleModules.indexOf(key), 'up'); }}
-                                                        disabled={index < 3}
-                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${index < 3 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
+                                                        onClick={(e) => { e.stopPropagation(); moveModule(moduleOrder.indexOf(key), 'up'); }}
+                                                        disabled={moduleOrder.indexOf(key) < 3}
+                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${moduleOrder.indexOf(key) < 3 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
                                                         title="Mover arriba">↑</button>
                                                     <span className={`w-6 h-7 flex items-center justify-center text-xs font-bold ${darkMode ? 'text-slate-300' : 'text-slate-500'}`}>{index + 1}</span>
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); moveModule(visibleModules.indexOf(key), 'down'); }}
-                                                        disabled={index >= visibleModules.length - 3}
-                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${index >= visibleModules.length - 3 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
+                                                        onClick={(e) => { e.stopPropagation(); moveModule(moduleOrder.indexOf(key), 'down'); }}
+                                                        disabled={moduleOrder.indexOf(key) >= moduleOrder.length - 3}
+                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${moduleOrder.indexOf(key) >= moduleOrder.length - 3 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
                                                         title="Mover abajo">↓</button>
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); moveModule(visibleModules.indexOf(key), 1); }}
-                                                        disabled={index === visibleModules.length - 1}
-                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${index === visibleModules.length - 1 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
+                                                        onClick={(e) => { e.stopPropagation(); moveModule(moduleOrder.indexOf(key), 1); }}
+                                                        disabled={moduleOrder.indexOf(key) === moduleOrder.length - 1}
+                                                        className={`w-7 h-7 rounded-full text-xs font-bold shadow-md flex items-center justify-center transition-colors ${moduleOrder.indexOf(key) === moduleOrder.length - 1 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700 hover:bg-emerald-500 hover:text-white border border-slate-300'}`}
                                                         title="Mover derecha">→</button>
                                                 </div>
                                             )}
@@ -2963,6 +3084,92 @@ ${invoice.items.map(item => `
                     )}
 
                     {/* ===== MODAL: CAMBIAR PIN ===== */}
+                    {/* Modal Pregunta de Seguridad */}
+                    {showSecurityModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                            style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+                            onClick={(e) => { if (e.target === e.currentTarget) setShowSecurityModal(false); }}>
+                            <div className={`w-full max-w-sm rounded-2xl shadow-2xl p-6 ${darkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-900'}`}>
+                                <div className="flex items-center justify-between mb-5">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${darkMode ? 'bg-purple-900' : 'bg-purple-100'}`}>
+                                            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-base">Pregunta de seguridad</h3>
+                                            <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{currentUser?.name} {currentUser?.lastname || ''}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setShowSecurityModal(false)}
+                                        className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${darkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                                    </button>
+                                </div>
+                                {securitySuccess ? (
+                                    <div className="flex flex-col items-center justify-center py-6 gap-3">
+                                        <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
+                                            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                                        </div>
+                                        <p className="text-green-600 font-semibold text-sm">¡Pregunta de seguridad actualizada!</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-3">
+                                        <div>
+                                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Tu PIN actual (para confirmar)</label>
+                                            <input type="password" maxLength={4} inputMode="numeric" placeholder="••••"
+                                                value={securityForm.pin}
+                                                onChange={e => setSecurityForm(f => ({...f, pin: e.target.value.replace(/\D/g,'')}))}
+                                                className={`w-full px-4 py-2.5 rounded-xl border text-center text-lg tracking-widest font-mono outline-none focus:ring-2 focus:ring-purple-500 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300'}`}/>
+                                        </div>
+                                        <div>
+                                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Pregunta de seguridad</label>
+                                            <input type="text" placeholder="Ej: ¿Nombre de tu primera mascota?"
+                                                value={securityForm.pregunta}
+                                                onChange={e => setSecurityForm(f => ({...f, pregunta: e.target.value}))}
+                                                className={`w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 focus:ring-purple-500 text-sm ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300'}`}/>
+                                        </div>
+                                        <div>
+                                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Respuesta</label>
+                                            <input type="text" placeholder="Tu respuesta secreta..."
+                                                value={securityForm.respuesta}
+                                                onChange={e => setSecurityForm(f => ({...f, respuesta: e.target.value}))}
+                                                className={`w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 focus:ring-purple-500 text-sm ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-300'}`}/>
+                                        </div>
+                                        {securityError && (
+                                            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl">
+                                                <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"/></svg>
+                                                <span className="text-red-600 text-xs">{securityError}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex gap-3 pt-1">
+                                            <button onClick={() => setShowSecurityModal(false)}
+                                                className={`flex-1 py-2.5 rounded-xl text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                                                Cancelar
+                                            </button>
+                                            <button onClick={() => {
+                                                if (!securityForm.pin) { setSecurityError('Ingresá tu PIN actual.'); return; }
+                                                if (securityForm.pin !== currentUser?.pin) { setSecurityError('PIN incorrecto.'); return; }
+                                                if (!securityForm.pregunta.trim()) { setSecurityError('Escribí una pregunta.'); return; }
+                                                if (!securityForm.respuesta.trim()) { setSecurityError('Escribí la respuesta.'); return; }
+                                                const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
+                                                    .map(u => u.id === currentUser.id ? {...u, preguntaSeguridad: securityForm.pregunta.trim(), respuestaSeguridad: securityForm.respuesta.trim().toLowerCase()} : u);
+                                                localStorage.setItem('systemUsers', JSON.stringify(todos));
+                                                dbSetArray('system_users', todos);
+                                                setCurrentUser(u => ({...u, preguntaSeguridad: securityForm.pregunta.trim(), respuestaSeguridad: securityForm.respuesta.trim().toLowerCase()}));
+                                                setSecuritySuccess(true);
+                                                setTimeout(() => setShowSecurityModal(false), 2000);
+                                            }}
+                                                disabled={!securityForm.pin || !securityForm.pregunta || !securityForm.respuesta}
+                                                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                                                Guardar
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {showChangePinModal && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
                             style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
@@ -3735,8 +3942,8 @@ ${invoice.items.map(item => `
         // COMPONENTE: SEGUIMIENTO DE PRÉSTAMOS
         // ============================================
         const CalendarioModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
-            const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'manager' ||
-                (currentUser?.permissions && currentUser.permissions['apps'] === 'edit');
+            const { isAdmin, canEdit: _canEdit } = usePermissions(currentUser, 'calendario');
+            const canEdit = isAdmin || _canEdit || currentUser?.permissions?.['calendario'] === 'editor';
 
             // ── Estado ─────────────────────────────────────────────────────
             const [view, setView] = React.useState('semana'); // 'dia' | 'semana' | 'mes' | 'horas'
@@ -6201,6 +6408,8 @@ ${invoice.items.map(item => `
                     username: '',
                     role: 'custom', 
                     pin: '',
+                    preguntaSeguridad: '',
+                    respuestaSeguridad: '',
                     accessType: 'custom',
                     permissions: {
                         ventas: 'editor',
@@ -6224,6 +6433,8 @@ ${invoice.items.map(item => `
                     username: user.username || '',
                     role: user.role || 'custom',
                     pin: user.pin,
+                    preguntaSeguridad: user.preguntaSeguridad || '',
+                    respuestaSeguridad: user.respuestaSeguridad || '',
                     accessType: user.accessType || 'custom',
                     permissions: user.permissions || {
                         ventas: 'editor',
@@ -6289,7 +6500,7 @@ ${invoice.items.map(item => `
                     // Editar usuario existente
                     setUsers(users.map(u => 
                         u.id === editingUser.id 
-                            ? { ...u, ...userForm }
+                            ? { ...u, ...userForm, preguntaSeguridad: userForm.preguntaSeguridad||'', respuestaSeguridad: (userForm.respuestaSeguridad||'').toLowerCase().trim() }
                             : u
                     ));
                     alert(t.userUpdated);
@@ -6298,6 +6509,8 @@ ${invoice.items.map(item => `
                     const newUser = {
                         id: Date.now(),
                         ...userForm,
+                        preguntaSeguridad: userForm.preguntaSeguridad || '',
+                        respuestaSeguridad: (userForm.respuestaSeguridad || '').toLowerCase().trim(),
                         createdAt: new Date().toISOString()
                     };
                     setUsers([...users, newUser]);
@@ -6511,18 +6724,7 @@ ${invoice.items.map(item => `
                                                                 >
                                                                     ✏️ {t.edit}
                                                                 </button>)}
-                                                                {currentUser?.role === 'superadmin' && user.role !== 'superadmin' && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (!confirm(`¿Cerrar todas las sesiones de ${user.name}? Deberá volver a loguearse.`)) return;
-                                                                        dbUpsertOne('app_config', `forceLogout_${user.id}`, { ts: Date.now(), by: currentUser?.name });
-                                                                        alert(`✓ Sesiones de ${user.name} cerradas. Se deslogueará en max. 5 segundos.`);
-                                                                    }}
-                                                                    className="text-orange-500 hover:text-orange-700 mr-4"
-                                                                    title="Cerrar todas las sesiones"
-                                                                >
-                                                                    🔌 Desloguear
-                                                                </button>)}
+
                                                                 {user.role !== 'superadmin' && (
                                                                 <button
                                                                     onClick={() => deleteUser(user.id)}
@@ -6673,8 +6875,44 @@ ${invoice.items.map(item => `
                                             </div>
                                         </div>
                                     </div>
-                                    
-                                    {/* SECCIÓN 4: ROL Y PERMISOS */}
+
+                                    {/* SECCIÓN: PREGUNTA DE SEGURIDAD */}
+                                    <div className={`p-4 rounded-lg border ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                                        <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                                            🔐 Pregunta de seguridad
+                                        </h4>
+                                        <p className={`text-xs mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                            Se pregunta tras 2 intentos fallidos de PIN. No aplica a superadmin.
+                                        </p>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Pregunta</label>
+                                                <select
+                                                    value={userForm.preguntaSeguridad}
+                                                    onChange={(e) => setUserForm({...userForm, preguntaSeguridad: e.target.value})}
+                                                    className={`w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
+                                                >
+                                                    <option value="">— Seleccionar pregunta —</option>
+                                                    <option value="¿Cuál es el nombre de tu mascota?">¿Cuál es el nombre de tu mascota?</option>
+                                                    <option value="¿En qué ciudad naciste?">¿En qué ciudad naciste?</option>
+                                                    <option value="¿Cuál es el nombre de tu madre?">¿Cuál es el nombre de tu madre?</option>
+                                                    <option value="¿Cuál es tu película favorita?">¿Cuál es tu película favorita?</option>
+                                                    <option value="¿Cuál fue el nombre de tu primera escuela?">¿Cuál fue el nombre de tu primera escuela?</option>
+                                                    <option value="¿Cuál es el apodo de tu mejor amigo?">¿Cuál es el apodo de tu mejor amigo?</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Respuesta</label>
+                                                <input
+                                                    type="text"
+                                                    value={userForm.respuestaSeguridad}
+                                                    onChange={(e) => setUserForm({...userForm, respuestaSeguridad: e.target.value.toLowerCase().trim()})}
+                                                    className={`w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
+                                                    placeholder="Respuesta (sin mayúsculas ni espacios extra)"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className={`p-4 rounded-lg border ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
                                         <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                                             👤 {t.userRole}
@@ -21677,8 +21915,28 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const enviarMensaje = () => {
                 if (!chatMsg.trim() || !chatTarea) return;
                 const msg = { id:Date.now(), ts:Date.now(), autorId:_uid, autorNombre:`${currentUser?.name} ${currentUser?.lastname||''}`.trim(), texto:chatMsg.trim() };
-                const l = tareas.map(t => t.id===chatTarea.id ? {...t, chat:[...(t.chat||[]),msg]} : t);
-                saveTareas(l); setChatMsg(''); setChatTarea(l.find(t=>t.id===chatTarea.id));
+                // Verificar si la tarea es propia o compartida conmigo
+                const esMia = tareas.find(t => t.id===chatTarea.id);
+                if (esMia) {
+                    const l = tareas.map(t => t.id===chatTarea.id ? {...t, chat:[...(t.chat||[]),msg]} : t);
+                    saveTareas(l); setChatMsg(''); setChatTarea(l.find(t=>t.id===chatTarea.id));
+                } else {
+                    // Es una tarea compartida — guardar en la clave del autor
+                    const autorKey = `miCerebroTareas_${chatTarea.autorId}`;
+                    window._sb?.from('app_config').select('data').eq('id', autorKey).maybeSingle().then(r => {
+                        const lista = r?.data?.data || [];
+                        const actualizada = lista.map(t => t.id===chatTarea.id ? {...t, chat:[...(t.chat||[]),msg]} : t);
+                        dbUpsertOne('app_config', autorKey, actualizada);
+                        // Actualizar también el cache local de compartidas
+                        const compKey = `miCerebroCompartidas_${_uid}`;
+                        const compCache = JSON.parse(localStorage.getItem(compKey)||'[]');
+                        const compActualizada = compCache.map(t => t.id===chatTarea.id ? {...t, chat:[...(t.chat||[]),msg]} : t);
+                        localStorage.setItem(compKey, JSON.stringify(compActualizada));
+                        setChatMsg('');
+                        setChatTarea(prev => ({...prev, chat:[...(prev.chat||[]),msg]}));
+                        window.dispatchEvent(new Event('tareasUpdate'));
+                    });
+                }
             };
             const mensajesNuevos = (t) => {
                 if (!t.chat?.length) return 0;
