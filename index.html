@@ -1310,6 +1310,7 @@ ${invoice.items.map(item => `
                                 (row.data||[]).forEach(t => { if((t.compartidoCon||[]).includes(uid2)) comp.push(t); });
                             });
                             localStorage.setItem(`miCerebroCompartidas_${uid2}`, JSON.stringify(comp));
+                            window.dispatchEvent(new Event('tareasUpdate'));
                         }
                         refreshNotifs();
                     } catch(e) {}
@@ -2382,7 +2383,7 @@ ${invoice.items.map(item => `
                                 !t.completada &&
                                 String(t.autorId) !== String(currentUser?.id) &&
                                 (t.compartidoCon||[]).includes(String(currentUser?.id)) &&
-                                !vistas.includes(t.id)
+                                !vistas.map(String).includes(String(t.id))
                             );
                             if (!nuevas.length) return null;
                             return (
