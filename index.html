@@ -2390,6 +2390,7 @@ ${invoice.items.map(item => `
                                 !t.completada &&
                                 !_vistas.includes(String(t.id))
                             );
+                            console.log('🟡 Banner compartidas:', nuevas.length, _u, _comp.length);
                             if (!nuevas.length) return null;
                             return (
                                 <div className="flex items-center gap-3 px-4 py-2.5"
