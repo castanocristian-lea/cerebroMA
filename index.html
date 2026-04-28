@@ -1294,12 +1294,19 @@ ${invoice.items.map(item => `
             const [showPassword, setShowPassword] = useState(false);
             const [supabaseReady, setSupabaseReady] = useState(window.__supabaseReady || false);
             const [ocultarBannerVencidas, setOcultarBannerVencidas] = useState(false);
+            const [idxVencida, setIdxVencida] = useState(0);
             const [notifKey, setNotifKey] = useState(0);
             const refreshNotifs = React.useCallback(() => setNotifKey(k => k+1), []);
 
             // Ticker cada 5s para re-renderizar banners con datos frescos de localStorage
             useEffect(() => {
                 const t = setInterval(() => setNotifKey(k => k+1), 5000);
+                return () => clearInterval(t);
+            }, []);
+
+            // Rotador de títulos de tareas vencidas cada 2s
+            useEffect(() => {
+                const t = setInterval(() => setIdxVencida(i => i+1), 2000);
                 return () => clearInterval(t);
             }, []);
 
@@ -2390,7 +2397,6 @@ ${invoice.items.map(item => `
                                 !t.completada &&
                                 !_vistas.includes(String(t.id))
                             );
-                            console.log('🟡 Banner compartidas:', nuevas.length, _u, _comp.length);
                             if (!nuevas.length) return null;
                             return (
                                 <div className="flex items-center gap-3 px-4 py-2.5"
@@ -2445,7 +2451,7 @@ ${invoice.items.map(item => `
                                     <span className="text-lg shrink-0">🧠</span>
                                     <p className="text-sm font-medium flex-1">
                                         Tenés <strong>{venc.length}</strong> tarea{venc.length !== 1 ? 's' : ''} vencida{venc.length !== 1 ? 's' : ''} en Mi Cerebro
-                                        {venc[0]?.titulo ? ` — "${venc[0].titulo}"` : ''}
+                                        {venc.length > 0 ? ` — "${venc[idxVencida % venc.length]?.titulo}"` : ''}
                                     </p>
                                     <button onClick={() => setActiveModule('micerebro')} className="text-xs opacity-80 hover:opacity-100 shrink-0">Ver →</button>
                                     <button onClick={e => { e.stopPropagation(); setOcultarBannerVencidas(true); }} className="ml-1 w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/20 opacity-70 hover:opacity-100 shrink-0 text-sm" title="Cerrar hasta próximo login">✕</button>
