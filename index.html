@@ -1347,6 +1347,25 @@ ${invoice.items.map(item => `
                 };
             }, []);
 
+            // Verificar logout forzado cada 5s
+            useEffect(() => {
+                if (!currentUser) return;
+                const checkLogout = async () => {
+                    try {
+                        const r = await window._sb?.from('app_config').select('data').eq('id', `forceLogout_${currentUser.id}`).maybeSingle();
+                        if (r?.data?.data?.ts) {
+                            const loginTime = currentUser.loginTs || 0;
+                            if (r.data.data.ts > loginTime) {
+                                handleLogout();
+                            }
+                        }
+                    } catch(e) {}
+                };
+                const t = setInterval(checkLogout, 5000);
+                checkLogout();
+                return () => clearInterval(t);
+            }, [currentUser]);
+
             // Polling cada 60s para sincronizar tareas desde Supabase
             useEffect(() => {
                 if (!currentUser) return;
@@ -1507,6 +1526,7 @@ ${invoice.items.map(item => `
             const [showUser, setShowUser] = useState(false);
             const [showPin, setShowPin] = useState(false);
             const [pinError, setPinError] = useState(false);
+            const [bloqueadoError, setBloqueadoError] = useState(false);
             const [currentUser, setCurrentUser] = useState(null);
             const [activeModule, setActiveModule] = useState('home');
             const [showUserMenu, setShowUserMenu] = useState(false);
@@ -1962,7 +1982,7 @@ ${invoice.items.map(item => `
                     const defaultAdmin = {
                         id: Date.now(),
                         name: 'admin',
-                        role: 'admin',
+                        role: 'superadmin',
                         pin: '1234',
                         createdAt: new Date().toISOString()
                     };
@@ -1984,10 +2004,18 @@ ${invoice.items.map(item => `
                     return;
                 }
                 
+                // Verificar si el usuario está bloqueado
+                if (user.bloqueado) {
+                    setBloqueadoError(true);
+                    setTimeout(() => setBloqueadoError(false), 5000);
+                    return;
+                }
+
                 // Validar PIN
                 if (user.pin === pinInput) {
-                    setCurrentUser(user);
-                    localStorage.setItem('malagestion_current_user', JSON.stringify(user));
+                    const userConTs = {...user, loginTs: Date.now()};
+                    setCurrentUser(userConTs);
+                    localStorage.setItem('malagestion_current_user', JSON.stringify(userConTs));
                     // Migrar tareas viejas a clave por usuario si es necesario
                     const tareasViejas = localStorage.getItem('miCerebroTareas');
                     const claveNueva = `miCerebroTareas_${user.id}`;
@@ -2091,7 +2119,13 @@ ${invoice.items.map(item => `
 
                                     {/* Formulario */}
                                     <form onSubmit={handleLogin} className="space-y-4">
-                                        {pinError && (
+                                        {bloqueadoError && (
+                                    <div className="mt-3 p-3 rounded-xl text-center" style={{background:'#7f1d1d', border:'1px solid #ef4444'}}>
+                                        <p className="text-sm font-bold text-red-300">🔒 Tu cuenta fue bloqueada</p>
+                                        <p className="text-xs text-red-400 mt-1">Contactá al administrador para recuperar el acceso.</p>
+                                    </div>
+                                )}
+                                {pinError && (
                                             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/40 border border-red-700/50">
                                                 <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                                 <p className="text-xs text-red-300">Usuario o PIN incorrecto</p>
@@ -2217,8 +2251,8 @@ ${invoice.items.map(item => `
                                         {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                                     </button>
                                     
-                                    {/* Botón Exportar */}
-                                    <button
+                                    {/* Botón Exportar — solo superadmin */}
+                                    {currentUser?.role === 'superadmin' && <button
                                         onClick={exportFullBackup}
                                         className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                                             darkMode 
@@ -2231,10 +2265,10 @@ ${invoice.items.map(item => `
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                         </svg>
                                         <span className="hidden sm:inline text-sm font-medium">{t.export}</span>
-                                    </button>
+                                    </button>}
                                     
-                                    {/* Botón Importar */}
-                                    <label className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer ${
+                                    {/* Botón Importar — solo superadmin */}
+                                    {currentUser?.role === 'superadmin' && <label className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer ${
                                         darkMode 
                                             ? 'bg-green-600 text-white hover:bg-green-700' 
                                             : 'bg-green-600 text-white hover:bg-green-700'
@@ -2251,7 +2285,7 @@ ${invoice.items.map(item => `
                                             onChange={importFullBackup}
                                             className="hidden"
                                         />
-                                    </label>
+                                    </label>}
                                     
                                     {/* Usuario actual - Dropdown */}
                                     {currentUser && (
@@ -2298,7 +2332,7 @@ ${invoice.items.map(item => `
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <p className={`text-sm font-bold truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>{currentUser?.name} {currentUser?.lastname || ''}</p>
-                                                                <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{currentUser?.role === 'admin' ? 'Administrador' : currentUser?.role}</p>
+                                                                <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{currentUser?.role === 'superadmin' ? '⭐ Super Admin' : currentUser?.role === 'admin' ? 'Administrador' : currentUser?.role}</p>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -3037,11 +3071,12 @@ ${invoice.items.map(item => `
          * Módulos disponibles: ventas | proveedores | sueldos | caja | apps | config
          */
         const usePermissions = (currentUser, module) => {
-            const isAdmin = currentUser?.role === 'admin';
+            const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
+            const isSuperAdmin = currentUser?.role === 'superadmin';
             const canEdit = isAdmin || currentUser?.permissions?.[module] === 'editor';
             const canRead = isAdmin || currentUser?.permissions?.[module] === 'read' || canEdit;
             
-            return { isAdmin, canEdit, canRead };
+            return { isAdmin, isSuperAdmin, canEdit, canRead };
         };
         
         /**
@@ -6141,6 +6176,17 @@ ${invoice.items.map(item => `
             
             // Permisos predefinidos por rol
             const rolePermissions = {
+                superadmin: {
+                    accessType: 'full',
+                    permissions: {
+                        ventas: 'editor',
+                        proveedores: 'editor',
+                        sueldos: 'editor',
+                        caja: 'editor',
+                        apps: 'editor',
+                        config: 'editor'
+                    }
+                },
                 admin: {
                     accessType: 'full',
                     permissions: {
@@ -6504,18 +6550,46 @@ ${invoice.items.map(item => `
                                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                         {canEdit && (
                                                             <>
+                                                                {currentUser?.role === 'superadmin' && user.role !== 'superadmin' && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const updated = systemUsers.map(u => u.id === user.id ? {...u, bloqueado: !u.bloqueado} : u);
+                                                                            setSystemUsers(updated);
+                                                                            localStorage.setItem('systemUsers', JSON.stringify(updated));
+                                                                            dbSetArray('system_users', updated);
+                                                                        }}
+                                                                        className={`mr-4 text-xs px-2 py-1 rounded-full font-medium border transition-all ${user.bloqueado ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-red-50 hover:text-red-600'}`}
+                                                                        title={user.bloqueado ? 'Desbloquear usuario' : 'Bloquear usuario'}
+                                                                    >
+                                                                        {user.bloqueado ? '🔒 Bloqueado' : '🔓 Bloquear'}
+                                                                    </button>
+                                                                )}
+                                                                {(user.role !== 'superadmin' || currentUser?.role === 'superadmin' && currentUser?.name?.toLowerCase() === user.name?.toLowerCase()) && (
                                                                 <button
                                                                     onClick={() => editUser(user)}
                                                                     className="text-blue-600 hover:text-blue-900 mr-4"
                                                                 >
                                                                     ✏️ {t.edit}
-                                                                </button>
+                                                                </button>)}
+                                                                {currentUser?.role === 'superadmin' && user.role !== 'superadmin' && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (!confirm(`¿Cerrar todas las sesiones de ${user.name}? Deberá volver a loguearse.`)) return;
+                                                                        dbUpsertOne('app_config', `forceLogout_${user.id}`, { ts: Date.now(), by: currentUser?.name });
+                                                                        alert(`✓ Sesiones de ${user.name} cerradas. Se deslogueará en max. 5 segundos.`);
+                                                                    }}
+                                                                    className="text-orange-500 hover:text-orange-700 mr-4"
+                                                                    title="Cerrar todas las sesiones"
+                                                                >
+                                                                    🔌 Desloguear
+                                                                </button>)}
+                                                                {user.role !== 'superadmin' && (
                                                                 <button
                                                                     onClick={() => deleteUser(user.id)}
                                                                     className="text-red-600 hover:text-red-900"
                                                                 >
                                                                     🗑️ {t.delete}
-                                                                </button>
+                                                                </button>)}
                                                             </>
                                                         )}
                                                     </td>
@@ -6672,6 +6746,7 @@ ${invoice.items.map(item => `
                                             onChange={(e) => handleRoleChange(e.target.value)}
                                             className={`w-full px-3 py-2 border rounded-lg mb-4 ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
                                         >
+                                            <option value="superadmin">⭐ Super Admin - Acceso total</option>
                                             <option value="admin">👑 {t.admin} - {t.fullAccess}</option>
                                             <option value="manager">📊 {t.manager} - {t.fullAccess}</option>
                                             <option value="employee">👤 {t.employee}</option>
@@ -21666,6 +21741,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [chatMsg,         setChatMsg]         = React.useState('');
             const [chatVistos,      setChatVistos]      = React.useState(() => { try { return JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}'); } catch(e){ return {}; } });
             const [showCompletadas, setShowCompletadas] = React.useState(false);
+            const [colVerTodo, setColVerTodo] = React.useState({0:false,1:false,2:false});
             const [busqueda,        setBusqueda]        = React.useState('');
             const [vistaActiva,     setVistaActiva]     = React.useState('tareas');
             const [calFecha,        setCalFecha]        = React.useState(new Date());
@@ -21972,7 +22048,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </div>
                                 <div className={`flex-1 p-3 space-y-2 overflow-y-auto ${darkMode?'bg-slate-800/50':'bg-slate-50/50'}`}>
                                     {col.tareas.length===0&&<p className={`text-xs text-center py-8 ${sub}`}>Sin tareas</p>}
-                                    {col.tareas.map(t=><TareaCard key={t.id} tarea={t} esPropia={col.esPropia} mostrarDe={col.mostrarDe}/>)}
+                                    {(colVerTodo[ci] ? col.tareas : col.tareas.slice(0,2)).map(t=><TareaCard key={t.id} tarea={t} esPropia={col.esPropia} mostrarDe={col.mostrarDe}/>)}
+                                    {col.tareas.length > 2 && (
+                                        <button onClick={() => setColVerTodo(prev=>({...prev,[ci]:!prev[ci]}))}
+                                            className={`w-full text-xs py-1.5 rounded-lg font-medium ${darkMode?'bg-slate-700/60 text-slate-400 hover:bg-slate-700':'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                            {colVerTodo[ci] ? '▲ Ver menos' : `▼ Ver ${col.tareas.length - 2} más`}
+                                        </button>
+                                    )}
                                 </div>
                             </div>))}
                     </div>
