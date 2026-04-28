@@ -19,6 +19,7 @@
         const SUPA_URL = 'https://cxuftcufdnofykmlkcru.supabase.co';
         const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4dWZ0Y3VmZG5vZnlrbWxrY3J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMzQ0MDMsImV4cCI6MjA5MjcxMDQwM30.CM6ssNRpkbBaDdv8vqxyJxehfu-S2D0WnhxSZn4jT40';
         const _sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+        window._sb = _sb;
 
         async function dbGetAll(table) {
             const { data, error } = await _sb.from(table).select('*').order('updated_at', { ascending: true });
@@ -91,7 +92,7 @@
                 { ls: 'cajaSueldosPlaneados',  table: 'cash_planning',     type: 'val',   key: 'sueldosPlaneados' },
                 { ls: 'cajaGastosPlaneados',   table: 'cash_planning',     type: 'val',   key: 'gastosPlaneados' },
                 { ls: 'prestamosData',         table: 'app_config',        type: 'val',   key: 'prestamos' },
-                { ls: 'miCerebroTareas',       table: 'app_config',        type: 'val',   key: 'miCerebroTareas' },
+                // miCerebroTareas se migra con clave por usuario en MiCerebroModule
             ];
             for (const m of maps) {
                 const raw = localStorage.getItem(m.ls);
@@ -209,9 +210,8 @@
                 // gastosPlaneados
                 const gastosR = await _sb.from('cash_planning').select('data').eq('id','gastosPlaneados').maybeSingle();
                 if (gastosR.data?.data) localStorage.setItem('cajaGastosPlaneados', JSON.stringify(gastosR.data.data));
-                // miCerebroTareas
-                const mcR = await _sb.from('app_config').select('data').eq('id','miCerebroTareas').maybeSingle();
-                if (mcR.data?.data) localStorage.setItem('miCerebroTareas', JSON.stringify(mcR.data.data));
+                // miCerebro — datos por usuario (se cargan en MiCerebroModule al montar)
+                // No pre-cargar aquí ya que la clave incluye el userId que no está disponible aún
 
                 // Préstamos
                 set('prestamosData',  prestamos.data?.data || []);
@@ -1298,11 +1298,27 @@ ${invoice.items.map(item => `
             const refreshNotifs = React.useCallback(() => setNotifKey(k => k+1), []);
 
             useEffect(() => {
-                if (window.__supabaseReady) { setSupabaseReady(true); refreshNotifs(); return; }
-                const handler = () => { setSupabaseReady(true); refreshNotifs(); };
+                const cargarCompartidas = async () => {
+                    try {
+                        const uid2 = String(currentUser?.id || '');
+                        if (!uid2 || uid2==='undefined') return;
+                        const allT = await window._sb?.from('app_config').select('id,data').like('id','miCerebroTareas_%');
+                        if (allT?.data) {
+                            let comp = [];
+                            allT.data.forEach(row => {
+                                if (row.id===`miCerebroTareas_${uid2}`) return;
+                                (row.data||[]).forEach(t => { if((t.compartidoCon||[]).includes(uid2)) comp.push(t); });
+                            });
+                            localStorage.setItem(`miCerebroCompartidas_${uid2}`, JSON.stringify(comp));
+                        }
+                        refreshNotifs();
+                    } catch(e) {}
+                };
+                if (window.__supabaseReady) { setSupabaseReady(true); cargarCompartidas(); return; }
+                const handler = () => { setSupabaseReady(true); cargarCompartidas(); };
                 window.addEventListener('supabase-loaded', handler);
                 return () => window.removeEventListener('supabase-loaded', handler);
-            }, []);
+            }, [currentUser]);
 
             // Escuchar eventos de actualización de tareas
             useEffect(() => {
@@ -1322,11 +1338,22 @@ ${invoice.items.map(item => `
                 if (!currentUser) return;
                 const poll = setInterval(async () => {
                     try {
-                        const r = await window._sb?.from('app_config').select('data').eq('id','miCerebroTareas').maybeSingle();
-                        if (r?.data?.data) {
-                            localStorage.setItem('miCerebroTareas', JSON.stringify(r.data.data));
-                            refreshNotifs();
+                        const uid2 = String(currentUser?.id || '');
+                        if (!uid2 || uid2 === 'undefined') return;
+                        // Tareas propias
+                        const r = await window._sb?.from('app_config').select('data').eq('id',`miCerebroTareas_${uid2}`).maybeSingle();
+                        if (r?.data?.data) localStorage.setItem(`miCerebroTareas_${uid2}`, JSON.stringify(r.data.data));
+                        // Tareas compartidas con este usuario (de otros)
+                        const allT = await window._sb?.from('app_config').select('id,data').like('id','miCerebroTareas_%');
+                        if (allT?.data) {
+                            let comp = [];
+                            allT.data.forEach(row => {
+                                if (row.id === `miCerebroTareas_${uid2}`) return;
+                                (row.data||[]).forEach(t => { if ((t.compartidoCon||[]).includes(uid2)) comp.push(t); });
+                            });
+                            localStorage.setItem(`miCerebroCompartidas_${uid2}`, JSON.stringify(comp));
                         }
+                        refreshNotifs();
                     } catch(e) {}
                 }, 30000);
                 return () => clearInterval(poll);
@@ -1334,8 +1361,13 @@ ${invoice.items.map(item => `
 
             // Leer tareas actualizadas reactivamente
             const tareasActuales = React.useMemo(() => {
-                try { return JSON.parse(localStorage.getItem('miCerebroTareas') || '[]'); } catch(e) { return []; }
-            }, [notifKey]);
+                try {
+                    const uid2 = String(currentUser?.id);
+                    const propias = JSON.parse(localStorage.getItem(`miCerebroTareas_${uid2}`) || '[]');
+                    const compartidas = JSON.parse(localStorage.getItem(`miCerebroCompartidas_${uid2}`) || '[]');
+                    return [...propias, ...compartidas.filter(t => !propias.find(p=>p.id===t.id))];
+                } catch(e) { return []; }
+            }, [notifKey, currentUser]);
             const tareasVistasActuales = React.useMemo(() => {
                 try { return JSON.parse(localStorage.getItem('miCerebroTareasVistas') || '[]'); } catch(e) { return []; }
             }, [notifKey]);
@@ -1941,6 +1973,13 @@ ${invoice.items.map(item => `
                 // Validar PIN
                 if (user.pin === pinInput) {
                     setCurrentUser(user);
+                    localStorage.setItem('malagestion_current_user', JSON.stringify(user));
+                    // Migrar tareas viejas a clave por usuario si es necesario
+                    const tareasViejas = localStorage.getItem('miCerebroTareas');
+                    const claveNueva = `miCerebroTareas_${user.id}`;
+                    if (tareasViejas && !localStorage.getItem(claveNueva)) {
+                        localStorage.setItem(claveNueva, tareasViejas);
+                    }
                     setIsUnlocked(true);
                     setPinError(false);
                     setUserInput('');
@@ -2379,7 +2418,9 @@ ${invoice.items.map(item => `
                             const hoyB = new Date(); hoyB.setHours(0,0,0,0);
                             const venc = tt.filter(t => {
                                 if (!t.vencimiento || t.completada) return false;
-                                if (new Date(t.vencimiento + 'T12:00:00') >= hoyB) return false;
+                                const hoyStr = new Date().toISOString().slice(0,10);
+                                // Vencida = ya pasó la hora de vencimiento (fin del día)
+                                if (new Date(t.vencimiento + 'T23:59:59') > new Date()) return false;
                                 // Autor siempre ve su vencimiento
                                 if (String(t.autorId) === String(currentUser?.id)) return true;
                                 // Compartido: solo si el autor eligió compartir el aviso
@@ -21589,369 +21630,528 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         // Esperar a que Supabase precargue antes de renderizar
 
-        // ══════════════════════════════════════════════════════════════════
-        // MI CEREBRO — Gestor de tareas personal con compartir y vencimientos
-        // ══════════════════════════════════════════════════════════════════
+        // ══ MI CEREBRO ══
         const MiCerebroModule = ({ darkMode, currentUser, systemUsers, onBack }) => {
-            const [tareas, setTareas] = React.useState(() => {
-                try { return JSON.parse(localStorage.getItem('miCerebroTareas') || '[]'); } catch(e) { return []; }
-            });
-            const [showModal, setShowModal] = React.useState(false);
-            const [editingTarea, setEditingTarea] = React.useState(null);
-            const [form, setForm] = React.useState({ titulo: '', descripcion: '', vencimiento: '', prioridad: 'media', compartidoCon: [], compartirVencimiento: false });
-            const [chatTarea, setChatTarea] = React.useState(null);
-            const [chatMsg, setChatMsg] = React.useState('');
-            const [chatVistos, setChatVistos] = React.useState(() => {
-                try { return JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}'); } catch(e) { return {}; }
-            });
-            const [showCompletadas, setShowCompletadas] = React.useState(false);
-            const [busqueda, setBusqueda] = React.useState('');
+            // Claves privadas por usuario — definidas PRIMERO antes de cualquier useState
+            const _uid = String(currentUser?.id || '');
+            const tareasKey   = `miCerebroTareas_${_uid}`;
+            const postitsKey  = `miCerebroPostits_${_uid}`;
+            const etiquetasKey = `miCerebroEtiquetas_${_uid}`;
 
+            const [tareas,   setTareas]   = React.useState(() => { try { return JSON.parse(localStorage.getItem(tareasKey)   || '[]'); } catch(e) { return []; } });
+            const [postits,  setPostits]  = React.useState(() => { try { return JSON.parse(localStorage.getItem(postitsKey)  || '[]'); } catch(e) { return []; } });
+            const [etiquetas,setEtiquetas]= React.useState(() => { try { return JSON.parse(localStorage.getItem(etiquetasKey)|| '[]'); } catch(e) { return []; } });
+
+            const [showModal,       setShowModal]       = React.useState(false);
+            const [editingTarea,    setEditingTarea]    = React.useState(null);
+            const [form,            setForm]            = React.useState({ titulo:'', descripcion:'', vencimiento:'', prioridad:'media', compartidoCon:[], compartirVencimiento:false, etiquetas:[] });
+            const [chatTarea,       setChatTarea]       = React.useState(null);
+            const [chatMsg,         setChatMsg]         = React.useState('');
+            const [chatVistos,      setChatVistos]      = React.useState(() => { try { return JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}'); } catch(e){ return {}; } });
+            const [showCompletadas, setShowCompletadas] = React.useState(false);
+            const [busqueda,        setBusqueda]        = React.useState('');
+            const [vistaActiva,     setVistaActiva]     = React.useState('tareas');
+            const [calFecha,        setCalFecha]        = React.useState(new Date());
+            const [calVista,        setCalVista]        = React.useState('mes');
+            const [editingPostit,   setEditingPostit]   = React.useState(null);
+            const [postitForm,      setPostitForm]      = React.useState({ texto:'', color:'#FEF08A' });
+            const [filtroEtiqueta,  setFiltroEtiqueta]  = React.useState(null);
+            const [showEtiquetasModal, setShowEtiquetasModal] = React.useState(false);
+            const [etiquetaForm,    setEtiquetaForm]    = React.useState({ nombre:'', color:'#7c3aed' });
+            const [editingEtiqueta, setEditingEtiqueta] = React.useState(null);
+
+            // Sync desde Supabase al montar
             React.useEffect(() => {
+                // Migrar tareas viejas (sin uid) a clave por usuario
+                const tareasViejas = localStorage.getItem('miCerebroTareas');
+                if (tareasViejas && _uid && !localStorage.getItem(tareasKey)) {
+                    localStorage.setItem(tareasKey, tareasViejas);
+                    setTareas(JSON.parse(tareasViejas));
+                }
                 const sync = async () => {
                     try {
-                        const r = await window._sb?.from('app_config').select('data').eq('id','miCerebroTareas').maybeSingle();
-                        if (r?.data?.data) {
-                            localStorage.setItem('miCerebroTareas', JSON.stringify(r.data.data));
-                            setTareas(r.data.data);
-                            window.dispatchEvent(new Event('tareasUpdate'));
+                        const [rt, rp, re, allT] = await Promise.all([
+                            window._sb?.from('app_config').select('data').eq('id', tareasKey).maybeSingle(),
+                            window._sb?.from('app_config').select('data').eq('id', postitsKey).maybeSingle(),
+                            window._sb?.from('app_config').select('data').eq('id', etiquetasKey).maybeSingle(),
+                            window._sb?.from('app_config').select('id,data').like('id','miCerebroTareas_%'),
+                        ]);
+                        if (rt?.data?.data)  { localStorage.setItem(tareasKey,    JSON.stringify(rt.data.data));  setTareas(rt.data.data);    window.dispatchEvent(new Event('tareasUpdate')); }
+                        if (rp?.data?.data)  { localStorage.setItem(postitsKey,   JSON.stringify(rp.data.data));  setPostits(rp.data.data); }
+                        if (re?.data?.data)  { localStorage.setItem(etiquetasKey, JSON.stringify(re.data.data));  setEtiquetas(re.data.data); }
+                        // Tareas compartidas conmigo por otros usuarios
+                        if (allT?.data) {
+                            let comp = [];
+                            allT.data.forEach(row => {
+                                if (row.id === tareasKey) return;
+                                (row.data||[]).forEach(t => { if ((t.compartidoCon||[]).includes(_uid)) comp.push(t); });
+                            });
+                            localStorage.setItem(`miCerebroCompartidas_${_uid}`, JSON.stringify(comp));
                         }
                     } catch(e) {}
                 };
                 sync();
-            }, []);
+            }, [_uid]);
 
-            const saveTareas = (lista) => {
-                setTareas(lista);
-                localStorage.setItem('miCerebroTareas', JSON.stringify(lista));
-                dbUpsertOne('app_config', 'miCerebroTareas', lista);
-                window.dispatchEvent(new Event('tareasUpdate'));
-            };
+            // Funciones save
+            const saveTareas   = (l) => { setTareas(l);    localStorage.setItem(tareasKey,    JSON.stringify(l)); dbUpsertOne('app_config', tareasKey,    l); window.dispatchEvent(new Event('tareasUpdate')); };
+            const savePostits  = (l) => { setPostits(l);   localStorage.setItem(postitsKey,   JSON.stringify(l)); dbUpsertOne('app_config', postitsKey,   l); };
+            const saveEtiquetas= (l) => { setEtiquetas(l); localStorage.setItem(etiquetasKey, JSON.stringify(l)); dbUpsertOne('app_config', etiquetasKey, l); };
 
-            const marcarChatVisto = (tareaId) => {
-                const nuevos = {...chatVistos, [String(tareaId)]: Date.now()};
-                setChatVistos(nuevos);
-                localStorage.setItem('miCerebroChatVistos', JSON.stringify(nuevos));
+            const marcarChatVisto = (id) => {
+                const n = {...chatVistos, [String(id)]: Date.now()};
+                setChatVistos(n); localStorage.setItem('miCerebroChatVistos', JSON.stringify(n));
                 window.dispatchEvent(new Event('chatUpdate'));
             };
-
             const enviarMensaje = () => {
                 if (!chatMsg.trim() || !chatTarea) return;
-                const msg = { id: Date.now(), ts: Date.now(), autorId: String(currentUser?.id), autorNombre: `${currentUser?.name} ${currentUser?.lastname||''}`.trim(), texto: chatMsg.trim() };
-                const lista = tareas.map(t => t.id === chatTarea.id ? {...t, chat: [...(t.chat||[]), msg]} : t);
-                saveTareas(lista);
-                setChatMsg('');
-                setChatTarea(lista.find(t => t.id === chatTarea.id));
+                const msg = { id:Date.now(), ts:Date.now(), autorId:_uid, autorNombre:`${currentUser?.name} ${currentUser?.lastname||''}`.trim(), texto:chatMsg.trim() };
+                const l = tareas.map(t => t.id===chatTarea.id ? {...t, chat:[...(t.chat||[]),msg]} : t);
+                saveTareas(l); setChatMsg(''); setChatTarea(l.find(t=>t.id===chatTarea.id));
             };
-
-            const mensajesNuevos = (tarea) => {
-                if (!tarea.chat?.length) return 0;
-                const vistoHasta = chatVistos[String(tarea.id)] || 0;
-                return tarea.chat.filter(m => m.ts > vistoHasta && String(m.autorId) !== String(currentUser?.id)).length;
+            const mensajesNuevos = (t) => {
+                if (!t.chat?.length) return 0;
+                const v = chatVistos[String(t.id)]||0;
+                return t.chat.filter(m => m.ts>v && String(m.autorId)!==_uid).length;
             };
-
             const toggleCompletar = (id) => {
-                const tarea = tareas.find(t => t.id === id);
-                saveTareas(tareas.map(t => t.id === id ? {...t, completada: !t.completada, completadaEl: !t.completada ? new Date().toISOString() : null} : t));
-                if (tarea && !tarea.completada) {
-                    const v = JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}');
-                    delete v[String(id)];
-                    localStorage.setItem('miCerebroChatVistos', JSON.stringify(v));
-                    window.dispatchEvent(new Event('chatUpdate'));
-                }
+                const t = tareas.find(x=>x.id===id);
+                saveTareas(tareas.map(x=>x.id===id?{...x,completada:!x.completada,completadaEl:!x.completada?new Date().toISOString():null}:x));
+                if (t&&!t.completada) { const v=JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}'); delete v[String(id)]; localStorage.setItem('miCerebroChatVistos',JSON.stringify(v)); window.dispatchEvent(new Event('chatUpdate')); }
             };
-
             const eliminarTarea = (id) => {
                 if (!confirm('¿Eliminar esta tarea?')) return;
-                saveTareas(tareas.filter(t => t.id !== id));
-                const v = JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}');
-                delete v[String(id)];
-                localStorage.setItem('miCerebroChatVistos', JSON.stringify(v));
-                window.dispatchEvent(new Event('chatUpdate'));
+                saveTareas(tareas.filter(t=>t.id!==id));
+                const v=JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}'); delete v[String(id)]; localStorage.setItem('miCerebroChatVistos',JSON.stringify(v)); window.dispatchEvent(new Event('chatUpdate'));
             };
-
-            const openNew = (compartidoCon = []) => {
-                setEditingTarea(null);
-                setForm({ titulo: '', descripcion: '', vencimiento: '', prioridad: 'media', compartidoCon, compartirVencimiento: false });
-                setShowModal(true);
-            };
-            const openEdit = (t) => {
-                setEditingTarea(t);
-                setForm({ titulo: t.titulo, descripcion: t.descripcion||'', vencimiento: t.vencimiento||'', prioridad: t.prioridad||'media', compartidoCon: t.compartidoCon||[], compartirVencimiento: t.compartirVencimiento||false });
-                setShowModal(true);
-            };
+            const openNew = () => { setEditingTarea(null); setForm({titulo:'',descripcion:'',vencimiento:'',prioridad:'media',compartidoCon:[],compartirVencimiento:false,etiquetas:[]}); setShowModal(true); };
+            const openEdit= (t) => { setEditingTarea(t); setForm({titulo:t.titulo,descripcion:t.descripcion||'',vencimiento:t.vencimiento||'',prioridad:t.prioridad||'media',compartidoCon:t.compartidoCon||[],compartirVencimiento:t.compartirVencimiento||false,etiquetas:t.etiquetas||[]}); setShowModal(true); };
             const saveTarea = () => {
                 if (!form.titulo.trim()) return;
-                if (editingTarea) {
-                    saveTareas(tareas.map(t => t.id === editingTarea.id ? {...t, ...form} : t));
-                } else {
-                    saveTareas([...tareas, { id: Date.now(), ...form, autorId: String(currentUser?.id), autorNombre: `${currentUser?.name} ${currentUser?.lastname||''}`.trim(), completada: false, creadaEl: new Date().toISOString() }]);
-                }
+                if (editingTarea) { saveTareas(tareas.map(t=>t.id===editingTarea.id?{...t,...form}:t)); }
+                else { saveTareas([...tareas,{id:Date.now(),...form,autorId:_uid,autorNombre:`${currentUser?.name} ${currentUser?.lastname||''}`.trim(),completada:false,creadaEl:new Date().toISOString()}]); }
                 setShowModal(false);
             };
 
-            const uid = String(currentUser?.id);
+            const uid = _uid;
             const hoy = new Date(); hoy.setHours(0,0,0,0);
-            const txt = darkMode ? 'text-white' : 'text-slate-800';
-            const sub = darkMode ? 'text-slate-400' : 'text-slate-500';
-            const otrosUsuarios = (systemUsers||[]).filter(u => String(u.id) !== uid && u.activo !== false);
+            const txt = darkMode?'text-white':'text-slate-800';
+            const sub = darkMode?'text-slate-400':'text-slate-500';
+            const otrosUsuarios = (systemUsers||[]).filter(u=>String(u.id)!==uid&&u.activo!==false);
 
             const fmtVenc = (v) => {
                 if (!v) return null;
-                const d = new Date(v + 'T12:00:00');
-                const diff = Math.round((d - hoy) / 86400000);
-                if (diff < 0) return { label: `Vencida hace ${Math.abs(diff)}d`, bg: 'bg-red-500', text: 'text-white' };
-                if (diff === 0) return { label: 'Vence hoy', bg: 'bg-orange-500', text: 'text-white' };
-                if (diff === 1) return { label: 'Mañana', bg: 'bg-amber-400', text: 'text-white' };
-                return { label: `${diff}d`, bg: darkMode ? 'bg-slate-700' : 'bg-slate-100', text: sub };
+                const d = new Date(v+'T23:59:59'), diff=(d-new Date())/86400000;
+                if (diff<0)  return {label:`Vencida hace ${Math.abs(Math.ceil(diff))}d`, bg:'bg-red-500',   text:'text-white'};
+                if (diff<1)  return {label:'Vence hoy',                                  bg:'bg-orange-500',text:'text-white'};
+                if (diff<2)  return {label:'Mañana',                                     bg:'bg-amber-400', text:'text-white'};
+                return {label:`${Math.ceil(diff)}d`, bg:darkMode?'bg-slate-700':'bg-slate-100', text:sub};
             };
-
-            const prioColors = { alta: '#E24B4A', media: '#EF9F27', baja: '#888780' };
-            const prioBadge = {
-                alta:  { bg: 'bg-red-500',    text: 'text-white',  label: '🔴 Alta' },
-                media: { bg: 'bg-amber-400',  text: 'text-white',  label: '🟡 Media' },
-                baja:  { bg: 'bg-slate-400',  text: 'text-white',  label: '⚪ Baja' },
-            };
+            const prioColors = {alta:'#E24B4A',media:'#EF9F27',baja:'#888780'};
+            const prioBadge  = {alta:{bg:'bg-red-500',text:'text-white',label:'🔴 Alta'},media:{bg:'bg-amber-400',text:'text-white',label:'🟡 Media'},baja:{bg:'bg-slate-400',text:'text-white',label:'⚪ Baja'}};
 
             const matchBusqueda = (t) => {
+                if (filtroEtiqueta&&!(t.etiquetas||[]).includes(filtroEtiqueta)) return false;
                 if (!busqueda.trim()) return true;
-                const q = busqueda.toLowerCase();
-                return (t.titulo||'').toLowerCase().includes(q) ||
-                       (t.descripcion||'').toLowerCase().includes(q) ||
-                       (t.chat||[]).some(m => m.texto.toLowerCase().includes(q));
+                const q=busqueda.toLowerCase();
+                return (t.titulo||'').toLowerCase().includes(q)||(t.descripcion||'').toLowerCase().includes(q)||(t.chat||[]).some(m=>m.texto.toLowerCase().includes(q));
             };
-            const misActivas = tareas.filter(t => String(t.autorId) === uid && !t.completada && !(t.compartidoCon||[]).length && matchBusqueda(t));
-            const misCompartidas = tareas.filter(t => String(t.autorId) === uid && !t.completada && (t.compartidoCon||[]).length > 0 && matchBusqueda(t));
-            const compartConmigo = tareas.filter(t => String(t.autorId) !== uid && (t.compartidoCon||[]).includes(uid) && !t.completada && matchBusqueda(t));
-            const completadas = tareas.filter(t => (String(t.autorId) === uid || (t.compartidoCon||[]).includes(uid)) && t.completada && matchBusqueda(t));
 
-            const TareaCard = ({ tarea, esPropia, mostrarDe }) => {
-                const venc = fmtVenc(tarea.vencimiento);
-                const notasN = mensajesNuevos(tarea);
-                const ultimaNota = tarea.chat?.length ? tarea.chat[tarea.chat.length - 1] : null;
-                const pc = prioColors[tarea.prioridad] || prioColors.media;
-                return (
-                    <div className={`rounded-xl border p-3 flex flex-col gap-2 ${darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-200'}`}
-                        style={{borderLeft: `3px solid ${pc}`}}>
-                        {/* Título y acciones */}
-                        {/* Badge prioridad */}
-                        <div className="flex items-center gap-1.5 mb-2">
-                            {(() => { const pb = prioBadge[tarea.prioridad]||prioBadge.baja; return <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${pb.bg} ${pb.text}`}>{pb.label}</span>; })()}
-                            {venc && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${venc.bg} ${venc.text}`}>{venc.label}</span>}
+            const tareasCompartConmigo = React.useMemo(()=>{ try{return JSON.parse(localStorage.getItem(`miCerebroCompartidas_${uid}`)||'[]');}catch(e){return[];} },[uid]);
+            const misActivas     = tareas.filter(t=>String(t.autorId)===uid&&!t.completada&&!(t.compartidoCon||[]).length&&matchBusqueda(t));
+            const misCompartidas = tareas.filter(t=>String(t.autorId)===uid&&!t.completada&&(t.compartidoCon||[]).length>0&&matchBusqueda(t));
+            const compartConmigo = [...tareas.filter(t=>String(t.autorId)!==uid&&(t.compartidoCon||[]).includes(uid)&&!t.completada&&matchBusqueda(t)),
+                                    ...tareasCompartConmigo.filter(t=>!t.completada&&matchBusqueda(t)&&!tareas.find(x=>x.id===t.id))];
+            const completadas    = [...tareas.filter(t=>(String(t.autorId)===uid||(t.compartidoCon||[]).includes(uid))&&t.completada&&matchBusqueda(t)),
+                                    ...tareasCompartConmigo.filter(t=>t.completada&&matchBusqueda(t)&&!tareas.find(x=>x.id===t.id))];
+            const todasMisT = [...tareas, ...tareasCompartConmigo.filter(t=>!tareas.find(x=>x.id===t.id))];
+
+            // ── Calendario ─────────────────────────────────────────────────────
+            const tareasEnFecha = (f) => todasMisT.filter(t=>t.vencimiento===f&&!t.completada);
+            const CalendarioVista = () => {
+                const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                const dsem=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+                const hoyStr=new Date().toISOString().slice(0,10);
+                const irMes=(d)=>{const f=new Date(calFecha);f.setMonth(f.getMonth()+d);setCalFecha(f);};
+                const irSem=(d)=>{const f=new Date(calFecha);f.setDate(f.getDate()+d*7);setCalFecha(f);};
+                const irDia=(d)=>{const f=new Date(calFecha);f.setDate(f.getDate()+d);setCalFecha(f);};
+
+                if (calVista==='mes') {
+                    const año=calFecha.getFullYear(),mes=calFecha.getMonth();
+                    const primero=new Date(año,mes,1),ultimo=new Date(año,mes+1,0).getDate();
+                    const celdas=[];
+                    for(let i=0;i<primero.getDay();i++) celdas.push(null);
+                    for(let d=1;d<=ultimo;d++) celdas.push(d);
+                    return (<div>
+                        <div className="flex items-center justify-between mb-4">
+                            <button onClick={()=>irMes(-1)} className={`px-2 py-1 rounded ${darkMode?'hover:bg-slate-700':'hover:bg-slate-100'}`}>←</button>
+                            <h2 className={`text-sm font-bold ${txt}`}>{meses[mes]} {año}</h2>
+                            <button onClick={()=>irMes(1)}  className={`px-2 py-1 rounded ${darkMode?'hover:bg-slate-700':'hover:bg-slate-100'}`}>→</button>
                         </div>
-                        <div className="flex items-start gap-2">
-                            <button onClick={() => toggleCompletar(tarea.id)}
-                                className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${tarea.completada ? 'bg-purple-600 border-purple-600' : darkMode ? 'border-slate-600 hover:border-purple-500' : 'border-slate-300 hover:border-purple-500'}`}>
-                                {tarea.completada && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
-                            </button>
+                        <div className="grid grid-cols-7 gap-1 mb-1">
+                            {dsem.map(d=><div key={d} className={`text-xs text-center font-semibold ${sub} py-1`}>{d}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                            {celdas.map((d,i)=>{
+                                if(!d) return <div key={i}/>;
+                                const fs=`${año}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                const ts=tareasEnFecha(fs), esHoy=fs===hoyStr;
+                                return (<div key={i} className={`min-h-[52px] p-1 rounded-lg border text-xs cursor-pointer ${esHoy?(darkMode?'border-purple-500 bg-purple-900/30':'border-purple-400 bg-purple-50'):(darkMode?'border-slate-700 hover:border-slate-600 bg-slate-800/50':'border-slate-200 hover:border-slate-300 bg-white')}`}
+                                    onClick={()=>{setCalFecha(new Date(fs+'T12:00:00'));setCalVista('dia');}}>
+                                    <div className={`font-bold mb-0.5 ${esHoy?(darkMode?'text-purple-400':'text-purple-600'):txt}`}>{d}</div>
+                                    {ts.slice(0,2).map(t=>{const pb=prioBadge[t.prioridad]||prioBadge.media;return <div key={t.id} className={`truncate px-1 rounded text-white text-xs mb-0.5 ${pb.bg}`}>{t.titulo}</div>;})}
+                                    {ts.length>2&&<div className={`text-xs ${sub}`}>+{ts.length-2}</div>}
+                                </div>);
+                            })}
+                        </div>
+                    </div>);
+                }
+                if (calVista==='semana') {
+                    const lun=new Date(calFecha); lun.setDate(calFecha.getDate()-calFecha.getDay()+1);
+                    const dias=Array.from({length:7},(_,i)=>{const d=new Date(lun);d.setDate(lun.getDate()+i);return d;});
+                    return (<div>
+                        <div className="flex items-center justify-between mb-4">
+                            <button onClick={()=>irSem(-1)} className={`px-2 py-1 rounded ${darkMode?'hover:bg-slate-700':'hover:bg-slate-100'}`}>←</button>
+                            <h2 className={`text-sm font-bold ${txt}`}>{dias[0].getDate()}/{dias[0].getMonth()+1} – {dias[6].getDate()}/{dias[6].getMonth()+1}/{dias[6].getFullYear()}</h2>
+                            <button onClick={()=>irSem(1)}  className={`px-2 py-1 rounded ${darkMode?'hover:bg-slate-700':'hover:bg-slate-100'}`}>→</button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-2">
+                            {dias.map((d,i)=>{const fs=d.toISOString().slice(0,10),ts=tareasEnFecha(fs),esHoy=fs===hoyStr;return(
+                                <div key={i} className={`rounded-xl border p-2 min-h-[100px] ${esHoy?(darkMode?'border-purple-500 bg-purple-900/20':'border-purple-400 bg-purple-50'):(darkMode?'border-slate-700 bg-slate-800/50':'border-slate-200 bg-white')}`}>
+                                    <div className={`text-xs font-bold mb-1 ${esHoy?(darkMode?'text-purple-400':'text-purple-600'):txt}`}>{dsem[d.getDay()]} {d.getDate()}</div>
+                                    {ts.map(t=>{const pb=prioBadge[t.prioridad]||prioBadge.media;return<div key={t.id} className={`truncate px-1.5 py-0.5 rounded text-white text-xs mb-1 ${pb.bg}`}>{t.titulo}</div>;})}
+                                    {ts.length===0&&<div className={`text-xs ${sub}`}>–</div>}
+                                </div>);
+                            })}
+                        </div>
+                    </div>);
+                }
+                const fs=calFecha.toISOString().slice(0,10),ts=tareasEnFecha(fs);
+                const lbl=calFecha.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+                return (<div>
+                    <div className="flex items-center justify-between mb-4">
+                        <button onClick={()=>irDia(-1)} className={`px-2 py-1 rounded ${darkMode?'hover:bg-slate-700':'hover:bg-slate-100'}`}>←</button>
+                        <h2 className={`text-sm font-bold capitalize ${txt}`}>{lbl}</h2>
+                        <button onClick={()=>irDia(1)}  className={`px-2 py-1 rounded ${darkMode?'hover:bg-slate-700':'hover:bg-slate-100'}`}>→</button>
+                    </div>
+                    {ts.length===0?<p className={`text-sm text-center py-8 ${sub}`}>Sin tareas que venzan este día</p>
+                    :<div className="space-y-2">{ts.map(t=>{const pb=prioBadge[t.prioridad]||prioBadge.media;return(
+                        <div key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`} style={{borderLeft:`3px solid ${prioColors[t.prioridad]||'#888780'}`}}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${pb.bg} ${pb.text}`}>{pb.label}</span>
                             <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-semibold ${txt} ${tarea.completada ? 'line-through opacity-60' : ''} truncate`}>{tarea.titulo}</p>
-                                {mostrarDe && <p className={`text-xs ${sub}`}>De: <span className="font-medium">{tarea.autorNombre?.split(' ')[0]}</span></p>}
-                                {tarea.descripcion && <p className={`text-xs mt-0.5 ${sub} truncate`}>{tarea.descripcion}</p>}
+                                <p className={`text-sm font-semibold ${txt}`}>{t.titulo}</p>
+                                {t.descripcion&&<p className={`text-xs ${sub}`}>{t.descripcion}</p>}
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                                {!tarea.completada && esPropia && <button onClick={() => openEdit(tarea)} className={`p-1 rounded text-xs ${darkMode?'hover:bg-slate-700 text-slate-500':'hover:bg-slate-100 text-slate-400'}`}>✏️</button>}
-                                {!tarea.completada && esPropia && <button onClick={() => eliminarTarea(tarea.id)} className={`p-1 rounded text-xs ${darkMode?'hover:bg-red-900/30 text-slate-500':'hover:bg-red-50 text-slate-400'}`}>🗑️</button>}
-                                {tarea.completada && <button onClick={() => toggleCompletar(tarea.id)} className={`text-xs px-1.5 py-0.5 rounded ${darkMode?'bg-slate-700 text-slate-400':'bg-slate-100 text-slate-500'}`}>↩</button>}
-                            </div>
-                        </div>
-
-                        {/* Última nota + botón notas */}
-                        <div className={`border-t pt-2 ${darkMode?'border-slate-700':'border-slate-100'}`}>
-                            {ultimaNota && !tarea.completada && (
-                                <div className={`text-xs px-2 py-1.5 rounded-lg mb-1.5 italic ${darkMode?'bg-slate-700/50 text-slate-300':'bg-slate-50 text-slate-600'}`}
-                                    style={{borderLeft: `2px solid ${String(ultimaNota.autorId)===uid ? '#7F77DD' : '#888780'}`}}>
-                                    <span className="not-italic font-medium" style={{color: String(ultimaNota.autorId)===uid ? '#7F77DD' : undefined}}>
-                                        {String(ultimaNota.autorId)===uid ? 'Vos' : ultimaNota.autorNombre?.split(' ')[0]}:
-                                    </span>{' '}
-                                    {ultimaNota.texto.length > 55 ? ultimaNota.texto.slice(0,55)+'…' : ultimaNota.texto}
-                                </div>
-                            )}
-                            <button onClick={() => setChatTarea(tarea)}
-                                className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-all font-medium ${notasN > 0 ? 'bg-purple-600 text-white' : darkMode ? 'bg-slate-700/60 text-slate-400 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
-                                <span>📝</span>
-                                <span>{notasN > 0 ? `${notasN} nota${notasN>1?'s':''} nueva${notasN>1?'s':''}` : tarea.chat?.length ? `${tarea.chat.length} nota${tarea.chat.length>1?'s':''}` : 'Agregar nota'}</span>
-                            </button>
-                        </div>
-                    </div>
-                );
+                        </div>);})}
+                    </div>}
+                </div>);
             };
 
-            const colHeaders = [
-                { titulo: 'Mis tareas', emoji: '📋', count: misActivas.length, headerBg: '#534AB7', headerText: '#EEEDFE', tareas: misActivas, esPropia: true, mostrarDe: false, onAdd: () => openNew() },
-                { titulo: 'Compartidas por mí', emoji: '📤', count: misCompartidas.length, headerBg: '#185FA5', headerText: '#E6F1FB', tareas: misCompartidas, esPropia: true, mostrarDe: false, onAdd: null },
-                { titulo: 'Compartidas conmigo', emoji: '🤝', count: compartConmigo.length, headerBg: '#854F0B', headerText: '#FAEEDA', tareas: compartConmigo, esPropia: false, mostrarDe: true, onAdd: null },
-            ];
-
-            return (
-                <div className={`min-h-screen flex flex-col ${darkMode?'bg-slate-900':'bg-slate-50'}`}>
-                    {/* Header */}
-                    <div className={`border-b px-4 py-3 flex items-center gap-3 shrink-0 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
-                        <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Menú</button>
-                        <span className="text-xl">🧠</span>
-                        <h1 className={`text-base font-bold ${txt}`}>Mi Cerebro</h1>
-                        <button onClick={() => openNew()} className="ml-auto px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">+ Nueva tarea</button>
+            // ── TareaCard ──────────────────────────────────────────────────────
+            const TareaCard = ({tarea,esPropia,mostrarDe}) => {
+                const venc=fmtVenc(tarea.vencimiento),notasN=mensajesNuevos(tarea);
+                const ultimaNota=tarea.chat?.length?tarea.chat[tarea.chat.length-1]:null;
+                const pc=prioColors[tarea.prioridad]||prioColors.media, pb=prioBadge[tarea.prioridad]||prioBadge.media;
+                return(<div className={`rounded-xl border p-3 flex flex-col gap-2 ${darkMode?'bg-slate-800/80 border-slate-700':'bg-white border-slate-200'}`} style={{borderLeft:`3px solid ${pc}`}}>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${pb.bg} ${pb.text}`}>{pb.label}</span>
+                        {venc&&<span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${venc.bg} ${venc.text}`}>{venc.label}</span>}
+                        {(tarea.etiquetas||[]).map(eid=>{const et=etiquetas.find(e=>e.id===eid);if(!et)return null;return(
+                            <span key={eid} onClick={e=>{e.stopPropagation();setFiltroEtiqueta(filtroEtiqueta===eid?null:eid);}}
+                                className="text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer"
+                                style={{background:et.color+'33',color:et.color,border:`1px solid ${et.color}66`}}>{et.nombre}</span>);})}
                     </div>
+                    <div className="flex items-start gap-2">
+                        <button onClick={()=>toggleCompletar(tarea.id)} className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${tarea.completada?'bg-purple-600 border-purple-600':darkMode?'border-slate-600 hover:border-purple-500':'border-slate-300 hover:border-purple-500'}`}>
+                            {tarea.completada&&<svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold ${txt} ${tarea.completada?'line-through opacity-60':''} truncate`}>{tarea.titulo}</p>
+                            {mostrarDe&&<p className={`text-xs ${sub}`}>De: <span className="font-medium">{tarea.autorNombre?.split(' ')[0]}</span></p>}
+                            {tarea.descripcion&&<p className={`text-xs mt-0.5 ${sub} truncate`}>{tarea.descripcion}</p>}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                            {!tarea.completada&&esPropia&&<button onClick={()=>openEdit(tarea)} className={`p-1 rounded text-xs ${darkMode?'hover:bg-slate-700 text-slate-500':'hover:bg-slate-100 text-slate-400'}`}>✏️</button>}
+                            {!tarea.completada&&esPropia&&<button onClick={()=>eliminarTarea(tarea.id)} className={`p-1 rounded text-xs ${darkMode?'hover:bg-red-900/30 text-slate-500':'hover:bg-red-50 text-slate-400'}`}>🗑️</button>}
+                            {tarea.completada&&<button onClick={()=>toggleCompletar(tarea.id)} className={`text-xs px-1.5 py-0.5 rounded ${darkMode?'bg-slate-700 text-slate-400':'bg-slate-100 text-slate-500'}`}>↩</button>}
+                        </div>
+                    </div>
+                    <div className={`border-t pt-2 ${darkMode?'border-slate-700':'border-slate-100'}`}>
+                        {ultimaNota&&!tarea.completada&&(
+                            <div className={`text-xs px-2 py-1.5 rounded-lg mb-1.5 italic ${darkMode?'bg-slate-700/50 text-slate-300':'bg-slate-50 text-slate-600'}`}
+                                style={{borderLeft:`2px solid ${String(ultimaNota.autorId)===uid?'#7F77DD':'#888780'}`}}>
+                                <span className="not-italic font-medium" style={{color:String(ultimaNota.autorId)===uid?'#7F77DD':undefined}}>{String(ultimaNota.autorId)===uid?'Vos':ultimaNota.autorNombre?.split(' ')[0]}:</span>{' '}
+                                {ultimaNota.texto.length>55?ultimaNota.texto.slice(0,55)+'…':ultimaNota.texto}
+                            </div>)}
+                        <button onClick={()=>setChatTarea(tarea)} className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${notasN>0?'bg-purple-600 text-white':darkMode?'bg-slate-700/60 text-slate-400 hover:bg-slate-700':'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
+                            <span>📝</span>
+                            <span>{notasN>0?`${notasN} nota${notasN>1?'s':''} nueva${notasN>1?'s':''}`:tarea.chat?.length?`${tarea.chat.length} nota${tarea.chat.length>1?'s':''}`:' Agregar nota'}</span>
+                        </button>
+                    </div>
+                </div>);
+            };
 
-                    {/* Buscador */}
+            const colHeaders=[
+                {titulo:'Mis tareas',         emoji:'📋',headerBg:'#534AB7',headerText:'#EEEDFE',tareas:misActivas,    esPropia:true, mostrarDe:false},
+                {titulo:'Compartidas por mí',  emoji:'📤',headerBg:'#185FA5',headerText:'#E6F1FB',tareas:misCompartidas,esPropia:true, mostrarDe:false},
+                {titulo:'Compartidas conmigo', emoji:'🤝',headerBg:'#854F0B',headerText:'#FAEEDA',tareas:compartConmigo,esPropia:false,mostrarDe:true},
+            ];
+            const coloresPostit=['#FEF08A','#86EFAC','#93C5FD','#FDA4AF','#C4B5FD','#FED7AA'];
+
+            return (<div className={`min-h-screen flex flex-col ${darkMode?'bg-slate-900':'bg-slate-50'}`}>
+                {/* Header */}
+                <div className={`border-b px-4 py-3 flex items-center gap-3 shrink-0 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                    <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Menú</button>
+                    <span className="text-xl">🧠</span>
+                    <h1 className={`text-base font-bold ${txt}`}>Mi Cerebro</h1>
+                    <div className={`ml-4 flex rounded-lg border ${darkMode?'border-slate-700':'border-slate-200'}`} style={{overflow:'visible'}}>
+                        {[['tareas','📋 Tareas'],['calendario','📅 Calendario'],['postits','🗒️ Post-its']].map(([v,l])=>{
+                            const badge=v==='postits'?postits.filter(p=>!p.resuelto).length:0;
+                            return(<button key={v} onClick={()=>setVistaActiva(v)}
+                                className={`relative px-3 py-1.5 text-xs font-medium transition-colors ${vistaActiva===v?(darkMode?'bg-purple-700 text-white':'bg-purple-600 text-white'):(darkMode?'bg-slate-800 text-slate-400 hover:text-white':'bg-white text-slate-600 hover:bg-slate-50')}`}>
+                                {l}
+                                {badge>0&&vistaActiva!==v&&<span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 bg-amber-400 text-slate-800 text-xs font-bold rounded-full flex items-center justify-center leading-none z-10">{badge>9?'9+':badge}</span>}
+                            </button>);
+                        })}
+                    </div>
+                    {vistaActiva==='tareas'  && <button onClick={openNew} className="ml-auto px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">+ Nueva tarea</button>}
+                    {vistaActiva==='postits' && <button onClick={()=>{setEditingPostit('new');setPostitForm({texto:'',color:'#FEF08A'});}} className="ml-auto px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">+ Post-it</button>}
+                </div>
+
+                {/* ── TAREAS ── */}
+                {vistaActiva==='tareas'&&<>
                     <div className={`px-4 pt-3 pb-2 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
                         <div className="relative">
                             <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${sub}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                            <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                                placeholder="Buscar en tareas, descripciones y notas..."
-                                className={`w-full pl-9 pr-4 py-2 border rounded-xl text-sm ${darkMode?'bg-slate-800 border-slate-700 text-white placeholder-slate-500':'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}/>
-                            {busqueda && <button onClick={() => setBusqueda('')} className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${sub} hover:text-slate-700`}>✕</button>}
+                            <input type="text" value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="Buscar en tareas, descripciones y notas..."
+                                className={`w-full pl-9 pr-4 py-2 border rounded-xl text-sm ${darkMode?'bg-slate-800 border-slate-700 text-white placeholder-slate-500':'bg-white border-slate-200 placeholder-slate-400'}`}/>
+                            {busqueda&&<button onClick={()=>setBusqueda('')} className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs ${sub}`}>✕</button>}
                         </div>
-                        {busqueda && <p className={`text-xs mt-1.5 ${sub}`}>{misActivas.length + misCompartidas.length + compartConmigo.length + completadas.length} resultado{(misActivas.length+misCompartidas.length+compartConmigo.length+completadas.length)!==1?'s':''}</p>}
+                        {busqueda&&<p className={`text-xs mt-1.5 ${sub}`}>{misActivas.length+misCompartidas.length+compartConmigo.length} resultados</p>}
                     </div>
-
-                    {/* 3 columnas kanban */}
+                    {etiquetas.length>0&&(
+                        <div className={`px-4 py-2 flex items-center gap-2 flex-wrap border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                            <span className={`text-xs font-semibold shrink-0 ${sub}`}>Etiquetas:</span>
+                            <button onClick={()=>setFiltroEtiqueta(null)} className={`text-xs px-2.5 py-1 rounded-full font-medium border ${!filtroEtiqueta?(darkMode?'bg-purple-700 text-white border-purple-600':'bg-purple-600 text-white border-purple-600'):(darkMode?'bg-slate-800 text-slate-400 border-slate-700':'bg-white text-slate-500 border-slate-200')}`}>Todas</button>
+                            {etiquetas.map(et=>(
+                                <button key={et.id} onClick={()=>setFiltroEtiqueta(filtroEtiqueta===et.id?null:et.id)}
+                                    className="text-xs px-2.5 py-1 rounded-full font-medium border transition-all"
+                                    style={filtroEtiqueta===et.id?{background:et.color,color:'white',borderColor:et.color}:{background:et.color+'22',color:et.color,borderColor:et.color+'66'}}>
+                                    {et.nombre}{filtroEtiqueta===et.id&&' ✓'}
+                                </button>))}
+                            <button onClick={()=>setShowEtiquetasModal(true)} className={`ml-auto text-xs px-2.5 py-1 rounded-full border ${darkMode?'border-slate-700 text-slate-400 hover:text-white':'border-slate-200 text-slate-500 hover:text-slate-700'}`}>✏️ Gestionar</button>
+                        </div>)}
+                    {etiquetas.length===0&&(
+                        <div className={`px-4 py-2 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                            <button onClick={()=>setShowEtiquetasModal(true)} className={`text-xs px-2.5 py-1 rounded-full border ${darkMode?'border-slate-700 text-slate-400 hover:text-white':'border-slate-200 text-slate-500 hover:text-slate-700'}`}>🏷️ Crear etiquetas</button>
+                        </div>)}
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-                        {colHeaders.map((col, ci) => (
+                        {colHeaders.map((col,ci)=>(
                             <div key={ci} className={`flex flex-col rounded-2xl overflow-hidden border ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                {/* Header de color */}
-                                <div className="flex items-center gap-2 px-4 py-3 shrink-0" style={{background: col.headerBg}}>
+                                <div className="flex items-center gap-2 px-4 py-3 shrink-0" style={{background:col.headerBg}}>
                                     <span className="text-base">{col.emoji}</span>
-                                    <p className="text-sm font-semibold m-0" style={{color: col.headerText}}>{col.titulo}</p>
-                                    <span className="ml-auto text-2xl font-bold" style={{color: 'rgba(255,255,255,0.9)'}}>{col.count}</span>
-                                    {col.onAdd && (
-                                        <button onClick={col.onAdd} className="w-6 h-6 rounded-full flex items-center justify-center text-lg font-bold hover:bg-white/20 transition-colors" style={{color:'rgba(255,255,255,0.8)'}}>+</button>
-                                    )}
+                                    <p className="text-sm font-semibold m-0" style={{color:col.headerText}}>{col.titulo}</p>
+                                    <span className="ml-auto text-2xl font-bold" style={{color:'rgba(255,255,255,0.9)'}}>{col.tareas.length}</span>
                                 </div>
-                                {/* Tareas */}
                                 <div className={`flex-1 p-3 space-y-2 overflow-y-auto ${darkMode?'bg-slate-800/50':'bg-slate-50/50'}`}>
-                                    {col.tareas.length === 0 && (
-                                        <p className={`text-xs text-center py-8 ${sub}`}>Sin tareas</p>
-                                    )}
-                                    {col.tareas.map(t => <TareaCard key={t.id} tarea={t} esPropia={col.esPropia} mostrarDe={col.mostrarDe}/>)}
+                                    {col.tareas.length===0&&<p className={`text-xs text-center py-8 ${sub}`}>Sin tareas</p>}
+                                    {col.tareas.map(t=><TareaCard key={t.id} tarea={t} esPropia={col.esPropia} mostrarDe={col.mostrarDe}/>)}
                                 </div>
-                            </div>
-                        ))}
+                            </div>))}
                     </div>
-
-                    {/* Completadas colapsables */}
-                    {completadas.length > 0 && (
+                    {completadas.length>0&&(
                         <div className="px-4 pb-4">
-                            <button onClick={() => setShowCompletadas(v => !v)}
-                                className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ${darkMode?'bg-slate-800 text-slate-400 hover:text-white':'bg-white text-slate-500 hover:text-slate-700 border border-slate-200'}`}>
+                            <button onClick={()=>setShowCompletadas(v=>!v)} className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ${darkMode?'bg-slate-800 text-slate-400 hover:text-white':'bg-white text-slate-500 border border-slate-200'}`}>
                                 <svg className={`w-3 h-3 transition-transform ${showCompletadas?'rotate-180':''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
-                                {showCompletadas ? 'Ocultar' : 'Ver'} {completadas.length} tarea{completadas.length>1?'s':''} completada{completadas.length>1?'s':''}
+                                {showCompletadas?'Ocultar':'Ver'} {completadas.length} completada{completadas.length>1?'s':''}
                             </button>
-                            {showCompletadas && (
-                                <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
-                                    {completadas.map(t => <TareaCard key={t.id} tarea={t} esPropia={String(t.autorId)===uid} mostrarDe={String(t.autorId)!==uid}/>)}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                            {showCompletadas&&<div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">{completadas.map(t=><TareaCard key={t.id} tarea={t} esPropia={String(t.autorId)===uid} mostrarDe={String(t.autorId)!==uid}/>)}</div>}
+                        </div>)}
+                </>}
 
-                    {/* Modal nueva/editar */}
-                    {showModal && (
-                        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                            <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-5 max-h-[90vh] overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`}>
-                                <h2 className={`text-sm font-bold mb-4 ${txt}`}>{editingTarea?'Editar tarea':'Nueva tarea'}</h2>
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className={`text-xs font-semibold ${sub}`}>Título *</label>
-                                        <input type="text" value={form.titulo} onChange={e => setForm(f=>({...f,titulo:e.target.value}))}
-                                            className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`} placeholder="¿Qué necesitás hacer?"/>
+                {/* ── CALENDARIO ── */}
+                {vistaActiva==='calendario'&&(
+                    <div className="flex-1 p-4 max-w-4xl mx-auto w-full">
+                        <div className={`rounded-2xl border p-4 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                            <div className="flex items-center gap-2 mb-4">
+                                {[['dia','Día'],['semana','Semana'],['mes','Mes']].map(([v,l])=>(
+                                    <button key={v} onClick={()=>setCalVista(v)} className={`px-3 py-1 rounded-lg text-xs font-medium ${calVista===v?'bg-purple-600 text-white':darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>{l}</button>))}
+                                <button onClick={()=>setCalFecha(new Date())} className={`ml-auto px-3 py-1 rounded-lg text-xs font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>Hoy</button>
+                            </div>
+                            <CalendarioVista/>
+                        </div>
+                    </div>)}
+
+                {/* ── POST-ITS ── */}
+                {vistaActiva==='postits'&&(
+                    <div className="flex-1 p-4">
+                        {postits.length===0&&editingPostit!=='new'&&(
+                            <div className={`text-center py-16 ${sub}`}>
+                                <div className="text-5xl mb-3">🗒️</div>
+                                <p className="text-sm">Sin post-its todavía</p>
+                                <button onClick={()=>{setEditingPostit('new');setPostitForm({texto:'',color:'#FEF08A'});}} className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm">+ Crear el primero</button>
+                            </div>)}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            {postits.map(p=>(
+                                <div key={p.id} className={`relative group rounded-xl shadow-md p-3 min-h-[120px] flex flex-col transition-opacity ${p.resuelto?'opacity-50':''}`}
+                                    style={{background:p.color,transform:`rotate(${p.rot}deg)`}}>
+                                    {p.resuelto&&<div className="absolute top-2 left-2 text-xs font-bold text-white bg-green-600 px-1.5 py-0.5 rounded-full opacity-80">✓ Resuelto</div>}
+                                    <p className="text-sm text-slate-800 flex-1 whitespace-pre-wrap break-words">{p.texto}</p>
+                                    <p className="text-xs text-slate-600 mt-2 opacity-70">{new Date(p.creadoEl).toLocaleDateString('es-AR',{day:'numeric',month:'short'})}</p>
+                                    <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
+                                        <button onClick={()=>savePostits(postits.map(x=>x.id===p.id?{...x,resuelto:!x.resuelto}:x))}
+                                            className={`w-5 h-5 rounded text-xs flex items-center justify-center ${p.resuelto?'bg-green-500 text-white':'bg-white/70 hover:bg-green-100'}`}>✓</button>
+                                        <button onClick={()=>{setEditingPostit(p.id);setPostitForm({texto:p.texto,color:p.color});}} className="w-5 h-5 bg-white/70 hover:bg-white rounded text-xs flex items-center justify-center">✏️</button>
+                                        <button onClick={()=>{if(confirm('¿Eliminar este post-it?'))savePostits(postits.filter(x=>x.id!==p.id));}} className="w-5 h-5 bg-white/70 hover:bg-red-100 rounded text-xs flex items-center justify-center">✕</button>
                                     </div>
-                                    <div>
-                                        <label className={`text-xs font-semibold ${sub}`}>Descripción</label>
-                                        <textarea value={form.descripcion} onChange={e => setForm(f=>({...f,descripcion:e.target.value}))} rows={2}
-                                            className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm resize-none ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`} placeholder="Detalles opcionales..."/>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className={`text-xs font-semibold ${sub}`}>Vencimiento</label>
-                                            <input type="date" value={form.vencimiento} onChange={e => setForm(f=>({...f,vencimiento:e.target.value}))}
-                                                className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}/>
-                                        </div>
-                                        <div>
-                                            <label className={`text-xs font-semibold ${sub}`}>Prioridad</label>
-                                            <select value={form.prioridad} onChange={e => setForm(f=>({...f,prioridad:e.target.value}))}
-                                                className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}>
-                                                <option value="alta">🔴 Alta</option>
-                                                <option value="media">🟡 Media</option>
-                                                <option value="baja">⚪ Baja</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    {otrosUsuarios.length > 0 && (
-                                        <div>
-                                            <label className={`text-xs font-semibold ${sub}`}>Compartir con</label>
-                                            <div className="mt-1 flex flex-wrap gap-2">
-                                                {otrosUsuarios.map(u => (
-                                                    <button key={u.id} onClick={() => setForm(f=>({...f,compartidoCon:f.compartidoCon.includes(String(u.id))?f.compartidoCon.filter(id=>id!==String(u.id)):[...f.compartidoCon,String(u.id)]}))}
-                                                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${form.compartidoCon.includes(String(u.id))?'bg-purple-600 text-white border-purple-600':darkMode?'bg-slate-700 text-slate-300 border-slate-600':'bg-white text-slate-600 border-slate-300'}`}>
-                                                        {u.name}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            {form.compartidoCon.length > 0 && (
-                                                <div className="mt-2 flex items-center gap-2">
-                                                    <button type="button" onClick={() => setForm(f=>({...f,compartirVencimiento:!f.compartirVencimiento}))}
-                                                        className={`w-4 h-4 rounded border-2 flex items-center justify-center ${form.compartirVencimiento?'bg-purple-600 border-purple-600':darkMode?'border-slate-500':'border-slate-300'}`}>
-                                                        {form.compartirVencimiento && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
-                                                    </button>
-                                                    <span className={`text-xs ${sub}`}>Compartir aviso de vencimiento</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                </div>))}
+                        </div>
+                    </div>)}
+
+                {/* ── MODALES ── */}
+
+                {/* Modal tarea */}
+                {showModal&&(
+                    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                        <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-5 max-h-[90vh] overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <h2 className={`text-sm font-bold mb-4 ${txt}`}>{editingTarea?'Editar tarea':'Nueva tarea'}</h2>
+                            <div className="space-y-3">
+                                <div><label className={`text-xs font-semibold ${sub}`}>Título *</label>
+                                    <input type="text" value={form.titulo} onChange={e=>setForm(f=>({...f,titulo:e.target.value}))} className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`} placeholder="¿Qué necesitás hacer?"/></div>
+                                <div><label className={`text-xs font-semibold ${sub}`}>Descripción</label>
+                                    <textarea value={form.descripcion} onChange={e=>setForm(f=>({...f,descripcion:e.target.value}))} rows={2} className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm resize-none ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`} placeholder="Detalles opcionales..."/></div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className={`text-xs font-semibold ${sub}`}>Vencimiento</label>
+                                        <input type="date" value={form.vencimiento} onChange={e=>setForm(f=>({...f,vencimiento:e.target.value}))} className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}/></div>
+                                    <div><label className={`text-xs font-semibold ${sub}`}>Prioridad</label>
+                                        <select value={form.prioridad} onChange={e=>setForm(f=>({...f,prioridad:e.target.value}))} className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}>
+                                            <option value="alta">🔴 Alta</option><option value="media">🟡 Media</option><option value="baja">⚪ Baja</option>
+                                        </select></div>
                                 </div>
-                                <div className="flex gap-2 mt-4">
-                                    <button onClick={() => setShowModal(false)} className={`flex-1 py-2 rounded-lg text-sm ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>Cancelar</button>
-                                    <button onClick={saveTarea} className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">💾 Guardar</button>
-                                </div>
+                                {etiquetas.length>0&&(<div><label className={`text-xs font-semibold ${sub}`}>Etiquetas</label>
+                                    <div className="mt-1 flex flex-wrap gap-2">
+                                        {etiquetas.map(et=>(
+                                            <button key={et.id} type="button" onClick={()=>setForm(f=>({...f,etiquetas:(f.etiquetas||[]).includes(et.id)?(f.etiquetas||[]).filter(id=>id!==et.id):[...(f.etiquetas||[]),et.id]}))}
+                                                className="px-2.5 py-1 rounded-full text-xs font-medium border transition-all"
+                                                style={(form.etiquetas||[]).includes(et.id)?{background:et.color,color:'white',borderColor:et.color}:{background:et.color+'22',color:et.color,borderColor:et.color+'66'}}>
+                                                {et.nombre}</button>))}</div></div>)}
+                                {otrosUsuarios.length>0&&(<div><label className={`text-xs font-semibold ${sub}`}>Compartir con</label>
+                                    <div className="mt-1 flex flex-wrap gap-2">
+                                        {otrosUsuarios.map(u=>(
+                                            <button key={u.id} onClick={()=>setForm(f=>({...f,compartidoCon:f.compartidoCon.includes(String(u.id))?f.compartidoCon.filter(id=>id!==String(u.id)):[...f.compartidoCon,String(u.id)]}))}
+                                                className={`px-2.5 py-1 rounded-full text-xs font-medium border ${form.compartidoCon.includes(String(u.id))?'bg-purple-600 text-white border-purple-600':darkMode?'bg-slate-700 text-slate-300 border-slate-600':'bg-white text-slate-600 border-slate-300'}`}>
+                                                {u.name}</button>))}
+                                    </div>
+                                    {form.compartidoCon.length>0&&(<div className="mt-2 flex items-center gap-2">
+                                        <button type="button" onClick={()=>setForm(f=>({...f,compartirVencimiento:!f.compartirVencimiento}))}
+                                            className={`w-4 h-4 rounded border-2 flex items-center justify-center ${form.compartirVencimiento?'bg-purple-600 border-purple-600':darkMode?'border-slate-500':'border-slate-300'}`}>
+                                            {form.compartirVencimiento&&<svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>}
+                                        </button>
+                                        <span className={`text-xs ${sub}`}>Compartir aviso de vencimiento</span>
+                                    </div>)}</div>)}
+                            </div>
+                            <div className="flex gap-2 mt-4">
+                                <button onClick={()=>setShowModal(false)} className={`flex-1 py-2 rounded-lg text-sm ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>Cancelar</button>
+                                <button onClick={saveTarea} className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">💾 Guardar</button>
                             </div>
                         </div>
-                    )}
+                    </div>)}
 
-                    {/* Modal Notas */}
-                    {chatTarea && (
-                        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-                            <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md flex flex-col max-h-[85vh] ${darkMode?'bg-slate-800':'bg-white'}`}>
-                                <div className={`flex items-center gap-3 px-4 py-3 border-b shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                    <div className="flex-1 min-w-0">
-                                        <p className={`text-sm font-bold truncate ${txt}`}>📝 {chatTarea.titulo}</p>
-                                        <p className={`text-xs ${sub}`}>Notas de progreso</p>
-                                    </div>
-                                    <button onClick={() => { marcarChatVisto(chatTarea.id); setChatTarea(null); }}
-                                        className={`text-xs px-2 py-1.5 rounded-lg font-medium mr-1 ${darkMode?'bg-slate-700 text-slate-300 hover:bg-green-900/40 hover:text-green-300':'bg-slate-100 text-slate-600 hover:bg-green-100 hover:text-green-700'}`}>Ya lo leí ✓</button>
-                                    <button onClick={() => setChatTarea(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0" style={{minHeight:'200px'}}>
-                                    {(!chatTarea.chat?.length) && <p className={`text-xs text-center py-8 ${sub}`}>Sin notas aún. Agregá la primera.</p>}
-                                    {(chatTarea.chat||[]).map(msg => {
-                                        const esMio = String(msg.autorId) === uid;
-                                        const fecha = new Date(msg.ts).toLocaleDateString('es-AR', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
-                                        return (
-                                            <div key={msg.id} className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border-l-4 ${esMio ? darkMode?'bg-purple-900/30 border-purple-500':'bg-purple-50 border-purple-400' : darkMode?'bg-slate-700/50 border-slate-500':'bg-slate-50 border-slate-300'}`}>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-0.5">
-                                                        <span className={`text-xs font-semibold ${esMio?(darkMode?'text-purple-300':'text-purple-700'):sub}`}>{esMio?'Vos':msg.autorNombre?.split(' ')[0]}</span>
-                                                        <span className={`text-xs ${sub}`}>{fecha}</span>
-                                                    </div>
-                                                    <p className={`text-sm ${txt}`}>{msg.texto}</p>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                                <div className={`flex gap-2 p-3 border-t shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                    <input type="text" value={chatMsg} onChange={e => setChatMsg(e.target.value)}
-                                        onKeyDown={e => e.key==='Enter' && !e.shiftKey && enviarMensaje()}
-                                        placeholder="Agregá una nota de progreso..."
-                                        className={`flex-1 px-3 py-2 border rounded-xl text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white placeholder-slate-500':'border-slate-300'}`}/>
-                                    <button onClick={enviarMensaje} disabled={!chatMsg.trim()}
-                                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-xl text-sm font-medium">→</button>
-                                </div>
+                {/* Modal post-it */}
+                {editingPostit&&(
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                        <div className="rounded-2xl shadow-2xl w-full max-w-sm p-5" style={{background:postitForm.color}}>
+                            <h2 className="text-sm font-bold mb-3 text-slate-800">{editingPostit==='new'?'Nuevo post-it':'Editar post-it'}</h2>
+                            <textarea value={postitForm.texto} onChange={e=>setPostitForm(f=>({...f,texto:e.target.value}))} rows={5} autoFocus placeholder="Escribí tu nota..."
+                                className="w-full px-3 py-2 rounded-xl text-sm resize-none bg-white/50 text-slate-800 placeholder-slate-500 border-0 outline-none focus:bg-white/70"/>
+                            <div className="flex gap-2 mt-3">
+                                {coloresPostit.map(c=>(<button key={c} onClick={()=>setPostitForm(f=>({...f,color:c}))}
+                                    className={`w-7 h-7 rounded-full border-2 transition-transform ${postitForm.color===c?'border-slate-800 scale-110':'border-transparent'}`} style={{background:c}}/>))}
+                            </div>
+                            <div className="flex gap-2 mt-4">
+                                <button onClick={()=>setEditingPostit(null)} className="flex-1 py-2 rounded-lg text-sm bg-white/50 text-slate-700 hover:bg-white/70">Cancelar</button>
+                                <button onClick={()=>{
+                                    if(!postitForm.texto.trim())return;
+                                    if(editingPostit==='new'){savePostits([...postits,{id:Date.now(),texto:postitForm.texto,color:postitForm.color,rot:(Math.random()-0.5)*3,creadoEl:new Date().toISOString(),resuelto:false}]);}
+                                    else{savePostits(postits.map(p=>p.id===editingPostit?{...p,texto:postitForm.texto,color:postitForm.color}:p));}
+                                    setEditingPostit(null);
+                                }} className="flex-1 py-2 rounded-lg text-sm bg-slate-800 text-white hover:bg-slate-700 font-medium">💾 Guardar</button>
                             </div>
                         </div>
-                    )}
-                </div>
-            );
+                    </div>)}
+
+                {/* Modal etiquetas */}
+                {showEtiquetasModal&&(
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                        <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-5 ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className="flex items-center gap-2 mb-4">
+                                <h2 className={`text-sm font-bold flex-1 ${txt}`}>🏷️ Mis etiquetas</h2>
+                                <button onClick={()=>{setShowEtiquetasModal(false);setEditingEtiqueta(null);setEtiquetaForm({nombre:'',color:'#7c3aed'});}} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                            </div>
+                            <div className={`p-3 rounded-xl mb-4 ${darkMode?'bg-slate-700/50':'bg-slate-50'}`}>
+                                <p className={`text-xs font-semibold mb-2 ${sub}`}>{editingEtiqueta?'Editar':'Nueva etiqueta'}</p>
+                                <div className="flex gap-2">
+                                    <input type="text" value={etiquetaForm.nombre} onChange={e=>setEtiquetaForm(f=>({...f,nombre:e.target.value}))} placeholder="Nombre..."
+                                        className={`flex-1 px-3 py-1.5 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}/>
+                                    <input type="color" value={etiquetaForm.color} onChange={e=>setEtiquetaForm(f=>({...f,color:e.target.value}))} className="w-10 h-9 rounded-lg border cursor-pointer p-0.5"/>
+                                </div>
+                                <div className="flex gap-2 mt-2">
+                                    {editingEtiqueta&&<button onClick={()=>{setEditingEtiqueta(null);setEtiquetaForm({nombre:'',color:'#7c3aed'});}} className={`flex-1 py-1.5 rounded-lg text-xs ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>Cancelar</button>}
+                                    <button onClick={()=>{
+                                        if(!etiquetaForm.nombre.trim())return;
+                                        if(editingEtiqueta){saveEtiquetas(etiquetas.map(e=>e.id===editingEtiqueta?{...e,nombre:etiquetaForm.nombre,color:etiquetaForm.color}:e));setEditingEtiqueta(null);}
+                                        else{saveEtiquetas([...etiquetas,{id:Date.now(),nombre:etiquetaForm.nombre.trim(),color:etiquetaForm.color}]);}
+                                        setEtiquetaForm({nombre:'',color:'#7c3aed'});
+                                    }} className="flex-1 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium">{editingEtiqueta?'💾 Guardar':'+ Crear'}</button>
+                                </div>
+                            </div>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {etiquetas.length===0&&<p className={`text-xs text-center py-4 ${sub}`}>Sin etiquetas aún</p>}
+                                {etiquetas.map(et=>(
+                                    <div key={et.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${darkMode?'bg-slate-700/50':'bg-slate-50'}`}>
+                                        <div className="w-3 h-3 rounded-full shrink-0" style={{background:et.color}}/>
+                                        <span className="text-sm flex-1 font-medium" style={{color:et.color}}>{et.nombre}</span>
+                                        <span className={`text-xs ${sub}`}>{tareas.filter(t=>(t.etiquetas||[]).includes(et.id)).length}t</span>
+                                        <button onClick={()=>{setEditingEtiqueta(et.id);setEtiquetaForm({nombre:et.nombre,color:et.color});}} className={`p-1 rounded text-xs ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-200 text-slate-500'}`}>✏️</button>
+                                        <button onClick={()=>{if(!confirm(`¿Eliminar "${et.nombre}"?`))return;saveEtiquetas(etiquetas.filter(e=>e.id!==et.id));saveTareas(tareas.map(t=>({...t,etiquetas:(t.etiquetas||[]).filter(id=>id!==et.id)})));if(filtroEtiqueta===et.id)setFiltroEtiqueta(null);}} className={`p-1 rounded text-xs ${darkMode?'hover:bg-red-900/30 text-slate-400':'hover:bg-red-50 text-slate-500'}`}>🗑️</button>
+                                    </div>))}
+                            </div>
+                        </div>
+                    </div>)}
+
+                {/* Modal notas */}
+                {chatTarea&&(
+                    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                        <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md flex flex-col max-h-[85vh] ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className={`flex items-center gap-3 px-4 py-3 border-b shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-bold truncate ${txt}`}>📝 {chatTarea.titulo}</p>
+                                    <p className={`text-xs ${sub}`}>Notas de progreso</p>
+                                </div>
+                                <button onClick={()=>{marcarChatVisto(chatTarea.id);setChatTarea(null);}} className={`text-xs px-2 py-1.5 rounded-lg font-medium mr-1 ${darkMode?'bg-slate-700 text-slate-300 hover:bg-green-900/40 hover:text-green-300':'bg-slate-100 text-slate-600 hover:bg-green-100 hover:text-green-700'}`}>Ya lo leí ✓</button>
+                                <button onClick={()=>setChatTarea(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0" style={{minHeight:'200px'}}>
+                                {(!chatTarea.chat?.length)&&<p className={`text-xs text-center py-8 ${sub}`}>Sin notas aún. Agregá la primera.</p>}
+                                {(chatTarea.chat||[]).map(msg=>{const esMio=String(msg.autorId)===uid,fecha=new Date(msg.ts).toLocaleDateString('es-AR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});return(
+                                    <div key={msg.id} className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border-l-4 ${esMio?darkMode?'bg-purple-900/30 border-purple-500':'bg-purple-50 border-purple-400':darkMode?'bg-slate-700/50 border-slate-500':'bg-slate-50 border-slate-300'}`}>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <span className={`text-xs font-semibold ${esMio?(darkMode?'text-purple-300':'text-purple-700'):sub}`}>{esMio?'Vos':msg.autorNombre?.split(' ')[0]}</span>
+                                                <span className={`text-xs ${sub}`}>{fecha}</span>
+                                            </div>
+                                            <p className={`text-sm ${txt}`}>{msg.texto}</p>
+                                        </div>
+                                    </div>);})}
+                            </div>
+                            <div className={`flex gap-2 p-3 border-t shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <input type="text" value={chatMsg} onChange={e=>setChatMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&enviarMensaje()} placeholder="Agregá una nota de progreso..."
+                                    className={`flex-1 px-3 py-2 border rounded-xl text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white placeholder-slate-500':'border-slate-300'}`}/>
+                                <button onClick={enviarMensaje} disabled={!chatMsg.trim()} className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-xl text-sm font-medium">→</button>
+                            </div>
+                        </div>
+                    </div>)}
+            </div>);
         };
 
 
