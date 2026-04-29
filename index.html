@@ -6885,7 +6885,7 @@ ${invoice.items.map(item => `
             }, []);
             const [showTransactionModal, setShowTransactionModal] = useState(false);
             const [showIngresoModal, setShowIngresoModal] = useState(false);
-            const [ingresoForm, setIngresoForm] = useState({ fecha: new Date().toISOString().split('T')[0], origen: 'BANK', monto: '', notas: '' });
+            const [ingresoForm, setIngresoForm] = useState({ fecha: new Date().toISOString().split('T')[0], origen: 'BANK', monto: '', notas: '', filas: [{ id: 1, origen: 'BANK', monto: '', notas: '' }] });
             const [editingTransaction, setEditingTransaction] = useState(null);
             const [viewMode, setViewMode] = useState('table'); // 'table', 'summary', 'stats', 'note
             const [ahorros, setAhorros] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaAhorros') || '[]'); } catch(e) { return []; } });
@@ -7937,7 +7937,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
 
                         // Fecha de inicio del control diario
-                        const inicioControl = localStorage.getItem('cajaInicioControlDiario') || hoyStr;
+                        const inicioControl = localStorage.getItem('cajaInicioControlDiario') || '2026-04-01';
                         const inicioDate = new Date(inicioControl+'T12:00:00'); inicioDate.setHours(0,0,0,0);
 
                         // Ayer (no incluir hoy — todavía hay tiempo de cargar)
@@ -7984,9 +7984,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                     <div className="flex flex-wrap gap-1.5 pl-8">
                                         {diasSinIngreso.slice(0,8).map(fs => (
-                                            <span key={fs} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{background:'rgba(255,255,255,0.2)'}}>
+                                            <button key={fs} onClick={() => {
+                                                setIngresoForm(f => ({...f, fecha: fs, filas: [{id: Date.now(), origen:'', monto:'', notas:''}]}));
+                                                setShowIngresoModal(true);
+                                            }} className="text-xs px-2 py-0.5 rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer" style={{background:'rgba(255,255,255,0.2)'}}>
                                                 {fmtCorta(fs)}
-                                            </span>
+                                            </button>
                                         ))}
                                         {diasSinIngreso.length > 8 && <span className="text-xs opacity-70">+{diasSinIngreso.length-8} más</span>}
                                     </div>
