@@ -1340,10 +1340,12 @@ ${invoice.items.map(item => `
                 window.addEventListener('tareasVistasUpdate', handler);
                 window.addEventListener('tareasUpdate', handler);
                 window.addEventListener('chatUpdate', handler);
+                window.addEventListener('sueldoNotifUpdate', handler);
                 return () => {
                     window.removeEventListener('tareasVistasUpdate', handler);
                     window.removeEventListener('tareasUpdate', handler);
                     window.removeEventListener('chatUpdate', handler);
+                    window.removeEventListener('sueldoNotifUpdate', handler);
                 };
             }, []);
 
@@ -1584,7 +1586,7 @@ ${invoice.items.map(item => `
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'stock', 'cocina', 'micerebro'];
+            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'stock', 'cocina', 'micerebro'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
@@ -1691,7 +1693,7 @@ ${invoice.items.map(item => `
                     invoices: "Proveedores",
                     invoicesDesc: "Administrador de proveedores",
                     invoicesDetail: "Gestiona facturas de proveedores: pendientes, vencidas y pagadas. Escaneo automático con IA.",
-                    payroll: "Sueldos",
+                    payroll: "Gestión de Sueldos",
                     payrollDesc: "Gestión de nómina",
                     payrollDetail: "Administra empleados, calcula nóminas y genera recibos de sueldo.",
                     cashRegister: "Caja Diaria",
@@ -2615,6 +2617,52 @@ ${invoice.items.map(item => `
                         } catch(e) { return null; }
                     })()}
 
+                    {/* Banner sueldo cobrado */}
+                    {(() => {
+                        if (!currentUser) return null;
+                        try {
+                            const empsLS = JSON.parse(localStorage.getItem('employees') || '[]');
+                            if (!empsLS.length) return null;
+                            const nameLC = (currentUser.name||'').toLowerCase();
+                            const userLC = (currentUser.username||'').toLowerCase();
+                            const yoEmpN = empsLS.find(e => {
+                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                                const enombre = (e.nombre||'').toLowerCase();
+                                return en.includes(nameLC)||(nameLC&&nameLC.includes(enombre))||
+                                       enombre.includes(userLC)||(userLC&&en.includes(userLC))||
+                                       String(e.id)===String(currentUser.id);
+                            });
+                            if (!yoEmpN) return null;
+                            const notifKey = `sueldoNotif_${yoEmpN.id}`;
+                            const notifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                            const noVistas = notifs.filter(n => !n.visto);
+                            if (!noVistas.length) return null;
+                            const ultima = noVistas[noVistas.length - 1];
+                            const fmtM = (n) => Number(n||0).toLocaleString('es-CZ',{minimumFractionDigits:0}) + ' CZK';
+                            return (
+                                <div className="flex items-center gap-3 px-4 py-2.5"
+                                    style={{background:'linear-gradient(90deg,#065f46,#047857)',color:'white'}}>
+                                    <span className="text-xl shrink-0">💰</span>
+                                    <p className="text-sm font-medium flex-1">
+                                        {noVistas.length > 1
+                                            ? `Recibiste ${noVistas.length} pagos nuevos`
+                                            : `¡Cobraste tu ${ultima.concepto}! ${fmtM(ultima.monto)}`
+                                        }
+                                    </p>
+                                    <button onClick={() => setActiveModule('misueldo')}
+                                        className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
+                                    <button onClick={() => {
+                                        const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                                        localStorage.setItem(notifKey, JSON.stringify(all.map(n => ({...n, visto: true}))));
+                                        window.dispatchEvent(new Event('sueldoNotifUpdate'));
+                                    }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
+                                </div>
+                            );
+                        } catch(e) { return null; }
+                    })()}
+
                     {/* Banner notas nuevas */}
                     {(() => {
                         if (!currentUser) return null;
@@ -2774,6 +2822,15 @@ ${invoice.items.map(item => `
                                     title: 'Gestión de Calendario',
                                     desc: 'Eventos, turnos y fechas importantes',
                                     detail: 'Agenda con vistas diaria, semanal y mensual por empleado y ubicación.',
+                                },
+                                misueldo: {
+                                    permission: 'micerebro',
+                                    navigate: 'misueldo',
+                                    color: 'green',
+                                    icon: <svg className={`w-8 h-8 ${darkMode ? 'text-green-400' : 'text-green-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+                                    title: 'Mi Sueldo',
+                                    desc: 'Mis pagos, sueldos y seguros médicos',
+                                    detail: 'Historial personal de sueldos cobrados, seguros médicos y pagos mensuales.',
                                 },
                                 stock: {
                                     permission: 'stock',
@@ -3074,6 +3131,12 @@ ${invoice.items.map(item => `
                     {activeModule === 'calendario' && (
                         <div className="flex-1 overflow-y-auto">
                             <CalendarioModule darkMode={darkMode} currentUser={currentUser} onBack={() => setActiveModule('home')} />
+                        </div>
+                    )}
+
+                    {activeModule === 'misueldo' && (
+                        <div className="flex-1 overflow-y-auto">
+                            <MiSueldoModule darkMode={darkMode} currentUser={currentUser} onBack={() => setActiveModule('home')} />
                         </div>
                     )}
 
@@ -4543,6 +4606,207 @@ ${invoice.items.map(item => `
         };
 
 
+        const MiSueldoModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
+            const { useState, useEffect, useMemo } = React;
+            const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
+            const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+            const txt  = darkMode ? 'text-white'     : 'text-slate-900';
+            const sub  = darkMode ? 'text-slate-400' : 'text-slate-500';
+
+            const [empleados,  setEmpleados]  = useState([]);
+            const [payroll,    setPayroll]    = useState({});
+            const [seguros,    setSeguros]    = useState({});
+            const [loaded,     setLoaded]     = useState(false);
+            const [yearSel,    setYearSel]    = useState(new Date().getFullYear());
+
+            useEffect(() => {
+                Promise.all([
+                    dbGetAll('employees'),
+                    dbGetKey('payroll_monthly', 'main'),
+                    dbGetKey('payroll_insurance', 'main'),
+                ]).then(([emps, pay, seg]) => {
+                    setEmpleados(emps || []);
+                    setPayroll(pay || JSON.parse(localStorage.getItem('payrollMonthlyData') || '{}'));
+                    setSeguros(seg || JSON.parse(localStorage.getItem('seguroMedicoData') || '{}'));
+                    setLoaded(true);
+                });
+            }, []);
+
+            // Encontrar el empleado del usuario logueado
+            const yoEmp = useMemo(() => {
+                if (!currentUser) return null;
+                const nameLC = (currentUser.name||'').toLowerCase();
+                const userLC = (currentUser.username||'').toLowerCase();
+                return empleados.find(e => {
+                    const empName = `${e.nombre} ${e.apellido}`.toLowerCase();
+                    const empNombre = (e.nombre||'').toLowerCase();
+                    return empName.includes(nameLC) || (nameLC && nameLC.includes(empNombre)) ||
+                           empNombre.includes(userLC) || (userLC && empName.includes(userLC)) ||
+                           String(e.id) === String(currentUser.id);
+                });
+            }, [empleados, currentUser]);
+
+            const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+            const fmt = (n) => Number(n||0).toLocaleString('es-CZ', {minimumFractionDigits:0, maximumFractionDigits:0}) + ' CZK';
+            const fmtFecha = (f) => f ? new Date(f+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'}) : '–';
+
+            // Construir historial por mes para el empleado
+            const historial = useMemo(() => {
+                if (!yoEmp) return [];
+                const empId = yoEmp.id;
+                const meses = [];
+                for (let m = 0; m < 12; m++) {
+                    const key = `${empId}_${yearSel}_${m}`;
+                    const pagosMes = payroll[key] || [];
+                    const segurosMes = seguros[key] || [];
+                    if (pagosMes.length === 0 && segurosMes.length === 0) continue;
+                    const sueldos = pagosMes.filter(p => p.concepto === 'sueldo' || p.tipo === 'sueldo');
+                    const otrosPagos = pagosMes.filter(p => p.concepto !== 'sueldo' && p.tipo !== 'sueldo');
+                    meses.push({ mes: m, label: MESES[m], sueldos, otrosPagos, segurosMes });
+                }
+                return meses.reverse(); // más reciente primero
+            }, [yoEmp, payroll, seguros, yearSel]);
+
+            const totalSueldos  = historial.reduce((acc,m) => acc + m.sueldos.reduce((s,p)=>s+(parseFloat(p.monto)||0),0), 0);
+            const totalSeguros  = historial.reduce((acc,m) => acc + m.segurosMes.reduce((s,p)=>s+(parseFloat(p.monto)||0),0), 0);
+            const totalPagos    = historial.reduce((acc,m) => acc + m.otrosPagos.reduce((s,p)=>s+(parseFloat(p.monto)||0),0), 0);
+
+            if (!loaded) return (
+                <div className={`flex items-center justify-center min-h-screen ${bg}`}>
+                    <p className={sub}>Cargando...</p>
+                </div>
+            );
+
+            return (
+                <div className={`min-h-screen ${bg}`}>
+                    {/* Header */}
+                    <div className={`sticky top-0 z-10 border-b ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'} px-4 py-3`}>
+                        <div className="flex items-center gap-3">
+                            {onBack && <button onClick={onBack} className={`flex items-center gap-1 text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>}
+                            <h1 className={`text-base font-bold ${txt} flex-1`}>💰 Mi Sueldo</h1>
+                            <select value={yearSel} onChange={e=>setYearSel(Number(e.target.value))}
+                                className={`text-xs px-2 py-1.5 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="p-4 max-w-2xl mx-auto space-y-4">
+                        {!yoEmp ? (
+                            <div className={`rounded-xl border ${card} p-8 text-center`}>
+                                <p className="text-3xl mb-3">👤</p>
+                                <p className={`font-semibold ${txt} mb-1`}>No se encontró tu perfil de empleado</p>
+                                <p className={`text-sm ${sub}`}>Pedile al administrador que vincule tu usuario con un empleado</p>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Tarjeta empleado */}
+                                <div className={`rounded-xl border ${card} p-4`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${darkMode?'bg-indigo-900/50 text-indigo-300':'bg-indigo-100 text-indigo-600'}`}>
+                                            {yoEmp.nombre?.[0]}{yoEmp.apellido?.[0]}
+                                        </div>
+                                        <div>
+                                            <p className={`font-bold ${txt}`}>{yoEmp.nombre} {yoEmp.apellido}</p>
+                                            <p className={`text-xs ${sub}`}>{yoEmp.puestoTrabajo || 'Sin puesto definido'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Totales del año */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    {[
+                                        ['💵 Sueldos cobrados', totalSueldos, 'text-green-500'],
+                                        ['🏥 Seguros médicos', totalSeguros, 'text-blue-500'],
+                                        ['📦 Otros pagos', totalPagos, 'text-amber-500'],
+                                    ].map(([label, total, color]) => (
+                                        <div key={label} className={`rounded-xl border ${card} p-3 text-center`}>
+                                            <p className={`text-xs ${sub} mb-1`}>{label}</p>
+                                            <p className={`text-sm font-bold ${color}`}>{fmt(total)}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Sin datos */}
+                                {historial.length === 0 && (
+                                    <div className={`rounded-xl border ${card} p-8 text-center`}>
+                                        <p className="text-3xl mb-3">📭</p>
+                                        <p className={`font-semibold ${txt} mb-1`}>Sin registros en {yearSel}</p>
+                                        <p className={`text-sm ${sub}`}>Los pagos aparecerán acá cuando el administrador los cargue</p>
+                                    </div>
+                                )}
+
+                                {/* Historial por mes */}
+                                {historial.map(({mes, label, sueldos, otrosPagos, segurosMes}) => {
+                                    const totalMes = [...sueldos,...otrosPagos].reduce((s,p)=>s+(parseFloat(p.monto)||0),0);
+                                    const totalSeg = segurosMes.reduce((s,p)=>s+(parseFloat(p.monto)||0),0);
+                                    return (
+                                    <div key={mes} className={`rounded-xl border ${card} overflow-hidden`}>
+                                        <div className={`px-4 py-2.5 border-b ${darkMode?'border-slate-700 bg-slate-700/30':'border-slate-100 bg-slate-50'}`}>
+                                            <div className="flex items-center justify-between">
+                                                <p className={`text-sm font-bold ${txt}`}>{label} {yearSel}</p>
+                                                <p className="text-sm font-bold text-green-500">{fmt(totalMes)}</p>
+                                            </div>
+                                            {totalSeg > 0 && (
+                                                <div className="flex items-center justify-between mt-0.5">
+                                                    <p className={`text-xs ${sub}`}>🏥 Seguro médico</p>
+                                                    <p className="text-xs font-semibold text-blue-500">{fmt(totalSeg)}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                            {/* Sueldos */}
+                                            {sueldos.map((p, i) => (
+                                                <div key={'s'+i} className="px-4 py-3 flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${darkMode?'bg-green-900/40':'bg-green-100'}`}>
+                                                        <span className="text-sm">💵</span>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className={`text-sm font-semibold ${txt}`}>Sueldo</p>
+                                                        <p className={`text-xs ${sub}`}>{fmtFecha(p.fecha)}{p.metodo ? ` · ${p.metodo}` : ''}{p.notas ? ` · ${p.notas}` : ''}</p>
+                                                    </div>
+                                                    <p className="text-sm font-bold text-green-500">{fmt(p.monto)}</p>
+                                                </div>
+                                            ))}
+                                            {/* Seguros médicos */}
+                                            {segurosMes.map((p, i) => (
+                                                <div key={'seg'+i} className="px-4 py-3 flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${darkMode?'bg-blue-900/40':'bg-blue-100'}`}>
+                                                        <span className="text-sm">🏥</span>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className={`text-sm font-semibold ${txt}`}>{p.concepto || 'Seguro médico'}</p>
+                                                        <p className={`text-xs ${sub}`}>{fmtFecha(p.fecha)}{p.metodo ? ` · ${p.metodo}` : ''}{p.notas ? ` · ${p.notas}` : ''}</p>
+                                                    </div>
+                                                    <p className="text-sm font-bold text-blue-500">{fmt(p.monto)}</p>
+                                                </div>
+                                            ))}
+                                            {/* Otros pagos mensuales */}
+                                            {otrosPagos.map((p, i) => (
+                                                <div key={'o'+i} className="px-4 py-3 flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${darkMode?'bg-amber-900/40':'bg-amber-100'}`}>
+                                                        <span className="text-sm">📦</span>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className={`text-sm font-semibold ${txt}`}>{p.concepto || 'Pago'}</p>
+                                                        <p className={`text-xs ${sub}`}>{fmtFecha(p.fecha)}{p.metodo ? ` · ${p.metodo}` : ''}{p.notas ? ` · ${p.notas}` : ''}</p>
+                                                    </div>
+                                                    <p className={`text-sm font-bold ${darkMode?'text-amber-400':'text-amber-600'}`}>{fmt(p.monto)}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    );
+                                })}
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+
         const CredencialesModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
             const [creds, setCreds] = React.useState([]);
             const [credsLoaded, setCredsLoaded] = React.useState(false);
@@ -5562,7 +5826,7 @@ ${invoice.items.map(item => `
                     editor: 'Editor',
                     salesInvoicing: 'Facturador de Ventas',
                     suppliers: 'Proveedores',
-                    payroll: 'Sueldos',
+                    payroll: 'Gestión de Sueldos',
                     cashRegister: 'Caja Diaria',
                     settings: "Gestión de Usuarios",
                     changePin: 'Cambiar PIN',
@@ -6324,7 +6588,8 @@ ${invoice.items.map(item => `
                                             const ALL_MODULES = [
                                                 { key: 'ventas',      label: '💰 Facturador de Ventas' },
                                                 { key: 'proveedores', label: '📦 Proveedores' },
-                                                { key: 'sueldos',     label: '💵 Sueldos' },
+                                                { key: 'sueldos',     label: '💵 Gestión de Sueldos' },
+                                                { key: 'misueldo',    label: '💰 Mi Sueldo' },
                                                 { key: 'caja',        label: '💰 Caja Diaria' },
                                                 { key: 'dashboard',   label: '📊 Dashboard' },
                                                 { key: 'calendario',  label: '📅 Agenda / Calendario' },
@@ -10430,7 +10695,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Estados
             const [employees, setEmployees] = useState([]);
             const [empLoaded, setEmpLoaded] = useState(false);
-            useEffect(() => { dbGetAll('employees').then(d => { setEmployees(d||[]); setEmpLoaded(true); }); }, []);
+            useEffect(() => { dbGetAll('employees').then(d => { const emps = d||[]; setEmployees(emps); setEmpLoaded(true); localStorage.setItem('employees', JSON.stringify(emps)); }); }, []);
             useEffect(() => {
                 if (employees.length === 0) return;
                 dbSetArray('employees', employees);
@@ -11372,6 +11637,22 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 }
                 updated.sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
                 setPayrollData({ ...payrollData, [key]: updated });
+                // Notificar al empleado que cobró
+                if (editingPayIdx === null) {
+                    try {
+                        const notifKey = `sueldoNotif_${payModalEmp.id}`;
+                        const existingNotifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                        existingNotifs.push({
+                            id: Date.now(),
+                            concepto: entry.concepto,
+                            monto: entry.monto,
+                            fecha: entry.fecha,
+                            visto: false,
+                        });
+                        localStorage.setItem(notifKey, JSON.stringify(existingNotifs));
+                        window.dispatchEvent(new Event('sueldoNotifUpdate'));
+                    } catch(e) {}
+                }
                 // Sincronizar con caja diaria
                 syncPaymentToCaja(payModalEmp, entry, cajaId, false);
                 setShowPayModal(false);
