@@ -6140,7 +6140,8 @@ ${invoice.items.map(item => `
                 
                 if (editingUser) {
                     // Verificar si es el último admin y se está cambiando su rol
-                    if (editingUser.role === 'admin' && userForm.role !== 'admin') {
+                    // El superadmin puede cambiar cualquier rol sin restricción
+                    if (editingUser.role === 'admin' && userForm.role !== 'admin' && currentUser?.role !== 'superadmin') {
                         const adminCount = users.filter(u => u.role === 'admin').length;
                         if (adminCount <= 1) {
                             alert(t.cannotChangeLastAdmin);
