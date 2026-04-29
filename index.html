@@ -2663,6 +2663,52 @@ ${invoice.items.map(item => `
                         } catch(e) { return null; }
                     })()}
 
+                    {/* Banner seguro médico cobrado */}
+                    {(() => {
+                        if (!currentUser) return null;
+                        try {
+                            const empsLS = JSON.parse(localStorage.getItem('employees') || '[]');
+                            if (!empsLS.length) return null;
+                            const nameLC = (currentUser.name||'').toLowerCase();
+                            const userLC = (currentUser.username||'').toLowerCase();
+                            const yoEmpN = empsLS.find(e => {
+                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                                const enombre = (e.nombre||'').toLowerCase();
+                                return en.includes(nameLC)||(nameLC&&nameLC.includes(enombre))||
+                                       enombre.includes(userLC)||(userLC&&en.includes(userLC))||
+                                       String(e.id)===String(currentUser.id);
+                            });
+                            if (!yoEmpN) return null;
+                            const notifKey = `seguroNotif_${yoEmpN.id}`;
+                            const notifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                            const noVistas = notifs.filter(n => !n.visto);
+                            if (!noVistas.length) return null;
+                            const ultima = noVistas[noVistas.length - 1];
+                            const fmtM = (n) => Number(n||0).toLocaleString('es-CZ',{minimumFractionDigits:0}) + ' CZK';
+                            return (
+                                <div className="flex items-center gap-3 px-4 py-2.5"
+                                    style={{background:'linear-gradient(90deg,#1e40af,#1d4ed8)',color:'white'}}>
+                                    <span className="text-xl shrink-0">🏥</span>
+                                    <p className="text-sm font-medium flex-1">
+                                        {noVistas.length > 1
+                                            ? `Recibiste ${noVistas.length} pagos de seguro médico`
+                                            : `¡Cobró tu ${ultima.concepto}! ${fmtM(ultima.monto)}`
+                                        }
+                                    </p>
+                                    <button onClick={() => setActiveModule('misueldo')}
+                                        className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
+                                    <button onClick={() => {
+                                        const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                                        localStorage.setItem(notifKey, JSON.stringify(all.map(n => ({...n, visto: true}))));
+                                        window.dispatchEvent(new Event('sueldoNotifUpdate'));
+                                    }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
+                                </div>
+                            );
+                        } catch(e) { return null; }
+                    })()}
+
                     {/* Banner notas nuevas */}
                     {(() => {
                         if (!currentUser) return null;
@@ -11523,6 +11569,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
+
+                // Notificar al empleado que cobró el seguro
+                if (editingSeguroIdx === null) {
+                    try {
+                        const notifKey = `seguroNotif_${seguroModalEmp.id}`;
+                        const existing2 = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                        existing2.push({ id: Date.now(), concepto: entry.concepto, monto: entry.monto, fecha: entry.fecha, visto: false });
+                        localStorage.setItem(notifKey, JSON.stringify(existing2));
+                        window.dispatchEvent(new Event('sueldoNotifUpdate'));
+                    } catch(e) {}
+                }
 
                 setShowSeguroModal(false);
             };
