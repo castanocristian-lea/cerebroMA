@@ -3941,7 +3941,7 @@ ${invoice.items.map(item => `
 
         // COMPONENTE: SEGUIMIENTO DE PRÉSTAMOS
         // ============================================
-        const CalendarioModule = ({ darkMode = false, currentUser = null }) => {
+        const CalendarioModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
             const { useState, useEffect, useMemo } = React;
             const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
             const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
@@ -3951,7 +3951,13 @@ ${invoice.items.map(item => `
 
             const [eventos,     setEventos]     = useState([]);
             const [empleados,   setEmpleados]   = useState([]);
-            const [tipos,       setTipos]       = useState(['Turno','Vacaciones','Ausencia','Capacitación','Otro']);
+            const [tipos, setTipos] = useState([
+                {label:'Turno',       color:'#6366f1'},
+                {label:'Vacaciones',  color:'#10b981'},
+                {label:'Ausencia',    color:'#ef4444'},
+                {label:'Capacitación',color:'#f59e0b'},
+                {label:'Otro',        color:'#94a3b8'},
+            ]);
             const [loaded,      setLoaded]      = useState(false);
             const [view,        setView]        = useState('semana');
             const [currentDate, setCurrentDate] = useState(new Date());
@@ -3961,6 +3967,7 @@ ${invoice.items.map(item => `
             const [editingEv,   setEditingEv]   = useState(null);
             const [form,        setForm]        = useState({});
             const [newTipo,     setNewTipo]     = useState('');
+            const [newTipoColor,setNewTipoColor] = useState('#6366f1');
             const [editTipoIdx, setEditTipoIdx] = useState(null);
             const [editTipoVal, setEditTipoVal] = useState('');
             const [filtroTipo,  setFiltroTipo]  = useState('');
@@ -3971,7 +3978,11 @@ ${invoice.items.map(item => `
                     setEventos(evs || []);
                     setEmpleados((emps || []).filter(e => e.activo !== false));
                     const t = (cfg || []).find(c => c.key === 'tipos');
-                    if (t?.value?.length) setTipos(t.value);
+                    if (t?.value?.length) {
+                        // Migrar strings a objetos si vienen del formato viejo
+                        const COLS_DEF = ['#6366f1','#10b981','#ef4444','#f59e0b','#94a3b8','#8b5cf6','#06b6d4','#f97316'];
+                        setTipos(t.value.map((v,i) => typeof v === 'string' ? {label:v, color:COLS_DEF[i%COLS_DEF.length]} : v));
+                    }
                     setLoaded(true);
                 });
             }, []);
@@ -4031,6 +4042,7 @@ ${invoice.items.map(item => `
             };
 
             const evsDelDia = (iso) => eventos.filter(ev => diasEv(ev).includes(iso) && (!filtroTipo || ev.tipo === filtroTipo));
+            const tipoLabel = (t) => typeof t === 'string' ? t : t?.label || '';
             // Verifica si un evento cae en rango (incluyendo eventos con fechaFin que empezaron antes)
             const evEnRango = (ev, rango) => {
                 if (ev.diasSueltos?.length) return ev.diasSueltos.some(d=>rango.includes(d));
@@ -4072,7 +4084,8 @@ ${invoice.items.map(item => `
                 const ids = ev.empleadoIds?.length ? ev.empleadoIds.map(String) : ev.empleadoId ? [String(ev.empleadoId)] : [];
                 setForm({ empleadoIds:ids, tipo:ev.tipo||'', modoFecha:ev.diasSueltos?.length?'sueltos':'rango',
                     fecha:ev.fecha||'', fechaFin:ev.fechaFin||'', diasSueltos:ev.diasSueltos||[],
-                    _mes:(ev.fecha||hoy).slice(0,7), horaInicio:ev.horaInicio||'', horaFin:ev.horaFin||'', notas:ev.notas||'' });
+                    _mes:(ev.fecha||hoy).slice(0,7), horaInicio:ev.horaInicio||'', horaFin:ev.horaFin||'',
+                    todoDia:ev.todoDia||(!ev.horaInicio), notas:ev.notas||'' });
                 setShowModal(true);
             };
 
@@ -4084,8 +4097,10 @@ ${invoice.items.map(item => `
                     fecha:form.modoFecha==='rango'?form.fecha:(form.diasSueltos[0]||''),
                     fechaFin:form.modoFecha==='rango'?(form.fechaFin||''):'',
                     diasSueltos:form.modoFecha==='sueltos'?form.diasSueltos:[],
-                    horaInicio:form.horaInicio, horaFin:form.horaFin, notas:form.notas,
-                    empleadoIds:form.empleadoIds };
+                    horaInicio:form.todoDia?'':form.horaInicio,
+                    horaFin:form.todoDia?'':form.horaFin,
+                    todoDia:form.todoDia||false,
+                    notas:form.notas, empleadoIds:form.empleadoIds };
                 if(editingEv) {
                     saveEvs(eventos.map(e=>e.id===editingEv.id?{...baseEv,id:e.id}:e));
                 } else {
@@ -4110,7 +4125,8 @@ ${invoice.items.map(item => `
             // Mini chip de evento en celda
             const renderEv = (ev) => {
                 const ids = empIdsDeEv(ev);
-                const c = colEmp(ids[0]);
+                const tipoObj = tipos.find(t=>t.label===ev.tipo);
+                const c = tipoObj?.color || colEmp(ids[0]);
                 const esYo = yoEmp && evPertenece(ev, yoEmp.id);
                 const nombres = ids.slice(0,2).map(id=>nomEmp(id).split(' ')[0]).join(', ')+(ids.length>2?'…':'');
                 return (
@@ -4169,8 +4185,10 @@ ${invoice.items.map(item => `
                 <React.Fragment>
                 <div className={`min-h-screen ${bg}`}>
                     <div className={`sticky top-0 z-10 border-b ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'} px-4 py-3`}>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <div className="flex items-center gap-1">
+                        {/* Fila 1: home + nav + título + acciones */}
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <button onClick={()=>onBack&&onBack()} className={`flex items-center gap-1 text-sm font-medium shrink-0 ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>
+                            <div className="flex items-center gap-1 shrink-0">
                                 <button onClick={()=>nav(-1)} className={`p-1.5 rounded-lg ${darkMode?'hover:bg-slate-700':'hover:bg-slate-100'}`}>
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
                                 </button>
@@ -4179,25 +4197,34 @@ ${invoice.items.map(item => `
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
                                 </button>
                             </div>
-                            <span className={`text-sm font-semibold ${txt} flex-1`}>{hdrLabel}</span>
-                            <div className={`flex rounded-lg overflow-hidden border text-xs ${darkMode?'border-slate-600':'border-slate-200'}`}>
+                            <span className={`text-sm font-semibold ${txt} flex-1 min-w-0 truncate`}>{hdrLabel}</span>
+                            <div className={`flex rounded-lg overflow-hidden border text-xs shrink-0 ${darkMode?'border-slate-600':'border-slate-200'}`}>
                                 {[['dia','Día'],['semana','Semana'],['mes','Mes']].map(([v,l])=>(
-                                    <button key={v} onClick={()=>setView(v)} className={`px-3 py-1.5 font-medium ${view===v?(darkMode?'bg-blue-700 text-white':'bg-blue-600 text-white'):(darkMode?'bg-slate-800 text-slate-400':'bg-white text-slate-500')}`}>{l}</button>
+                                    <button key={v} onClick={()=>setView(v)} className={`px-2.5 py-1.5 font-medium ${view===v?(darkMode?'bg-blue-700 text-white':'bg-blue-600 text-white'):(darkMode?'bg-slate-800 text-slate-400':'bg-white text-slate-500')}`}>{l}</button>
                                 ))}
                             </div>
-                            <select value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)} className={`text-xs px-2 py-1.5 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200 text-slate-700'}`}>
-                                <option value="">Todos los tipos</option>
-                                {tipos.map(t=><option key={t} value={t}>{t}</option>)}
-                            </select>
-                            <button onClick={()=>openNew()} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium">+ Evento</button>
-                            <button onClick={()=>setShowMisEvs(true)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${darkMode?'bg-indigo-700 text-white hover:bg-indigo-600':'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
+                            <button onClick={()=>openNew()} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium shrink-0">+ Evento</button>
+                            <button onClick={()=>setShowMisEvs(true)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 ${darkMode?'bg-indigo-700 text-white hover:bg-indigo-600':'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                 Mis eventos
                             </button>
-                            <button onClick={()=>setShowConfig(true)} className={`p-1.5 rounded-lg ${darkMode?'hover:bg-slate-700':'hover:bg-slate-100'}`}>⚙️</button>
+                            <button onClick={()=>setShowConfig(true)} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 shrink-0 ${darkMode?'hover:bg-slate-700 text-slate-300':'hover:bg-slate-100 text-slate-600'}`}>
+                                ⚙️ Tipos de evento
+                            </button>
+                        </div>
+                        {/* Fila 2: filtro por tipo */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-xs ${sub} shrink-0`}>Filtrar:</span>
+                            <button onClick={()=>setFiltroTipo('')} className={`px-2.5 py-0.5 rounded-full text-xs font-medium border-2 transition-all ${filtroTipo===''?(darkMode?'bg-blue-600 text-white border-blue-600':'bg-blue-600 text-white border-blue-600'):(darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-600')}`}>Todos</button>
+                            {tipos.map(t=>(
+                                <button key={t.label} onClick={()=>setFiltroTipo(filtroTipo===t.label?'':t.label)}
+                                    className="px-2.5 py-0.5 rounded-full text-xs font-medium border-2 transition-all"
+                                    style={filtroTipo===t.label?{backgroundColor:t.color,borderColor:t.color,color:'white'}:{borderColor:t.color,color:t.color,backgroundColor:'transparent'}}>
+                                    {t.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
-
                     <div className="p-4 space-y-4">
                         {view==='dia' && (
                             <div className={`rounded-xl border ${card} p-4`}>
@@ -4313,7 +4340,6 @@ ${invoice.items.map(item => `
                                     </button>
                                 )}
                             </div>
-                        </div>
                     </div>
 
                 </div>
@@ -4344,20 +4370,33 @@ ${invoice.items.map(item => `
                                 </div>
                                 <div>
                                     <label className={`block text-xs font-medium mb-1 ${sub}`}>Tipo de evento</label>
-                                    <select value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})} className={inp}>
-                                        <option value="">Sin especificar</option>
-                                        {tipos.map(t=><option key={t} value={t}>{t}</option>)}
-                                    </select>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {tipos.map(t=>(
+                                            <button key={t.label} type="button" onClick={()=>setForm({...form,tipo:t.label})}
+                                                className="px-2.5 py-1 rounded-full text-xs font-medium border-2 transition-all"
+                                                style={form.tipo===t.label?{backgroundColor:t.color,borderColor:t.color,color:'white'}:{borderColor:t.color,color:t.color,backgroundColor:'transparent'}}>
+                                                {t.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className={`block text-xs font-medium mb-1 ${sub}`}>Hora inicio</label>
-                                        <input type="time" value={form.horaInicio} onChange={e=>setForm({...form,horaInicio:e.target.value})} className={inp}/>
-                                    </div>
-                                    <div>
-                                        <label className={`block text-xs font-medium mb-1 ${sub}`}>Hora fin</label>
-                                        <input type="time" value={form.horaFin} onChange={e=>setForm({...form,horaFin:e.target.value})} className={inp}/>
-                                    </div>
+                                <div>
+                                    <label className="flex items-center gap-2 cursor-pointer mb-2">
+                                        <input type="checkbox" checked={form.todoDia||false} onChange={e=>setForm({...form,todoDia:e.target.checked,horaInicio:'',horaFin:''})} className="w-4 h-4 rounded accent-blue-600"/>
+                                        <span className={`text-xs font-medium ${sub}`}>Sin horario / Todo el día</span>
+                                    </label>
+                                    {!form.todoDia && (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className={`block text-xs font-medium mb-1 ${sub}`}>Hora inicio</label>
+                                                <input type="time" value={form.horaInicio} onChange={e=>setForm({...form,horaInicio:e.target.value})} className={inp}/>
+                                            </div>
+                                            <div>
+                                                <label className={`block text-xs font-medium mb-1 ${sub}`}>Hora fin</label>
+                                                <input type="time" value={form.horaFin} onChange={e=>setForm({...form,horaFin:e.target.value})} className={inp}/>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label className={`block text-xs font-medium mb-1 ${sub}`}>Modo de fecha</label>
@@ -4471,30 +4510,34 @@ ${invoice.items.map(item => `
                             <div className="space-y-2 mb-3">
                                 {tipos.map((t,i)=>(
                                     <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${darkMode?'bg-slate-700':'bg-slate-50'}`}>
+                                        <div className="w-4 h-4 rounded-full shrink-0" style={{backgroundColor:t.color}}/>
                                         {editTipoIdx===i ? (
                                             <React.Fragment>
-                                                <input value={editTipoVal} onChange={e=>setEditTipoVal(e.target.value)} className={`flex-1 px-2 py-0.5 text-sm border rounded ${darkMode?'bg-slate-600 border-slate-500 text-white':'border-slate-300'}`}/>
+                                                <input value={editTipoVal.label||''} onChange={e=>setEditTipoVal({...editTipoVal,label:e.target.value})} className={`flex-1 px-2 py-0.5 text-sm border rounded ${darkMode?'bg-slate-600 border-slate-500 text-white':'border-slate-300'}`} placeholder="Nombre..."/>
+                                                <input type="color" value={editTipoVal.color||'#6366f1'} onChange={e=>setEditTipoVal({...editTipoVal,color:e.target.value})} className="w-8 h-7 rounded cursor-pointer border-0 p-0"/>
                                                 <button onClick={()=>{saveTips(tipos.map((x,j)=>j===i?editTipoVal:x));setEditTipoIdx(null);}} className="text-green-500 font-bold">✓</button>
                                                 <button onClick={()=>setEditTipoIdx(null)} className="text-slate-400 font-bold">✕</button>
                                             </React.Fragment>
                                         ) : (
                                             <React.Fragment>
-                                                <span className={`flex-1 text-sm ${txt}`}>{t}</span>
-                                                <button onClick={()=>{setEditTipoIdx(i);setEditTipoVal(t);}} className="text-blue-400 hover:text-blue-600 text-xs">✏️</button>
+                                                <span className={`flex-1 text-sm ${txt}`}>{t.label}</span>
+                                                <button onClick={()=>{setEditTipoIdx(i);setEditTipoVal({label:t.label,color:t.color});}} className="text-blue-400 hover:text-blue-600 text-xs">✏️</button>
                                                 <button onClick={()=>saveTips(tipos.filter((_,j)=>j!==i))} className="text-red-400 hover:text-red-600 font-bold">✕</button>
                                             </React.Fragment>
                                         )}
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 items-center">
                                 <input value={newTipo} onChange={e=>setNewTipo(e.target.value)} placeholder="Nuevo tipo..." className={inp}
-                                    onKeyDown={e=>{if(e.key==='Enter'&&newTipo.trim()){saveTips([...tipos,newTipo.trim()]);setNewTipo('');}}}/>
-                                <button onClick={()=>{if(newTipo.trim()){saveTips([...tipos,newTipo.trim()]);setNewTipo('');}}} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">+</button>
+                                    onKeyDown={e=>{if(e.key==='Enter'&&newTipo.trim()){saveTips([...tipos,{label:newTipo.trim(),color:newTipoColor}]);setNewTipo('');}}}/>
+                                <input type="color" value={newTipoColor} onChange={e=>setNewTipoColor(e.target.value)} className="w-9 h-9 rounded cursor-pointer border-0 p-0 shrink-0"/>
+                                <button onClick={()=>{if(newTipo.trim()){saveTips([...tipos,{label:newTipo.trim(),color:newTipoColor}]);setNewTipo('');}}} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shrink-0">+</button>
                             </div>
                         </div>
                     </div>
                 )}
+                </div>
                 </React.Fragment>
             );
         };
