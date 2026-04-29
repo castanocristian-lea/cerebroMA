@@ -7645,7 +7645,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         ...formData,
                         dia: diaCalc, mes: mesCalc,
                         concepto: conceptoCompat,
-                        monto: -Math.abs(parseFloat(formData.monto) || 0),
+                        monto: formData.tipoCosto === 'INGRESOS' ? Math.abs(parseFloat(formData.monto) || 0) : -Math.abs(parseFloat(formData.monto) || 0),
                         year: yearReal
                     };
                     const oldYear = editingTransaction.year || selectedYear;
