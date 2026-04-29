@@ -2692,7 +2692,7 @@ ${invoice.items.map(item => `
                                     <p className="text-sm font-medium flex-1">
                                         {noVistas.length > 1
                                             ? `Recibiste ${noVistas.length} pagos de seguro médico`
-                                            : `¡Cobró tu ${ultima.concepto}! ${fmtM(ultima.monto)}`
+                                            : `¡Cobraste tu ${ultima.concepto}! ${fmtM(ultima.monto)}`
                                         }
                                     </p>
                                     <button onClick={() => setActiveModule('misueldo')}
@@ -4150,7 +4150,8 @@ ${invoice.items.map(item => `
                 return dias;
             };
 
-            const evsDelDia = (iso) => eventos.filter(ev => diasEv(ev).includes(iso) && (!filtroTipo || ev.tipo === filtroTipo));
+            const esVisible = (ev) => !ev.privado || evPertenece(ev, yoEmp?.id);
+            const evsDelDia = (iso) => eventos.filter(ev => diasEv(ev).includes(iso) && (!filtroTipo || ev.tipo === filtroTipo) && esVisible(ev));
             const tipoLabel = (t) => typeof t === 'string' ? t : t?.label || '';
             // Verifica si un evento cae en rango (incluyendo eventos con fechaFin que empezaron antes)
             const evEnRango = (ev, rango) => {
@@ -4194,7 +4195,7 @@ ${invoice.items.map(item => `
                 setForm({ empleadoIds:ids, tipo:ev.tipo||'', modoFecha:ev.diasSueltos?.length?'sueltos':'rango',
                     fecha:ev.fecha||'', fechaFin:ev.fechaFin||'', diasSueltos:ev.diasSueltos||[],
                     _mes:(ev.fecha||hoy).slice(0,7), horaInicio:ev.horaInicio||'', horaFin:ev.horaFin||'',
-                    todoDia:ev.todoDia||(!ev.horaInicio), notas:ev.notas||'' });
+                    todoDia:ev.todoDia||(!ev.horaInicio), notas:ev.notas||'', privado:ev.privado||false });
                 setShowModal(true);
             };
 
@@ -4202,7 +4203,7 @@ ${invoice.items.map(item => `
                 if(!(form.empleadoIds||[]).length) return alert('Seleccioná al menos un empleado');
                 if(form.modoFecha==='sueltos'&&!form.diasSueltos?.length) return alert('Seleccioná al menos un día');
                 if(form.modoFecha==='rango'&&!form.fecha) return alert('Ingresá una fecha');
-                const baseEv = { tipo:form.tipo,
+                const baseEv = { tipo:form.tipo, privado:form.privado||false,
                     fecha:form.modoFecha==='rango'?form.fecha:(form.diasSueltos[0]||''),
                     fechaFin:form.modoFecha==='rango'?(form.fechaFin||''):'',
                     diasSueltos:form.modoFecha==='sueltos'?form.diasSueltos:[],
@@ -4242,6 +4243,7 @@ ${invoice.items.map(item => `
                     <div key={ev.id} onClick={(e)=>{e.stopPropagation();openEdit(ev);}}
                         className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs cursor-pointer hover:opacity-80 mb-0.5 truncate"
                         style={{backgroundColor:c+'22',borderLeft:`3px solid ${c}`,color:darkMode?'#e2e8f0':'#1e293b'}}>
+                        {ev.privado && <span className="shrink-0 text-[9px]">🔒</span>}
                         <span className="font-semibold truncate">{nombres}</span>
                         {esYo && <span className="shrink-0 text-[9px] font-bold px-1 rounded" style={{background:c,color:'white'}}>vos</span>}
                         <span className={`shrink-0 ${sub}`}>· {ev.tipo}</span>
@@ -4403,13 +4405,13 @@ ${invoice.items.map(item => `
                             <div className="space-y-2">
                                 {empsOrdenados.filter((emp, idx) => {
                                     const esYo = yoEmp && String(emp.id)===String(yoEmp.id);
-                                    const evs = eventos.filter(ev=>evPertenece(ev,emp.id)&&evEnRango(ev,rango7));
+                                    const evs = eventos.filter(ev=>evPertenece(ev,emp.id)&&evEnRango(ev,rango7)&&esVisible(ev));
                                     if (esYo) return true;
                                     if (evs.length === 0) return false;
                                     return verTodos7 || idx < 3;
                                 }).map(emp=>{
                                     const esYo=yoEmp&&String(emp.id)===String(yoEmp.id);
-                                    const evs=eventos.filter(ev=>evPertenece(ev,emp.id)&&evEnRango(ev,rango7)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+                                    const evs=eventos.filter(ev=>evPertenece(ev,emp.id)&&evEnRango(ev,rango7)&&esVisible(ev)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
                                     const c=colEmp(emp.id);
                                     return (
                                         <div key={emp.id} className={`rounded-lg border-l-4 p-2.5 ${darkMode?'bg-slate-700/40':'bg-slate-50'}`} style={{borderLeftColor:c}}>
@@ -4547,6 +4549,18 @@ ${invoice.items.map(item => `
                                     <label className={`block text-xs font-medium mb-1 ${sub}`}>Notas</label>
                                     <textarea rows={2} value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})} className={inp+" resize-none"} placeholder="Observaciones..."/>
                                 </div>
+                                <div className={`flex items-center justify-between px-3 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${form.privado?(darkMode?'border-amber-500 bg-amber-900/20':'border-amber-400 bg-amber-50'):(darkMode?'border-slate-600 bg-slate-700/30':'border-slate-200 bg-slate-50')}`}
+                                    onClick={()=>setForm({...form,privado:!form.privado})}>
+                                    <div>
+                                        <p className={`text-xs font-semibold ${form.privado?(darkMode?'text-amber-300':'text-amber-700'):txt}`}>
+                                            {form.privado ? '🔒 Evento privado' : '🌐 Evento público'}
+                                        </p>
+                                        <p className={`text-xs ${sub}`}>{form.privado ? 'Solo vos lo ves' : 'Lo ven todos'}</p>
+                                    </div>
+                                    <div className={`w-9 h-5 rounded-full transition-colors relative ${form.privado?'bg-amber-500':'bg-slate-300'}`}>
+                                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${form.privado?'left-4':'left-0.5'}`}/>
+                                    </div>
+                                </div>
                             </div>
                             <div className="flex gap-2 mt-4">
                                 <button onClick={()=>setShowModal(false)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-white':'bg-slate-100 text-slate-700'}`}>Cancelar</button>
@@ -4648,207 +4662,6 @@ ${invoice.items.map(item => `
                 )}
                 </div>
                 </React.Fragment>
-            );
-        };
-
-
-        const MiSueldoModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
-            const { useState, useEffect, useMemo } = React;
-            const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
-            const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
-            const txt  = darkMode ? 'text-white'     : 'text-slate-900';
-            const sub  = darkMode ? 'text-slate-400' : 'text-slate-500';
-
-            const [empleados,  setEmpleados]  = useState([]);
-            const [payroll,    setPayroll]    = useState({});
-            const [seguros,    setSeguros]    = useState({});
-            const [loaded,     setLoaded]     = useState(false);
-            const [yearSel,    setYearSel]    = useState(new Date().getFullYear());
-
-            useEffect(() => {
-                Promise.all([
-                    dbGetAll('employees'),
-                    dbGetKey('payroll_monthly', 'main'),
-                    dbGetKey('payroll_insurance', 'main'),
-                ]).then(([emps, pay, seg]) => {
-                    setEmpleados(emps || []);
-                    setPayroll(pay || JSON.parse(localStorage.getItem('payrollMonthlyData') || '{}'));
-                    setSeguros(seg || JSON.parse(localStorage.getItem('seguroMedicoData') || '{}'));
-                    setLoaded(true);
-                });
-            }, []);
-
-            // Encontrar el empleado del usuario logueado
-            const yoEmp = useMemo(() => {
-                if (!currentUser) return null;
-                const nameLC = (currentUser.name||'').toLowerCase();
-                const userLC = (currentUser.username||'').toLowerCase();
-                return empleados.find(e => {
-                    const empName = `${e.nombre} ${e.apellido}`.toLowerCase();
-                    const empNombre = (e.nombre||'').toLowerCase();
-                    return empName.includes(nameLC) || (nameLC && nameLC.includes(empNombre)) ||
-                           empNombre.includes(userLC) || (userLC && empName.includes(userLC)) ||
-                           String(e.id) === String(currentUser.id);
-                });
-            }, [empleados, currentUser]);
-
-            const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-            const fmt = (n) => Number(n||0).toLocaleString('es-CZ', {minimumFractionDigits:0, maximumFractionDigits:0}) + ' CZK';
-            const fmtFecha = (f) => f ? new Date(f+'T12:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'}) : '–';
-
-            // Construir historial por mes para el empleado
-            const historial = useMemo(() => {
-                if (!yoEmp) return [];
-                const empId = yoEmp.id;
-                const meses = [];
-                for (let m = 0; m < 12; m++) {
-                    const key = `${empId}_${yearSel}_${m}`;
-                    const pagosMes = payroll[key] || [];
-                    const segurosMes = seguros[key] || [];
-                    if (pagosMes.length === 0 && segurosMes.length === 0) continue;
-                    const sueldos = pagosMes.filter(p => p.concepto === 'sueldo' || p.tipo === 'sueldo');
-                    const otrosPagos = pagosMes.filter(p => p.concepto !== 'sueldo' && p.tipo !== 'sueldo');
-                    meses.push({ mes: m, label: MESES[m], sueldos, otrosPagos, segurosMes });
-                }
-                return meses.reverse(); // más reciente primero
-            }, [yoEmp, payroll, seguros, yearSel]);
-
-            const totalSueldos  = historial.reduce((acc,m) => acc + m.sueldos.reduce((s,p)=>s+(parseFloat(p.monto)||0),0), 0);
-            const totalSeguros  = historial.reduce((acc,m) => acc + m.segurosMes.reduce((s,p)=>s+(parseFloat(p.monto)||0),0), 0);
-            const totalPagos    = historial.reduce((acc,m) => acc + m.otrosPagos.reduce((s,p)=>s+(parseFloat(p.monto)||0),0), 0);
-
-            if (!loaded) return (
-                <div className={`flex items-center justify-center min-h-screen ${bg}`}>
-                    <p className={sub}>Cargando...</p>
-                </div>
-            );
-
-            return (
-                <div className={`min-h-screen ${bg}`}>
-                    {/* Header */}
-                    <div className={`sticky top-0 z-10 border-b ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'} px-4 py-3`}>
-                        <div className="flex items-center gap-3">
-                            {onBack && <button onClick={onBack} className={`flex items-center gap-1 text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>}
-                            <h1 className={`text-base font-bold ${txt} flex-1`}>💰 Mi Sueldo</h1>
-                            <select value={yearSel} onChange={e=>setYearSel(Number(e.target.value))}
-                                className={`text-xs px-2 py-1.5 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
-                                {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="p-4 max-w-2xl mx-auto space-y-4">
-                        {!yoEmp ? (
-                            <div className={`rounded-xl border ${card} p-8 text-center`}>
-                                <p className="text-3xl mb-3">👤</p>
-                                <p className={`font-semibold ${txt} mb-1`}>No se encontró tu perfil de empleado</p>
-                                <p className={`text-sm ${sub}`}>Pedile al administrador que vincule tu usuario con un empleado</p>
-                            </div>
-                        ) : (
-                            <>
-                                {/* Tarjeta empleado */}
-                                <div className={`rounded-xl border ${card} p-4`}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${darkMode?'bg-indigo-900/50 text-indigo-300':'bg-indigo-100 text-indigo-600'}`}>
-                                            {yoEmp.nombre?.[0]}{yoEmp.apellido?.[0]}
-                                        </div>
-                                        <div>
-                                            <p className={`font-bold ${txt}`}>{yoEmp.nombre} {yoEmp.apellido}</p>
-                                            <p className={`text-xs ${sub}`}>{yoEmp.puestoTrabajo || 'Sin puesto definido'}</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Totales del año */}
-                                <div className="grid grid-cols-3 gap-3">
-                                    {[
-                                        ['💵 Sueldos cobrados', totalSueldos, 'text-green-500'],
-                                        ['🏥 Seguros médicos', totalSeguros, 'text-blue-500'],
-                                        ['📦 Otros pagos', totalPagos, 'text-amber-500'],
-                                    ].map(([label, total, color]) => (
-                                        <div key={label} className={`rounded-xl border ${card} p-3 text-center`}>
-                                            <p className={`text-xs ${sub} mb-1`}>{label}</p>
-                                            <p className={`text-sm font-bold ${color}`}>{fmt(total)}</p>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Sin datos */}
-                                {historial.length === 0 && (
-                                    <div className={`rounded-xl border ${card} p-8 text-center`}>
-                                        <p className="text-3xl mb-3">📭</p>
-                                        <p className={`font-semibold ${txt} mb-1`}>Sin registros en {yearSel}</p>
-                                        <p className={`text-sm ${sub}`}>Los pagos aparecerán acá cuando el administrador los cargue</p>
-                                    </div>
-                                )}
-
-                                {/* Historial por mes */}
-                                {historial.map(({mes, label, sueldos, otrosPagos, segurosMes}) => {
-                                    const totalMes = [...sueldos,...otrosPagos].reduce((s,p)=>s+(parseFloat(p.monto)||0),0);
-                                    const totalSeg = segurosMes.reduce((s,p)=>s+(parseFloat(p.monto)||0),0);
-                                    return (
-                                    <div key={mes} className={`rounded-xl border ${card} overflow-hidden`}>
-                                        <div className={`px-4 py-2.5 border-b ${darkMode?'border-slate-700 bg-slate-700/30':'border-slate-100 bg-slate-50'}`}>
-                                            <div className="flex items-center justify-between">
-                                                <p className={`text-sm font-bold ${txt}`}>{label} {yearSel}</p>
-                                                <p className="text-sm font-bold text-green-500">{fmt(totalMes)}</p>
-                                            </div>
-                                            {totalSeg > 0 && (
-                                                <div className="flex items-center justify-between mt-0.5">
-                                                    <p className={`text-xs ${sub}`}>🏥 Seguro médico</p>
-                                                    <p className="text-xs font-semibold text-blue-500">{fmt(totalSeg)}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                                            {/* Sueldos */}
-                                            {sueldos.map((p, i) => (
-                                                <div key={'s'+i} className="px-4 py-3 flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${darkMode?'bg-green-900/40':'bg-green-100'}`}>
-                                                        <span className="text-sm">💵</span>
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <p className={`text-sm font-semibold ${txt}`}>Sueldo</p>
-                                                        <p className={`text-xs ${sub}`}>{fmtFecha(p.fecha)}{p.metodo ? ` · ${p.metodo}` : ''}{p.notas ? ` · ${p.notas}` : ''}</p>
-                                                    </div>
-                                                    <p className="text-sm font-bold text-green-500">{fmt(p.monto)}</p>
-                                                </div>
-                                            ))}
-                                            {/* Seguros médicos */}
-                                            {segurosMes.map((p, i) => (
-                                                <div key={'seg'+i} className="px-4 py-3 flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${darkMode?'bg-blue-900/40':'bg-blue-100'}`}>
-                                                        <span className="text-sm">🏥</span>
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <p className={`text-sm font-semibold ${txt}`}>{p.concepto || 'Seguro médico'}</p>
-                                                        <p className={`text-xs ${sub}`}>{fmtFecha(p.fecha)}{p.metodo ? ` · ${p.metodo}` : ''}{p.notas ? ` · ${p.notas}` : ''}</p>
-                                                    </div>
-                                                    <p className="text-sm font-bold text-blue-500">{fmt(p.monto)}</p>
-                                                </div>
-                                            ))}
-                                            {/* Otros pagos mensuales */}
-                                            {otrosPagos.map((p, i) => (
-                                                <div key={'o'+i} className="px-4 py-3 flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${darkMode?'bg-amber-900/40':'bg-amber-100'}`}>
-                                                        <span className="text-sm">📦</span>
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <p className={`text-sm font-semibold ${txt}`}>{p.concepto || 'Pago'}</p>
-                                                        <p className={`text-xs ${sub}`}>{fmtFecha(p.fecha)}{p.metodo ? ` · ${p.metodo}` : ''}{p.notas ? ` · ${p.notas}` : ''}</p>
-                                                    </div>
-                                                    <p className={`text-sm font-bold ${darkMode?'text-amber-400':'text-amber-600'}`}>{fmt(p.monto)}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    );
-                                })}
-                            </>
-                        )}
-                    </div>
-                </div>
             );
         };
 
