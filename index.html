@@ -4284,6 +4284,12 @@ ${invoice.items.map(item => `
             const [newTipoSolic,setNewTipoSolic]= useState('');
             const [editTipoSolicIdx, setEditTipoSolicIdx] = useState(null);
             const [editTipoSolicVal, setEditTipoSolicVal] = useState('');
+            const [showHorasModal, setShowHorasModal] = useState(false);
+            const [horasForm, setHorasForm] = useState(() => { const h = new Date().toISOString().split('T')[0]; return { empleadoId:'', fecha:h, modoFecha:'rango', fechaFin:'', diasSueltos:[], _mes:h.slice(0,7), normal:'', extra:'', feriado:'', tiposPorDia:{}, notas:'' }; });
+            const [horasGuardadas, setHorasGuardadas] = useState([]);
+            const [horasOpen,    setHorasOpen]    = useState({});
+            const [horasBusq,    setHorasBusq]    = useState('');
+            const [horasFiltro,  setHorasFiltro]  = useState({ desde:'', hasta:'' });
             const [solicitudes, setSolicitudes] = useState([]);
             const [showSolicitudes, setShowSolicitudes] = useState(false);
             const [showNuevaSolic, setShowNuevaSolic] = useState(false);
@@ -4292,22 +4298,6 @@ ${invoice.items.map(item => `
             const [editTipoVal, setEditTipoVal] = useState('');
             const [filtroTipo,  setFiltroTipo]  = useState('');
             const [verTodos7,   setVerTodos7]   = useState(false);
-
-            useEffect(() => {
-                // Escuchar cambios en tiempo real de Supabase
-                const handleRealtime = (e) => {
-                    if (!e.detail) return;
-                    const { tabla } = e.detail;
-                    if (tabla === 'calendar_events') {
-                        dbGetAll('calendar_events').then(evs => setEventos(evs || []));
-                    }
-                    if (tabla === 'employees') {
-                        dbGetAll('employees').then(emps => setEmpleados((emps||[]).filter(e=>e.activo!==false)));
-                    }
-                };
-                window.addEventListener('realtimeUpdate', handleRealtime);
-                return () => window.removeEventListener('realtimeUpdate', handleRealtime);
-            }, []);
 
             useEffect(() => {
                 // Escuchar solicitud de abrir nuevo evento desde banner
@@ -4358,6 +4348,10 @@ ${invoice.items.map(item => `
             }, [solicitudes]);
 
             useEffect(() => {
+                dbGetAll('calendar_horas').then(h => setHorasGuardadas(h||[])).catch(()=>{});
+            }, []);
+
+            useEffect(() => {
                 Promise.all([dbGetAll('calendar_events'), dbGetAll('employees'), dbGetAll('calendar_config'), dbGetAll('calendar_solicitudes')]).then(([evs, emps, cfg, solic]) => {
                     setEventos(evs || []);
                     setEmpleados((emps || []).filter(e => e.activo !== false));
@@ -4372,6 +4366,12 @@ ${invoice.items.map(item => `
                     setLoaded(true);
                 });
             }, []);
+
+            const saveHoras = (h) => {
+                const nuevas = [...horasGuardadas.filter(x=>!(x.empleadoId===h.empleadoId&&x.fecha===h.fecha&&x.tipo===h.tipo)), h];
+                setHorasGuardadas(nuevas);
+                dbSetArray('calendar_horas', nuevas);
+            };
 
             const saveEvs  = (evs) => { setEventos(evs); localStorage.setItem('calendarioEventos', JSON.stringify(evs)); dbSetArray('calendar_events', evs); };
             const saveSolicitudes = (list) => { setSolicitudes(list); localStorage.setItem('calendar_solicitudes_cache', JSON.stringify(list)); dbSetArray('calendar_solicitudes', list); };
@@ -4509,7 +4509,7 @@ ${invoice.items.map(item => `
                 setEditingEv(null);
                 setForm({ empleadoIds:[], tipo:tipos[0]||'', modoFecha:'rango',
                     fecha:iso||hoy, fechaFin:'', diasSueltos:[], _mes:iso?iso.slice(0,7):hoy.slice(0,7),
-                    horaInicio:'09:00', horaFin:'17:00', notas:'' });
+                    horaInicio:'09:00', horaFin:'17:00', notas:'', privado:false, cargarHoras:false });
                 setShowModal(true);
             };
 
@@ -4519,7 +4519,7 @@ ${invoice.items.map(item => `
                 setForm({ empleadoIds:ids, tipo:ev.tipo||'', modoFecha:ev.diasSueltos?.length?'sueltos':'rango',
                     fecha:ev.fecha||'', fechaFin:ev.fechaFin||'', diasSueltos:ev.diasSueltos||[],
                     _mes:(ev.fecha||hoy).slice(0,7), horaInicio:ev.horaInicio||'', horaFin:ev.horaFin||'',
-                    todoDia:ev.todoDia||(!ev.horaInicio), notas:ev.notas||'', privado:ev.privado||false });
+                    todoDia:ev.todoDia||(!ev.horaInicio), notas:ev.notas||'', privado:ev.privado||false, cargarHoras:false });
                 setShowModal(true);
             };
 
@@ -4558,6 +4558,30 @@ ${invoice.items.map(item => `
                         window.dispatchEvent(new Event('calendarioNotifUpdate'));
                     } catch(e) {}
                 }
+                // Carga automática de horas si está marcado
+                if(form.cargarHoras && !form.todoDia && form.horaInicio && form.horaFin && (form.empleadoIds||[]).length > 0) {
+                    const [h1,m1] = form.horaInicio.split(':').map(Number);
+                    const [h2,m2] = form.horaFin.split(':').map(Number);
+                    const mins = (h2*60+m2) - (h1*60+m1);
+                    if(mins > 0) {
+                        const horasTotal = Math.round(mins/60*2)/2; // redondear a 0.5
+                        const fechasEv = baseEv.diasSueltos?.length ? baseEv.diasSueltos
+                            : baseEv.fechaFin && baseEv.fechaFin !== baseEv.fecha
+                            ? (()=>{ const ds=[], c=new Date(baseEv.fecha+'T12:00:00'), f=new Date(baseEv.fechaFin+'T12:00:00'); while(c<=f){ds.push(toISO(c));c.setDate(c.getDate()+1);} return ds; })()
+                            : [baseEv.fecha];
+                        const nuevasH = [...horasGuardadas];
+                        fechasEv.forEach(fecha => {
+                            (form.empleadoIds||[]).forEach(eid => {
+                                const id = `${eid}_${fecha}_normal`;
+                                if(!nuevasH.find(h=>h.id===id)) {
+                                    nuevasH.push({ id, empleadoId:eid, fecha, tipo:'normal', horas:horasTotal, auto:true, notas:`Auto: ${form.tipo||'Evento'}` });
+                                }
+                            });
+                        });
+                        setHorasGuardadas(nuevasH);
+                        dbSetArray('calendar_horas', nuevasH);
+                    }
+                }
                 setShowModal(false);
             };
 
@@ -4580,16 +4604,21 @@ ${invoice.items.map(item => `
                 const tipoObj = tipos.find(t=>t.label===ev.tipo);
                 const c = tipoObj?.color || colEmp(ids[0]);
                 const esYo = yoEmp && evPertenece(ev, yoEmp.id);
-                const nombres = ids.slice(0,2).map(id=>nomEmp(id).split(' ')[0]).join(', ')+(ids.length>2?'…':'');
+                const nombresCompletos = ids.map(id => { const e = empleados.find(e=>String(e.id)===String(id)); return e?.nombre || nomEmp(id).split(' ')[0]; }).join(', ');
                 return (
                     <div key={ev.id} onClick={(e)=>{e.stopPropagation();openEdit(ev);}}
-                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs cursor-pointer hover:opacity-80 mb-0.5 truncate"
+                        className="px-1.5 py-1 rounded text-xs cursor-pointer hover:opacity-80 mb-0.5"
                         style={{backgroundColor:c+'22',borderLeft:`3px solid ${c}`,color:darkMode?'#e2e8f0':'#1e293b'}}>
-                        {ev.privado && <span className="shrink-0 text-[9px]">🔒</span>}
-                        <span className="font-semibold truncate">{nombres}</span>
-                        {esYo && <span className="shrink-0 text-[9px] font-bold px-1 rounded" style={{background:c,color:'white'}}>vos</span>}
-                        <span className={`shrink-0 ${sub}`}>· {ev.tipo}</span>
-                        {ev.horaInicio && <span className={`shrink-0 ${sub}`}>{ev.horaInicio}</span>}
+                        <div className="flex items-center gap-1 flex-wrap">
+                            {ev.privado && <span className="text-[9px]">🔒</span>}
+                            <span className="font-bold truncate">{nombresCompletos}</span>
+                            {esYo && <span className="text-[9px] font-bold px-1 rounded shrink-0" style={{background:c,color:'white'}}>vos</span>}
+                        </div>
+                        <div className={`flex items-center gap-1 flex-wrap mt-0.5 ${darkMode?'text-slate-400':'text-slate-500'}`}>
+                            {ev.tipo && <span className="truncate">{ev.tipo}</span>}
+                            {ev.horaInicio && <span className="shrink-0">· {ev.horaInicio}–{ev.horaFin}</span>}
+                            {calcH(ev) && <span className="shrink-0 font-semibold" style={{color:c}}>{calcH(ev)}</span>}
+                        </div>
                     </div>
                 );
             };
@@ -4660,6 +4689,9 @@ ${invoice.items.map(item => `
                             <button onClick={()=>setShowSolicitudes(true)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 ${darkMode?'bg-amber-700 text-white hover:bg-amber-600':'bg-amber-500 text-white hover:bg-amber-600'}`}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                                 Solicitudes {solicitudes.filter(s=>s.estado==='pendiente'&&String(s.destinatarioId)===String(yoEmp?.id)).length>0&&<span className="bg-white text-amber-600 rounded-full text-[10px] font-bold px-1.5">{solicitudes.filter(s=>s.estado==='pendiente'&&String(s.destinatarioId)===String(yoEmp?.id)).length}</span>}
+                            </button>
+                            <button onClick={()=>{setHorasForm({empleadoId:yoEmp?.id||empleados[0]?.id||'',fecha:hoy,normal:'',extra:'',feriado:'',notas:''});setShowHorasModal(true);}} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 ${darkMode?'bg-teal-700 text-white hover:bg-teal-600':'bg-teal-600 text-white hover:bg-teal-700'}`}>
+                                ⏱️ Cargar horas
                             </button>
                             <button onClick={()=>setShowMisEvs(true)} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 ${darkMode?'bg-indigo-700 text-white hover:bg-indigo-600':'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -4774,6 +4806,7 @@ ${invoice.items.map(item => `
                                                             <div className="flex items-center gap-2 text-xs">
                                                                 <span className={`w-24 shrink-0 font-medium ${d===hoy?(darkMode?'text-blue-400':'text-blue-600'):sub}`}>{d===hoy?'⭐ Hoy':fmtF(d)}</span>
                                                                 <span className={`font-semibold ${txt} flex-1`}>{ev.tipo}</span>
+                                                                {ev.privado && <span className="shrink-0 text-xs">🔒</span>}
                                                                 {ev.horaInicio && <span className={sub}>{ev.horaInicio}–{ev.horaFin}</span>}
                                                                 {calcH(ev) && <span className={`font-bold ${darkMode?'text-blue-400':'text-blue-600'}`}>{calcH(ev)}</span>}
                                                             </div>
@@ -4800,7 +4833,283 @@ ${invoice.items.map(item => `
                     </div>
 
                 </div>
-                {showModal && (
+                {showHorasModal && (
+                        <div className={`fixed inset-0 z-50 flex flex-col ${darkMode?'bg-slate-900':'bg-slate-50'}`}>
+                            {/* Header */}
+                            <div className={`flex items-center gap-3 px-4 py-3 border-b ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                                <button onClick={()=>setShowHorasModal(false)} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>
+                                <h2 className={`font-bold text-base flex-1 ${txt}`}>⏱️ Carga de horas</h2>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto">
+                                <div className="max-w-2xl mx-auto px-4 py-5 space-y-5">
+
+                                    {/* Formulario de carga */}
+                                    <div className={`rounded-xl border ${card} p-4 space-y-3`}>
+                                        <p className={`text-xs font-bold uppercase tracking-wide ${sub}`}>Nueva carga</p>
+
+                                        {/* Empleado */}
+                                        <div>
+                                            <label className={`block text-xs font-medium mb-1 ${sub}`}>Empleado</label>
+                                            <select value={horasForm.empleadoId} onChange={e=>setHorasForm({...horasForm,empleadoId:e.target.value})} className={inp}>
+                                                {empleados.map(e=><option key={e.id} value={e.id}>{e.nombre} {e.apellido}{yoEmp&&String(e.id)===String(yoEmp.id)?' (Vos)':''}</option>)}
+                                            </select>
+                                        </div>
+
+                                        {/* Modo fecha */}
+                                        <div>
+                                            <label className={`block text-xs font-medium mb-1.5 ${sub}`}>Modo de fecha</label>
+                                            <div className={`flex rounded-lg overflow-hidden border mb-3 ${darkMode?'border-slate-600':'border-slate-300'}`}>
+                                                {[['rango','📅 Rango'],['sueltos','🗓️ Días sueltos']].map(([v,l])=>(
+                                                    <button key={v} type="button" onClick={()=>setHorasForm({...horasForm,modoFecha:v,fecha:hoy,fechaFin:'',diasSueltos:[],_mes:hoy.slice(0,7)})}
+                                                        className={`flex-1 py-1.5 text-xs font-medium ${(horasForm.modoFecha||'rango')===v?(darkMode?'bg-blue-700 text-white':'bg-blue-600 text-white'):(darkMode?'bg-slate-700 text-slate-400':'bg-white text-slate-500')}`}>{l}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {(!horasForm.modoFecha||horasForm.modoFecha==='rango') ? (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className={`block text-xs font-medium mb-1 ${sub}`}>Inicio *</label>
+                                                        <input type="date" value={horasForm.fecha||hoy} onChange={e=>setHorasForm({...horasForm,fecha:e.target.value})} className={inp}/>
+                                                    </div>
+                                                    <div>
+                                                        <label className={`block text-xs font-medium mb-1 ${sub}`}>Fin (opcional)</label>
+                                                        <input type="date" value={horasForm.fechaFin||''} onChange={e=>setHorasForm({...horasForm,fechaFin:e.target.value})} className={inp}/>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    {/* Mini calendario para días sueltos */}
+                                                    {(()=>{
+                                                        const mes = horasForm._mes || hoy.slice(0,7);
+                                                        const [ySel,mSel] = mes.split('-').map(Number);
+                                                        const p=new Date(ySel,mSel-1,1), dow=(p.getDay()+6)%7, tot=new Date(ySel,mSel,0).getDate();
+                                                        const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+                                                        const irMes=(d)=>{const f=new Date(ySel,mSel-1+d,1);setHorasForm(fr=>({...fr,_mes:`${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}`}));};
+                                                        return (
+                                                            <div className={`rounded-xl border p-3 ${darkMode?'bg-slate-700 border-slate-600':'bg-slate-50 border-slate-200'}`}>
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <button type="button" onClick={()=>irMes(-1)} className={`px-2 py-0.5 rounded text-xs ${darkMode?'hover:bg-slate-600':'hover:bg-slate-200'}`}>←</button>
+                                                                    <span className={`text-xs font-semibold ${txt}`}>{meses[mSel-1]} {ySel}</span>
+                                                                    <button type="button" onClick={()=>irMes(1)} className={`px-2 py-0.5 rounded text-xs ${darkMode?'hover:bg-slate-600':'hover:bg-slate-200'}`}>→</button>
+                                                                </div>
+                                                                <div className="grid grid-cols-7 gap-0.5 mb-1">
+                                                                    {['L','M','X','J','V','S','D'].map(d=><div key={d} className={`text-center text-xs font-semibold ${sub}`}>{d}</div>)}
+                                                                </div>
+                                                                <div className="grid grid-cols-7 gap-0.5">
+                                                                    {Array.from({length:dow}).map((_,i)=><div key={"e"+i}/>)}
+                                                                    {Array.from({length:tot},(_,i)=>{
+                                                                        const dia=i+1, fs=`${ySel}-${String(mSel).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+                                                                        const sel=(horasForm.diasSueltos||[]).includes(fs);
+                                                                        return (
+                                                                            <button key={dia} type="button" onClick={()=>{
+                                                                                const ya=horasForm.diasSueltos||[];
+                                                                                setHorasForm(f=>({...f,diasSueltos:sel?ya.filter(x=>x!==fs):[...ya,fs].sort()}));
+                                                                            }} className={`rounded text-xs py-1 font-medium transition-colors ${sel?'bg-blue-600 text-white':darkMode?'hover:bg-slate-600 text-slate-300':'hover:bg-slate-200 text-slate-700'}`}>{dia}</button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                {(horasForm.diasSueltos||[]).length>0 && (
+                                                                    <div className="mt-3 space-y-2">
+                                                                        <p className={`text-xs font-semibold ${sub}`}>Tipo por día:</p>
+                                                                        {(horasForm.diasSueltos||[]).map(d=>{
+                                                                            const tpd = (horasForm.tiposPorDia||{})[d] || 'normal';
+                                                                            return (
+                                                                                <div key={d} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${darkMode?'bg-slate-600':'bg-white border border-slate-200'}`}>
+                                                                                    <span className={`text-xs font-medium flex-1 ${txt}`}>{fmtF(d)}</span>
+                                                                                    <div className={`flex rounded-lg overflow-hidden border text-xs ${darkMode?'border-slate-500':'border-slate-200'}`}>
+                                                                                        {[['normal','🕐'],['extra','⚡'],['feriado','🎉']].map(([tipo,ico])=>(
+                                                                                            <button key={tipo} type="button" onClick={()=>setHorasForm(f=>({...f,tiposPorDia:{...(f.tiposPorDia||{}),[d]:tipo}}))}
+                                                                                                className={`px-2 py-1 font-medium ${tpd===tipo?(darkMode?'bg-blue-700 text-white':'bg-blue-600 text-white'):(darkMode?'bg-slate-700 text-slate-400':'bg-white text-slate-500')}`}>{ico} {tipo}</button>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                    <button type="button" onClick={()=>setHorasForm(f=>({...f,diasSueltos:(f.diasSueltos||[]).filter(x=>x!==d)}))} className="text-red-400 hover:text-red-500 text-xs">✕</button>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Horas */}
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div>
+                                                <label className={`block text-xs font-medium mb-1 ${sub}`}>🕐 Normales</label>
+                                                <input type="number" min="0" max="24" step="0.5" value={horasForm.normal} onChange={e=>setHorasForm({...horasForm,normal:e.target.value})} className={inp} placeholder="0"/>
+                                            </div>
+                                            <div>
+                                                <label className={`block text-xs font-medium mb-1 ${sub}`}>⚡ Extra</label>
+                                                <input type="number" min="0" max="24" step="0.5" value={horasForm.extra} onChange={e=>setHorasForm({...horasForm,extra:e.target.value})} className={inp} placeholder="0"/>
+                                            </div>
+                                            <div>
+                                                <label className={`block text-xs font-medium mb-1 ${sub}`}>🎉 Feriado</label>
+                                                <input type="number" min="0" max="24" step="0.5" value={horasForm.feriado} onChange={e=>setHorasForm({...horasForm,feriado:e.target.value})} className={inp} placeholder="0"/>
+                                            </div>
+                                        </div>
+                                        {(parseFloat(horasForm.normal)||0)+(parseFloat(horasForm.extra)||0)+(parseFloat(horasForm.feriado)||0) > 0 && (
+                                            <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs ${darkMode?'bg-slate-700':'bg-slate-100'}`}>
+                                                <span className={`font-bold ${txt}`}>Total: {((parseFloat(horasForm.normal)||0)+(parseFloat(horasForm.extra)||0)+(parseFloat(horasForm.feriado)||0)).toFixed(1)}h</span>
+                                                {parseFloat(horasForm.normal)>0 && <span className={darkMode?'text-blue-400':'text-blue-600'}>{parseFloat(horasForm.normal)}h norm.</span>}
+                                                {parseFloat(horasForm.extra)>0 && <span className={darkMode?'text-amber-400':'text-amber-600'}>{parseFloat(horasForm.extra)}h extra</span>}
+                                                {parseFloat(horasForm.feriado)>0 && <span className={darkMode?'text-green-400':'text-green-600'}>{parseFloat(horasForm.feriado)}h fer.</span>}
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className={`block text-xs font-medium mb-1 ${sub}`}>Notas</label>
+                                            <textarea rows={2} value={horasForm.notas} onChange={e=>setHorasForm({...horasForm,notas:e.target.value})} className={inp+' resize-none'} placeholder="Observaciones..."/>
+                                        </div>
+                                        <button onClick={()=>{
+                                            if(!horasForm.empleadoId) return alert('Seleccioná un empleado');
+                                            const n=parseFloat(horasForm.normal)||0, ex=parseFloat(horasForm.extra)||0, fer=parseFloat(horasForm.feriado)||0;
+                                            if(n+ex+fer===0) return alert('Ingresá al menos un tipo de horas');
+                                            const modo = horasForm.modoFecha||'rango';
+                                            let fechas = [];
+                                            if(modo==='sueltos') {
+                                                fechas = horasForm.diasSueltos||[];
+                                                if(!fechas.length) return alert('Seleccioná al menos un día');
+                                            } else {
+                                                const ini = horasForm.fecha||hoy, fin = horasForm.fechaFin||ini;
+                                                const cur = new Date(ini+'T12:00:00'), finD = new Date(fin+'T12:00:00');
+                                                while(cur<=finD){ fechas.push(toISO(cur)); cur.setDate(cur.getDate()+1); }
+                                            }
+                                            fechas.forEach(fecha => {
+                                                if(modo==='sueltos') {
+                                                    const tipo = (horasForm.tiposPorDia||{})[fecha] || 'normal';
+                                                    const hTotal = n+ex+fer;
+                                                    saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo,horas:hTotal,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_${tipo}`});
+                                                } else {
+                                                    if(n>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'normal',horas:n,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_normal`});
+                                                    if(ex>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'extra',horas:ex,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_extra`});
+                                                    if(fer>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'feriado',horas:fer,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_feriado`});
+                                                }
+                                            });
+                                            setHorasForm(f=>({...f,normal:'',extra:'',feriado:'',notas:'',diasSueltos:[],fechaFin:'',tiposPorDia:{}}));
+                                        }} className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">💾 Guardar horas</button>
+                                    </div>
+
+                                    {/* Resumen por empleado */}
+                                    <div>
+                                        <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${sub}`}>Resumen por empleado</p>
+
+                                        {/* Filtros */}
+                                        <div className={`rounded-xl border ${card} p-3 mb-3 space-y-2`}>
+                                            <div className="flex items-center gap-2">
+                                                <svg className={`w-4 h-4 shrink-0 ${sub}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                                <input type="text" value={horasBusq} onChange={e=>setHorasBusq(e.target.value)} placeholder="Buscar empleado..."
+                                                    className={`flex-1 px-2 py-1.5 rounded-lg border text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white placeholder-slate-500':'bg-white border-slate-200 placeholder-slate-400'}`}/>
+                                                {horasBusq && <button onClick={()=>setHorasBusq('')} className={`text-xs ${sub} hover:text-red-400`}>✕</button>}
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className={`text-xs font-medium ${sub} shrink-0`}>Rango:</span>
+                                                <input type="date" value={horasFiltro.desde} onChange={e=>setHorasFiltro(f=>({...f,desde:e.target.value}))}
+                                                    className={`flex-1 min-w-0 px-2 py-1.5 rounded-lg border text-xs ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                                                <span className={`text-xs ${sub}`}>→</span>
+                                                <input type="date" value={horasFiltro.hasta} onChange={e=>setHorasFiltro(f=>({...f,hasta:e.target.value}))}
+                                                    className={`flex-1 min-w-0 px-2 py-1.5 rounded-lg border text-xs ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                                                {(horasFiltro.desde||horasFiltro.hasta) && <button onClick={()=>setHorasFiltro({desde:'',hasta:''})} className={`text-xs ${sub} hover:text-red-400 shrink-0`}>✕</button>}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            {empleados.filter(emp => {
+                                                if(!horasBusq.trim()) return true;
+                                                const q = horasBusq.toLowerCase();
+                                                return `${emp.nombre} ${emp.apellido}`.toLowerCase().includes(q);
+                                            }).map(emp => {
+                                                const hEmpFiltradas = horasGuardadas.filter(h => {
+                                                    if(String(h.empleadoId) !== String(emp.id)) return false;
+                                                    if(horasFiltro.desde && h.fecha < horasFiltro.desde) return false;
+                                                    if(horasFiltro.hasta && h.fecha > horasFiltro.hasta) return false;
+                                                    return true;
+                                                });
+                                                if(!hEmpFiltradas.length) return null;
+                                                const totNorm  = hEmpFiltradas.filter(h=>h.tipo==='normal').reduce((s,h)=>s+(parseFloat(h.horas)||0),0);
+                                                const totExtra = hEmpFiltradas.filter(h=>h.tipo==='extra').reduce((s,h)=>s+(parseFloat(h.horas)||0),0);
+                                                const totFer   = hEmpFiltradas.filter(h=>h.tipo==='feriado').reduce((s,h)=>s+(parseFloat(h.horas)||0),0);
+                                                const isOpen = !!horasOpen[emp.id];
+                                                return (
+                                                    <div key={emp.id} className={`rounded-xl border ${card} overflow-hidden`}>
+                                                        <button onClick={()=>setHorasOpen(prev=>({...prev,[emp.id]:!prev[emp.id]}))} className={`w-full flex items-center gap-3 px-4 py-3 ${darkMode?'hover:bg-slate-700/50':'hover:bg-slate-50'}`}>
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${darkMode?'bg-slate-700 text-teal-400':'bg-teal-50 text-teal-700'}`}>
+                                                                {emp.nombre?.[0]}{emp.apellido?.[0]}
+                                                            </div>
+                                                            <div className="flex-1 text-left">
+                                                                <p className={`text-sm font-semibold ${txt}`}>{emp.nombre} {emp.apellido}</p>
+                                                                <div className="flex gap-2 mt-0.5 flex-wrap">
+                                                                    {totNorm>0 && <span className={`text-xs ${darkMode?'text-blue-400':'text-blue-600'}`}>🕐 {totNorm}h norm.</span>}
+                                                                    {totExtra>0 && <span className={`text-xs ${darkMode?'text-amber-400':'text-amber-600'}`}>⚡ {totExtra}h extra</span>}
+                                                                    {totFer>0 && <span className={`text-xs ${darkMode?'text-green-400':'text-green-600'}`}>🎉 {totFer}h fer.</span>}
+                                                                </div>
+                                                            </div>
+                                                            <span className={`text-sm font-bold ${darkMode?'text-teal-400':'text-teal-600'}`}>{(totNorm+totExtra+totFer).toFixed(1)}h</span>
+                                                            <svg className={`w-4 h-4 ${sub} transition-transform shrink-0 ${isOpen?'rotate-180':''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                                                        </button>
+                                                        {isOpen && (
+                                                            <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}>
+                                                                {[...new Set(hEmpFiltradas.map(h=>h.fecha))].sort().reverse().map(fecha=>{
+                                                                    const del_dia = hEmpFiltradas.filter(h=>h.fecha===fecha);
+                                                                    return (
+                                                                        <div key={fecha} className={`flex items-center gap-3 px-4 py-2.5 border-b last:border-0 ${darkMode?'border-slate-700/50':'border-slate-50'}`}>
+                                                                            <span className={`text-xs w-24 shrink-0 ${sub}`}>{fmtF(fecha)}</span>
+                                                                            <div className="flex gap-2 flex-1 flex-wrap">
+                                                                                {del_dia.map(h=>{
+                                                                                    const ico=h.tipo==='normal'?'🕐':h.tipo==='extra'?'⚡':'🎉';
+                                                                                    const col=h.tipo==='normal'?(darkMode?'bg-blue-900/40 text-blue-300':'bg-blue-50 text-blue-700'):h.tipo==='extra'?(darkMode?'bg-amber-900/40 text-amber-300':'bg-amber-50 text-amber-700'):(darkMode?'bg-green-900/40 text-green-300':'bg-green-50 text-green-700');
+                                                                                    const editKey=`edit_${h.id}`;
+                                                                                    const isEditing=!!horasOpen[editKey];
+                                                                                    return isEditing ? (
+                                                                                        <div key={h.id} className="flex items-center gap-1">
+                                                                                            <span className="text-xs">{ico}</span>
+                                                                                            <input type="number" min="0" max="24" step="0.5" defaultValue={h.horas}
+                                                                                                className={`w-14 px-1 py-0.5 text-xs border rounded ${darkMode?'bg-slate-600 border-slate-500 text-white':'border-slate-300'}`}
+                                                                                                onBlur={e=>{const v=parseFloat(e.target.value)||0;const ns=horasGuardadas.map(x=>x.id===h.id?{...x,horas:v}:x);setHorasGuardadas(ns);dbSetArray('calendar_horas',ns);setHorasOpen(p=>({...p,[editKey]:false}));}}/>
+                                                                                            <button onClick={()=>setHorasOpen(p=>({...p,[editKey]:false}))} className="text-slate-400 text-xs">✕</button>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <button key={h.id} onClick={()=>setHorasOpen(p=>({...p,[editKey]:true}))}
+                                                                                            className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 hover:opacity-80 ${col}`}>
+                                                                                            {ico} {h.horas}h
+                                                                                            {h.auto && <span className="text-[9px] opacity-60 font-bold"> AUTO</span>}
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                            {del_dia[0]?.notas && <span className={`text-xs italic ${sub} truncate max-w-[80px]`}>{del_dia[0].notas}</span>}
+                                                                            <button onClick={()=>{
+                                                                                const nuevas = horasGuardadas.filter(h=>!(String(h.empleadoId)===String(emp.id)&&h.fecha===fecha));
+                                                                                setHorasGuardadas(nuevas);
+                                                                                dbSetArray('calendar_horas', nuevas);
+                                                                            }} className="text-red-400 hover:text-red-500 text-xs shrink-0 ml-1">✕</button>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            {empleados.filter(emp=>{
+                                                if(horasBusq.trim() && !`${emp.nombre} ${emp.apellido}`.toLowerCase().includes(horasBusq.toLowerCase())) return false;
+                                                return horasGuardadas.some(h=>String(h.empleadoId)===String(emp.id)&&(!horasFiltro.desde||h.fecha>=horasFiltro.desde)&&(!horasFiltro.hasta||h.fecha<=horasFiltro.hasta));
+                                            }).length === 0 && (
+                                                <div className={`p-8 text-center rounded-xl border-2 border-dashed ${darkMode?'border-slate-700 text-slate-500':'border-slate-200 text-slate-400'}`}>
+                                                    <p className="text-3xl mb-2">⏱️</p>
+                                                    <p className="text-sm">{horasGuardadas.length===0?'No hay horas cargadas aún':'Sin resultados para el filtro'}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showModal && (
                     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
                         <div className={`rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-md p-5 max-h-[90vh] overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className="flex items-center justify-between mb-4">
@@ -4907,6 +5216,15 @@ ${invoice.items.map(item => `
                                         <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${form.privado?'left-4':'left-0.5'}`}/>
                                     </div>
                                 </div>
+                                {!form.todoDia && form.horaInicio && form.horaFin && (
+                                    <label className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 cursor-pointer transition-all ${form.cargarHoras?(darkMode?'border-teal-500 bg-teal-900/20':'border-teal-400 bg-teal-50'):(darkMode?'border-slate-600 bg-slate-700/30':'border-slate-200 bg-slate-50')}`}>
+                                        <input type="checkbox" checked={form.cargarHoras||false} onChange={e=>setForm({...form,cargarHoras:e.target.checked})} className="w-4 h-4 accent-teal-600"/>
+                                        <div className="flex-1">
+                                            <p className={`text-xs font-semibold ${form.cargarHoras?(darkMode?'text-teal-300':'text-teal-700'):txt}`}>⏱️ Cargar horas automáticamente</p>
+                                            <p className={`text-xs ${sub}`}>{form.horaInicio&&form.horaFin?(()=>{const [h1,m1]=form.horaInicio.split(':').map(Number),[h2,m2]=form.horaFin.split(':').map(Number),m=(h2*60+m2)-(h1*60+m1);return m>0?(Math.round(m/60*2)/2)+'h como horas normales':'—';})():'Ingresá horario primero'}</p>
+                                        </div>
+                                    </label>
+                                )}
                             </div>
                             <div className="flex gap-2 mt-4">
                                 <button onClick={()=>setShowModal(false)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-white':'bg-slate-100 text-slate-700'}`}>Cancelar</button>
@@ -5360,7 +5678,7 @@ ${invoice.items.map(item => `
         };
 
 
-                const CredencialesModule = ({ darkMode = false, onBack, currentUser }) => {
+        const CredencialesModule = ({ darkMode = false, onBack, currentUser }) => {
             const [creds, setCreds] = React.useState([]);
             const [credsLoaded, setCredsLoaded] = React.useState(false);
             const [showModal, setShowModal] = React.useState(false);
