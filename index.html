@@ -150,10 +150,18 @@
                     _sb.from('app_config').select('data').eq('id','prestamos').maybeSingle(),
                 ]);
 
-                // Helper: setear localStorage SIEMPRE (sobreescribe)
+                // Helper: setear localStorage con manejo de quota
                 const set = (key, val) => {
                     if (val !== null && val !== undefined) {
-                        localStorage.setItem(key, JSON.stringify(val));
+                        try {
+                            localStorage.setItem(key, JSON.stringify(val));
+                        } catch(e) {
+                            if (e.name === 'QuotaExceededError') {
+                                console.warn(`⚠️ localStorage lleno, omitiendo ${key} (${Math.round(JSON.stringify(val).length/1024)}KB)`);
+                            } else {
+                                throw e;
+                            }
+                        }
                     }
                 };
 
@@ -209,7 +217,7 @@
 
                 // gastosPlaneados
                 const gastosR = await _sb.from('cash_planning').select('data').eq('id','gastosPlaneados').maybeSingle();
-                if (gastosR.data?.data) localStorage.setItem('cajaGastosPlaneados', JSON.stringify(gastosR.data.data));
+                if (gastosR.data?.data) { try { localStorage.setItem('cajaGastosPlaneados', JSON.stringify(gastosR.data.data)); } catch(e) { console.warn('⚠️ localStorage lleno, omitiendo cajaGastosPlaneados'); } }
                 // miCerebro — datos por usuario (se cargan en MiCerebroModule al montar)
                 // No pre-cargar aquí ya que la clave incluye el userId que no está disponible aún
 
@@ -218,7 +226,7 @@
 
                 // markedCategories
                 const mc = await _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle();
-                if (mc.data?.data) localStorage.setItem('markedCategories', JSON.stringify(mc.data.data));
+                if (mc.data?.data) { try { localStorage.setItem('markedCategories', JSON.stringify(mc.data.data)); } catch(e) { console.warn('⚠️ localStorage lleno, omitiendo markedCategories'); } }
 
                 console.log('✅ Datos cargados desde Supabase | usuarios:', (sysU.data||[]).length, '| empleados:', (emp.data||[]).length);
             } catch(e) {
@@ -4911,19 +4919,25 @@ ${invoice.items.map(item => `
                                                                 </div>
                                                                 {(horasForm.diasSueltos||[]).length>0 && (
                                                                     <div className="mt-3 space-y-2">
-                                                                        <p className={`text-xs font-semibold ${sub}`}>Tipo por día:</p>
+                                                                        <p className={`text-xs font-semibold ${sub}`}>Horas por día:</p>
                                                                         {(horasForm.diasSueltos||[]).map(d=>{
-                                                                            const tpd = (horasForm.tiposPorDia||{})[d] || 'normal';
+                                                                            const hpd = (horasForm.horasPorDia||{})[d] || {};
+                                                                            const setHpd = (campo, val) => setHorasForm(f=>({...f, horasPorDia:{...(f.horasPorDia||{}),[d]:{...((f.horasPorDia||{})[d]||{}),[campo]:val}}}));
                                                                             return (
-                                                                                <div key={d} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${darkMode?'bg-slate-600':'bg-white border border-slate-200'}`}>
-                                                                                    <span className={`text-xs font-medium flex-1 ${txt}`}>{fmtF(d)}</span>
-                                                                                    <div className={`flex rounded-lg overflow-hidden border text-xs ${darkMode?'border-slate-500':'border-slate-200'}`}>
-                                                                                        {[['normal','🕐'],['extra','⚡'],['feriado','🎉']].map(([tipo,ico])=>(
-                                                                                            <button key={tipo} type="button" onClick={()=>setHorasForm(f=>({...f,tiposPorDia:{...(f.tiposPorDia||{}),[d]:tipo}}))}
-                                                                                                className={`px-2 py-1 font-medium ${tpd===tipo?(darkMode?'bg-blue-700 text-white':'bg-blue-600 text-white'):(darkMode?'bg-slate-700 text-slate-400':'bg-white text-slate-500')}`}>{ico} {tipo}</button>
+                                                                                <div key={d} className={`rounded-xl border p-3 ${darkMode?'bg-slate-700 border-slate-600':'bg-white border-slate-200'}`}>
+                                                                                    <div className="flex items-center justify-between mb-2">
+                                                                                        <span className={`text-xs font-bold ${txt}`}>{fmtF(d)}</span>
+                                                                                        <button type="button" onClick={()=>setHorasForm(f=>({...f,diasSueltos:(f.diasSueltos||[]).filter(x=>x!==d)}))} className="text-red-400 hover:text-red-500 text-xs">✕</button>
+                                                                                    </div>
+                                                                                    <div className="grid grid-cols-3 gap-2">
+                                                                                        {[['normal','🕐 Normal','normal'],['extra','⚡ Extra','extra'],['feriado','🎉 Feriado','feriado']].map(([campo,label])=>(
+                                                                                            <div key={campo}>
+                                                                                                <label className={`block text-xs mb-0.5 ${sub}`}>{label}</label>
+                                                                                                <input type="number" min="0" max="24" step="0.5" value={hpd[campo]||''} onChange={e=>setHpd(campo,e.target.value)}
+                                                                                                    className={`w-full px-2 py-1 text-xs border rounded-lg ${darkMode?'bg-slate-600 border-slate-500 text-white':'bg-white border-slate-300'}`} placeholder="0"/>
+                                                                                            </div>
                                                                                         ))}
                                                                                     </div>
-                                                                                    <button type="button" onClick={()=>setHorasForm(f=>({...f,diasSueltos:(f.diasSueltos||[]).filter(x=>x!==d)}))} className="text-red-400 hover:text-red-500 text-xs">✕</button>
                                                                                 </div>
                                                                             );
                                                                         })}
@@ -4937,7 +4951,7 @@ ${invoice.items.map(item => `
                                         </div>
 
                                         {/* Horas */}
-                                        <div className="grid grid-cols-3 gap-3">
+                                        {(!horasForm.modoFecha||horasForm.modoFecha==='rango') && <div className="grid grid-cols-3 gap-3">
                                             <div>
                                                 <label className={`block text-xs font-medium mb-1 ${sub}`}>🕐 Normales</label>
                                                 <input type="number" min="0" max="24" step="0.5" value={horasForm.normal} onChange={e=>setHorasForm({...horasForm,normal:e.target.value})} className={inp} placeholder="0"/>
@@ -4950,8 +4964,8 @@ ${invoice.items.map(item => `
                                                 <label className={`block text-xs font-medium mb-1 ${sub}`}>🎉 Feriado</label>
                                                 <input type="number" min="0" max="24" step="0.5" value={horasForm.feriado} onChange={e=>setHorasForm({...horasForm,feriado:e.target.value})} className={inp} placeholder="0"/>
                                             </div>
-                                        </div>
-                                        {(parseFloat(horasForm.normal)||0)+(parseFloat(horasForm.extra)||0)+(parseFloat(horasForm.feriado)||0) > 0 && (
+                                        </div>}
+                                        {(!horasForm.modoFecha||horasForm.modoFecha==='rango') && (parseFloat(horasForm.normal)||0)+(parseFloat(horasForm.extra)||0)+(parseFloat(horasForm.feriado)||0) > 0 && (
                                             <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs ${darkMode?'bg-slate-700':'bg-slate-100'}`}>
                                                 <span className={`font-bold ${txt}`}>Total: {((parseFloat(horasForm.normal)||0)+(parseFloat(horasForm.extra)||0)+(parseFloat(horasForm.feriado)||0)).toFixed(1)}h</span>
                                                 {parseFloat(horasForm.normal)>0 && <span className={darkMode?'text-blue-400':'text-blue-600'}>{parseFloat(horasForm.normal)}h norm.</span>}
@@ -4979,16 +4993,18 @@ ${invoice.items.map(item => `
                                             }
                                             fechas.forEach(fecha => {
                                                 if(modo==='sueltos') {
-                                                    const tipo = (horasForm.tiposPorDia||{})[fecha] || 'normal';
-                                                    const hTotal = n+ex+fer;
-                                                    saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo,horas:hTotal,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_${tipo}`});
+                                                    const hpd = (horasForm.horasPorDia||{})[fecha] || {};
+                                                    const hn=parseFloat(hpd.normal)||0, he=parseFloat(hpd.extra)||0, hf=parseFloat(hpd.feriado)||0;
+                                                    if(hn>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'normal',horas:hn,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_normal`});
+                                                    if(he>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'extra',horas:he,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_extra`});
+                                                    if(hf>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'feriado',horas:hf,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_feriado`});
                                                 } else {
                                                     if(n>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'normal',horas:n,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_normal`});
                                                     if(ex>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'extra',horas:ex,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_extra`});
                                                     if(fer>0) saveHoras({empleadoId:horasForm.empleadoId,fecha,tipo:'feriado',horas:fer,notas:horasForm.notas,id:`${horasForm.empleadoId}_${fecha}_feriado`});
                                                 }
                                             });
-                                            setHorasForm(f=>({...f,normal:'',extra:'',feriado:'',notas:'',diasSueltos:[],fechaFin:'',tiposPorDia:{}}));
+                                            setHorasForm(f=>({...f,normal:'',extra:'',feriado:'',notas:'',diasSueltos:[],fechaFin:'',tiposPorDia:{},horasPorDia:{}}));
                                         }} className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">💾 Guardar horas</button>
                                     </div>
 
