@@ -1636,7 +1636,7 @@ ${invoice.items.map(item => `
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'stock', 'cocina', 'micerebro'];
+            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
@@ -3080,6 +3080,15 @@ ${invoice.items.map(item => `
                                     desc: 'Eventos, turnos y fechas importantes',
                                     detail: 'Agenda con vistas diaria, semanal y mensual por empleado y ubicación.',
                                 },
+                                codigos: {
+                                    permission: 'micerebro',
+                                    navigate: 'codigos',
+                                    color: 'teal',
+                                    icon: <svg className={`w-8 h-8 ${darkMode ? 'text-teal-400' : 'text-teal-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>,
+                                    title: 'Generador de Códigos',
+                                    desc: 'Códigos de barras y QR para productos',
+                                    detail: 'Generá códigos EAN-13 y QR con link, exportables a PDF para imprimir y usar en el sistema de cobro.',
+                                },
                                 misueldo: {
                                     permission: 'micerebro',
                                     navigate: 'misueldo',
@@ -3130,9 +3139,11 @@ ${invoice.items.map(item => `
                                 amber:   { border: 'hover:border-amber-500',   bg: darkMode ? 'bg-amber-900'   : 'bg-amber-100',   hover: 'group-hover:bg-amber-600' },
                             };
 
+                            const EN_CONSTRUCCION = ['dashboard', 'stock', 'cocina'];
                             const visibleModules = moduleOrder.filter(key => {
                                 const mod = allModules[key];
                                 if (!mod || !hasPermission(mod.permission, 'read')) return false;
+                                if (EN_CONSTRUCCION.includes(key)) return false;
                                 if (!moduleSearch) return true;
                                 const q = moduleSearch.toLowerCase();
                                 return (
@@ -3142,8 +3153,21 @@ ${invoice.items.map(item => `
                                     key.toLowerCase().includes(q)
                                 );
                             });
+                            const construccionModules = moduleOrder.filter(key => {
+                                const mod = allModules[key];
+                                if (!mod || !hasPermission(mod.permission, 'read')) return false;
+                                if (!EN_CONSTRUCCION.includes(key)) return false;
+                                if (!moduleSearch) return true;
+                                const q = moduleSearch.toLowerCase();
+                                return (
+                                    mod.title?.toLowerCase().includes(q) ||
+                                    mod.desc?.toLowerCase().includes(q) ||
+                                    key.toLowerCase().includes(q)
+                                );
+                            });
 
                             return (
+                            <React.Fragment>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6" style={{gridAutoRows: '1fr'}}>
                                 {visibleModules.map((key, index) => {
                                     const mod = allModules[key];
@@ -3228,6 +3252,33 @@ ${invoice.items.map(item => `
                                     );
                                 })}
                             </div>
+                            {construccionModules.length > 0 && (
+                                <div className="mt-8">
+                                    <div className={`flex items-center gap-3 mb-5`}>
+                                        <div className={`flex-1 h-px ${darkMode?'bg-slate-700':'bg-slate-200'}`}/>
+                                        <span className={`text-xs font-bold uppercase tracking-widest px-3 ${darkMode?'text-slate-500':'text-slate-400'}`}>🚧 En construcción</span>
+                                        <div className={`flex-1 h-px ${darkMode?'bg-slate-700':'bg-slate-200'}`}/>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                                        {construccionModules.map(key => {
+                                            const mod = allModules[key];
+                                            return (
+                                                <div key={key} className={`rounded-2xl border p-5 flex items-center gap-4 opacity-60 cursor-not-allowed ${darkMode?'bg-slate-800/50 border-slate-700':'bg-slate-50 border-slate-200'}`}>
+                                                    <div className={`p-2.5 rounded-xl ${darkMode?'bg-slate-700':'bg-slate-100'}`}>
+                                                        {mod.icon}
+                                                    </div>
+                                                    <div>
+                                                        <p className={`font-semibold text-sm ${darkMode?'text-slate-300':'text-slate-600'}`}>{mod.title}</p>
+                                                        <p className={`text-xs mt-0.5 ${darkMode?'text-slate-500':'text-slate-400'}`}>{mod.desc}</p>
+                                                        <span className={`inline-block mt-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${darkMode?'bg-amber-900/40 text-amber-400':'bg-amber-50 text-amber-600 border border-amber-200'}`}>🚧 Próximamente</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                            </React.Fragment>
                         );
                         })()}
                         
@@ -3394,6 +3445,12 @@ ${invoice.items.map(item => `
                     {activeModule === 'misueldo' && (
                         <div className="flex-1 overflow-y-auto">
                             <MiSueldoModule darkMode={darkMode} currentUser={currentUser} onBack={() => setActiveModule('home')} />
+                        </div>
+                    )}
+
+                    {activeModule === 'codigos' && (
+                        <div className="flex-1 overflow-y-auto">
+                            <CodigosModule darkMode={darkMode} currentUser={currentUser} onBack={() => setActiveModule('home')} />
                         </div>
                     )}
 
@@ -3750,517 +3807,20 @@ ${invoice.items.map(item => `
         // COMPONENTE: EXTERNAL APPS MODULE (APLICACIONES EXTERNAS)
         // COMPONENTE: DASHBOARD — Datos y Estadísticas
         // ============================================
-        const DashboardModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
-            const now = new Date();
-            const currentYear = now.getFullYear();
-            const currentMonthIdx = now.getMonth();
-            const MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
-
-            // ── Filtros ──────────────────────────────────────────────────
-            const [filtYear, setFiltYear] = React.useState(currentYear);
-            const [filtMonth, setFiltMonth] = React.useState(-1); // -1 = todos los meses
-            const [filtDay, setFiltDay] = React.useState(-1);    // -1 = todos los días
-
-            // ── Leer datos de localStorage ──────────────────────────────
-            const allTx = React.useMemo(() => JSON.parse(localStorage.getItem('cashTransactionsMultiYear') || '{}'), []);
-            const employees = React.useMemo(() => JSON.parse(localStorage.getItem('employees') || '[]'), []);
-            const payrollData = React.useMemo(() => JSON.parse(localStorage.getItem('payrollMonthlyData') || '{}'), []);
-            const invoices = React.useMemo(() => JSON.parse(localStorage.getItem('invoices') || '[]'), []);
-            const cajaRubros = React.useMemo(() => JSON.parse(localStorage.getItem('cajaRubrosCosto') || '["INGRESOS","SUELDOS","DEV PRESTAMO","MATERIA PRIMA","GASTOS VARIABLES","GASTOS FIJOS","IMPUESTOS","PUBLICIDAD","TRANSPORTE"]'), []);
-
-            // Años disponibles
-            const yearsAvailable = React.useMemo(() => {
-                const yrs = new Set(Object.keys(allTx).map(Number));
-                yrs.add(currentYear);
-                return [...yrs].sort((a,b) => b-a);
-            }, [allTx]);
-
-            // ── Filtrar transacciones según selección ──────────────────
-            const txFiltered = React.useMemo(() => {
-                const txYear = allTx[filtYear] || [];
-                return txYear.filter(t => {
-                    if (filtMonth !== -1 && t.mes !== MESES[filtMonth]) return false;
-                    if (filtDay !== -1 && Number(t.dia) !== filtDay) return false;
-                    return true;
-                });
-            }, [allTx, filtYear, filtMonth, filtDay]);
-
-            const txYear = allTx[filtYear] || [];
-
-            // ── Métricas del período filtrado ───────────────────────────
-            const ingresosPeriodo = txFiltered.filter(t => t.monto > 0).reduce((s,t) => s+t.monto, 0);
-            const egresosPeriodo = txFiltered.filter(t => t.monto < 0).reduce((s,t) => s+t.monto, 0);
-            const saldoPeriodo = ingresosPeriodo + egresosPeriodo;
-
-            // Métricas del año completo (independiente de filtros mes/día)
-            const ingresosAnio = txYear.filter(t => t.monto > 0).reduce((s,t) => s+t.monto, 0);
-            const egresosAnio = txYear.filter(t => t.monto < 0).reduce((s,t) => s+t.monto, 0);
-            const saldoAnio = ingresosAnio + egresosAnio;
-
-            // Período label
-            const periodoLabel = React.useMemo(() => {
-                if (filtDay !== -1 && filtMonth !== -1) return `${filtDay} ${MESES[filtMonth].substring(0,3)} ${filtYear}`;
-                if (filtMonth !== -1) return `${MESES[filtMonth]} ${filtYear}`;
-                return `Año ${filtYear}`;
-            }, [filtYear, filtMonth, filtDay]);
-
-            // Spark — últimos 6 meses relativos al filtro de año
-            const ultimos6 = React.useMemo(() => Array.from({length:6}, (_,i) => {
-                const baseMonth = filtMonth !== -1 ? filtMonth : currentMonthIdx;
-                const idx = (baseMonth - 5 + i + 12) % 12;
-                const yr = (baseMonth - 5 + i < 0) ? filtYear - 1 : filtYear;
-                const txs = allTx[yr] || [];
-                return { mes: MESES[idx].substring(0,3), isCurrent: yr === filtYear && idx === baseMonth, ing: txs.filter(t=>t.mes===MESES[idx]&&t.monto>0).reduce((s,t)=>s+t.monto,0), egr: Math.abs(txs.filter(t=>t.mes===MESES[idx]&&t.monto<0).reduce((s,t)=>s+t.monto,0)) };
-            }), [allTx, filtYear, filtMonth]);
-            const maxBar = Math.max(...ultimos6.map(m => Math.max(m.ing, m.egr)), 1);
-
-            // Costos por rubro del período filtrado
-            const rubrosCosto = cajaRubros.filter(r => r !== 'INGRESOS').map(r => ({
-                name: r,
-                val: Math.abs(txFiltered.filter(t => t.tipoCosto === r && t.monto < 0).reduce((s,t) => s+t.monto, 0))
-            })).filter(r => r.val > 0).sort((a,b) => b.val - a.val);
-            const maxRubro = rubrosCosto[0]?.val || 1;
-
-            // ── Sueldos ─────────────────────────────────────────────────
-            const empleadosActivos = employees.filter(e => e.activo);
-            const mesIdx = filtMonth !== -1 ? filtMonth : currentMonthIdx;
-            const mesKey = `_${filtYear}_${mesIdx}`;
-            const sueldosMesPagado = empleadosActivos.reduce((s, e) => {
-                const k = `${e.id}${mesKey}`;
-                return s + (payrollData[k] || []).reduce((ss,p) => ss+p.monto, 0);
-            }, 0);
-            const sueldosMesTotal = empleadosActivos.reduce((s,e) => s + (parseFloat(e.salario)||0), 0);
-            const pctNomina = sueldosMesTotal > 0 ? Math.min(100, (sueldosMesPagado/sueldosMesTotal)*100) : 0;
-
-            // ── Proveedores ──────────────────────────────────────────────
-            const invPendientes = invoices.filter(i => i.status === 'pending');
-            const invPagadas = invoices.filter(i => i.status === 'paid');
-            const totalPendiente = invPendientes.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
-            const invVencidas = invPendientes.filter(i => {
-                if (!i.dueDate) return false;
-                return new Date(i.dueDate) < now;
-            });
-
-            const fmt = v => v.toLocaleString('es-CZ', {minimumFractionDigits:0});
-            const clr = v => v >= 0 ? 'text-green-600' : 'text-red-500';
-            const card = `rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`;
-            const label = `text-xs font-semibold uppercase tracking-wide mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`;
-
-            // Días disponibles del mes filtrado
-            const diasDisponibles = React.useMemo(() => {
-                if (filtMonth === -1) return [];
-                const txsMes = (allTx[filtYear]||[]).filter(t => t.mes === MESES[filtMonth]);
-                const dias = [...new Set(txsMes.map(t => Number(t.dia)).filter(Boolean))].sort((a,b)=>a-b);
-                return dias;
-            }, [allTx, filtYear, filtMonth]);
-
-            // ── Solapas ──────────────────────────────────────────────────
-            const [activeTab, setActiveTab] = React.useState('resumen');
-
-            // ── Filtros comparativa ──────────────────────────────────────
-            const [cmpYearA, setCmpYearA] = React.useState(currentYear);
-            const [cmpYearB, setCmpYearB] = React.useState(currentYear - 1);
-
-            // ── Helpers comparativa ──────────────────────────────────────
-            const getAnual = (yr, tipo) => {
-                const txs = allTx[yr] || [];
-                if (tipo === 'ING') return txs.filter(t=>t.monto>0).reduce((s,t)=>s+t.monto,0);
-                if (tipo === 'EGR') return Math.abs(txs.filter(t=>t.monto<0).reduce((s,t)=>s+t.monto,0));
-                if (tipo === 'SALDO') return txs.reduce((s,t)=>s+t.monto,0);
-                if (tipo) return Math.abs(txs.filter(t=>t.tipoCosto===tipo&&t.monto<0).reduce((s,t)=>s+t.monto,0));
-                return txs.reduce((s,t)=>s+t.monto,0);
-            };
-            const getByMes = (yr, mes, tipo) => {
-                const txs = allTx[yr] || [];
-                const filtered = txs.filter(t => t.mes === mes);
-                if (tipo === 'ING') return filtered.filter(t=>t.monto>0).reduce((s,t)=>s+t.monto,0);
-                if (tipo === 'EGR') return Math.abs(filtered.filter(t=>t.monto<0).reduce((s,t)=>s+t.monto,0));
-                return filtered.reduce((s,t)=>s+t.monto,0);
-            };
-            const pctChange = (a, b) => b !== 0 ? ((a - b) / Math.abs(b) * 100) : (a > 0 ? 100 : 0);
-            const arrow = v => v > 2 ? '↗' : v < -2 ? '↘' : '→';
-            const clrPct = (v, invert) => {
-                if (Math.abs(v) <= 2) return darkMode ? 'text-slate-400' : 'text-slate-400';
-                const positive = invert ? v < 0 : v > 0;
-                return positive ? 'text-green-600' : 'text-red-500';
-            };
-
+        const DashboardModule = ({ darkMode = false, onBack = null }) => {
+            const bg  = darkMode ? 'bg-slate-900' : 'bg-slate-50';
+            const txt = darkMode ? 'text-white'   : 'text-slate-900';
+            const sub = darkMode ? 'text-slate-400' : 'text-slate-500';
             return (
-                <div className={`min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
-                    <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
-                        {/* Header */}
-                        {onBack && (
-                            <button onClick={onBack}
-                                className={`flex items-center gap-1.5 text-sm font-medium mb-4 transition-colors ${darkMode ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'}`}>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
-                                </svg>
-                                Volver al menú principal
-                            </button>
-                        )}
-                        <h1 className={`text-3xl font-bold mb-1 ${darkMode ? 'text-white' : 'text-slate-900'}`}>📊 Datos y Estadísticas</h1>
-
-                        {/* Solapas */}
-                        <div className={`flex gap-1 mb-6 mt-4 p-1 rounded-xl w-fit ${darkMode?'bg-slate-800':'bg-slate-200'}`}>
-                            {[['resumen','📋 Resumen'],['comparativas','📈 Comparativas']].map(([id,lbl]) => (
-                                <button key={id} onClick={() => setActiveTab(id)}
-                                    className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                                        activeTab === id
-                                            ? darkMode ? 'bg-indigo-600 text-white shadow' : 'bg-white text-indigo-700 shadow'
-                                            : darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-700'
-                                    }`}>{lbl}</button>
-                            ))}
-                        </div>
-
-                        {/* ══════════════════════════════════════════════════
-                            SOLAPA: RESUMEN
-                        ══════════════════════════════════════════════════ */}
-                        {activeTab === 'resumen' && (
-                            <div>
-                                <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                                    <p className={`text-sm ${darkMode?'text-slate-300':'text-slate-500'}`}>{periodoLabel} · Vista general</p>
-                                    <div className="flex flex-wrap gap-2 items-center">
-                                        <select value={filtYear} onChange={e => { setFiltYear(Number(e.target.value)); setFiltMonth(-1); setFiltDay(-1); }}
-                                            className={`px-3 py-1.5 text-sm border rounded-lg font-medium ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300 text-slate-700 bg-white'}`}>
-                                            {yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}
-                                        </select>
-                                        <select value={filtMonth} onChange={e => { setFiltMonth(Number(e.target.value)); setFiltDay(-1); }}
-                                            className={`px-3 py-1.5 text-sm border rounded-lg ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300 text-slate-600 bg-white'}`}>
-                                            <option value={-1}>Todos los meses</option>
-                                            {MESES.map((m,i) => <option key={i} value={i}>{m.substring(0,3)}</option>)}
-                                        </select>
-                                        {filtMonth !== -1 && diasDisponibles.length > 0 && (
-                                            <select value={filtDay} onChange={e => setFiltDay(Number(e.target.value))}
-                                                className={`px-3 py-1.5 text-sm border rounded-lg ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300 text-slate-600 bg-white'}`}>
-                                                <option value={-1}>Todos los días</option>
-                                                {diasDisponibles.map(d => <option key={d} value={d}>{d}</option>)}
-                                            </select>
-                                        )}
-                                        {(filtMonth !== -1 || filtDay !== -1 || filtYear !== currentYear) && (
-                                            <button onClick={() => { setFiltYear(currentYear); setFiltMonth(-1); setFiltDay(-1); }}
-                                                className={`px-3 py-1.5 text-xs rounded-lg font-medium ${darkMode?'bg-slate-700 text-slate-400 hover:text-white':'bg-slate-100 text-slate-500 hover:text-slate-700'}`}>↺ Hoy</button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* KPIs */}
-                                <div className="grid grid-cols-2 gap-4 mb-4" style={{gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))'}}>
-                                    {[
-                                        { label: `Ingresos ${periodoLabel}`, val: ingresosPeriodo, color: 'text-green-600' },
-                                        { label: `Egresos ${periodoLabel}`, val: egresosPeriodo, color: 'text-red-500' },
-                                        { label: `Saldo ${periodoLabel}`, val: saldoPeriodo, color: clr(saldoPeriodo) },
-                                        { label: `Saldo año ${filtYear}`, val: saldoAnio, color: clr(saldoAnio) },
-                                    ].map((item, i) => (
-                                        <div key={i} className={card}>
-                                            <div className={label}>{item.label}</div>
-                                            <div className={`text-xl font-bold font-mono ${item.color}`}>
-                                                {item.val > 0 && item.label.startsWith('Ingreso') ? '+' : ''}{fmt(item.val)}
-                                                <span className={`text-xs ml-1 font-normal ${darkMode?'text-slate-300':'text-slate-400'}`}>CZK</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Spark + Nómina + Proveedores */}
-                                <div className="grid gap-4 mb-4" style={{gridTemplateColumns:'2fr 1fr 1fr'}}>
-                                    <div className={card}>
-                                        <div className={label}>Ingresos y egresos — últimos 6 meses</div>
-                                        <div className="flex items-end gap-2 mt-4 h-20">
-                                            {ultimos6.map((m, i) => (
-                                                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                                                    <div className="w-full flex items-end gap-0.5" style={{height:'56px'}}>
-                                                        <div className="flex-1 rounded-t bg-green-400 opacity-70" style={{height: Math.max(2,(m.ing/maxBar)*56)+'px'}}/>
-                                                        <div className="flex-1 rounded-t bg-red-400 opacity-70" style={{height: Math.max(2,(m.egr/maxBar)*56)+'px'}}/>
-                                                    </div>
-                                                    <span className={`text-xs ${m.isCurrent?(darkMode?'text-indigo-400 font-bold':'text-indigo-600 font-bold'):darkMode?'text-slate-300':'text-slate-400'}`}>{m.mes}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="flex gap-4 mt-2">
-                                            <span className="flex items-center gap-1 text-xs text-green-500"><span className="w-2 h-2 rounded bg-green-400 inline-block"/>Ingresos</span>
-                                            <span className="flex items-center gap-1 text-xs text-red-400"><span className="w-2 h-2 rounded bg-red-400 inline-block"/>Egresos</span>
-                                        </div>
-                                    </div>
-                                    <div className={card}>
-                                        <div className={label}>Nómina {filtMonth !== -1 ? MESES[filtMonth].substring(0,3) : MESES[mesIdx].substring(0,3)} {filtYear}</div>
-                                        <div className={`text-xl font-bold font-mono mt-1 ${darkMode?'text-white':'text-slate-800'}`}>
-                                            {fmt(sueldosMesPagado)}
-                                            <span className={`text-xs ml-1 font-normal ${darkMode?'text-slate-300':'text-slate-400'}`}>/ {fmt(sueldosMesTotal)}</span>
-                                        </div>
-                                        <div className="mt-3">
-                                            <div className={`w-full h-2 rounded-full ${darkMode?'bg-slate-700':'bg-slate-200'}`}>
-                                                <div className="h-2 rounded-full bg-blue-500" style={{width: pctNomina+'%'}}/>
-                                            </div>
-                                            <div className="flex justify-between mt-1">
-                                                <span className={`text-xs ${darkMode?'text-slate-300':'text-slate-500'}`}>{pctNomina.toFixed(0)}% pagado</span>
-                                                <span className={`text-xs ${darkMode?'text-slate-300':'text-slate-500'}`}>{empleadosActivos.length} emp.</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className={card}>
-                                        <div className={label}>Proveedores</div>
-                                        <div className="space-y-2 mt-2">
-                                            <div className="flex justify-between items-center">
-                                                <span className={`text-xs ${darkMode?'text-slate-300':'text-slate-500'}`}>Pendientes</span>
-                                                <span className="text-sm font-bold text-amber-500">{invPendientes.length}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className={`text-xs ${darkMode?'text-slate-300':'text-slate-500'}`}>⚠️ Vencidas</span>
-                                                <span className={`text-sm font-bold ${invVencidas.length>0?'text-red-500':darkMode?'text-slate-300':'text-slate-400'}`}>{invVencidas.length}</span>
-                                            </div>
-                                            <div className={`border-t pt-2 ${darkMode?'border-slate-700':'border-slate-100'}`}>
-                                                <div className={`text-xs ${darkMode?'text-slate-300':'text-slate-500'}`}>Total pendiente</div>
-                                                <div className="text-sm font-bold font-mono text-red-500">{fmt(totalPendiente)} CZK</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Rubros + Resumen anual */}
-                                <div className="grid gap-4" style={{gridTemplateColumns:'3fr 2fr'}}>
-                                    <div className={card}>
-                                        <div className={label}>Costos por rubro — {periodoLabel}</div>
-                                        {rubrosCosto.length === 0 ? (
-                                            <p className={`text-xs mt-3 ${darkMode?'text-slate-300':'text-slate-400'}`}>Sin datos de egresos</p>
-                                        ) : (
-                                            <div className="space-y-2.5 mt-3">
-                                                {rubrosCosto.slice(0,7).map(r => (
-                                                    <div key={r.name}>
-                                                        <div className="flex justify-between items-center mb-0.5">
-                                                            <span className={`text-xs font-semibold uppercase tracking-wide ${darkMode?'text-slate-300':'text-slate-600'}`}>{r.name}</span>
-                                                            <span className="text-xs font-mono font-bold text-red-500">{fmt(r.val)}</span>
-                                                        </div>
-                                                        <div className={`w-full h-1.5 rounded-full ${darkMode?'bg-slate-700':'bg-slate-100'}`}>
-                                                            <div className="h-1.5 rounded-full bg-red-400" style={{width: Math.max(2,(r.val/maxRubro)*100)+'%'}}/>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className={card}>
-                                        <div className={label}>Resumen {filtYear}</div>
-                                        <div className="space-y-3 mt-3">
-                                            <div><div className={`text-xs mb-0.5 ${darkMode?'text-slate-300':'text-slate-500'}`}>Ingresos totales</div><div className="text-lg font-bold font-mono text-green-600">+{fmt(ingresosAnio)}</div></div>
-                                            <div><div className={`text-xs mb-0.5 ${darkMode?'text-slate-300':'text-slate-500'}`}>Egresos totales</div><div className="text-lg font-bold font-mono text-red-500">{fmt(egresosAnio)}</div></div>
-                                            <div className={`border-t pt-3 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                                <div className={`text-xs mb-0.5 ${darkMode?'text-slate-300':'text-slate-500'}`}>Saldo neto</div>
-                                                <div className={`text-xl font-bold font-mono ${clr(saldoAnio)}`}>{saldoAnio>=0?'+':''}{fmt(saldoAnio)} <span className={`text-xs font-normal ${darkMode?'text-slate-300':'text-slate-400'}`}>CZK</span></div>
-                                            </div>
-                                            <div className={`border-t pt-3 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                                <div className={`text-xs mb-0.5 ${darkMode?'text-slate-300':'text-slate-500'}`}>Facturas pagadas</div>
-                                                <div className={`text-sm font-bold ${darkMode?'text-slate-300':'text-slate-700'}`}>{invPagadas.length} facturas</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ══════════════════════════════════════════════════
-                            SOLAPA: COMPARATIVAS
-                        ══════════════════════════════════════════════════ */}
-                        {activeTab === 'comparativas' && (() => {
-                            const ingA = getAnual(cmpYearA,'ING'), ingB = getAnual(cmpYearB,'ING');
-                            const egrA = getAnual(cmpYearA,'EGR'), egrB = getAnual(cmpYearB,'EGR');
-                            const sldA = getAnual(cmpYearA,'SALDO'), sldB = getAnual(cmpYearB,'SALDO');
-                            const pIngA = pctChange(ingA,ingB), pEgrA = pctChange(egrA,egrB), pSldA = pctChange(sldA,sldB);
-
-                            // Todos los años disponibles para tabla multi-año
-                            const allYears = yearsAvailable.slice().sort((a,b)=>a-b);
-
-                            // Rubros comparados
-                            const rubrosComp = cajaRubros.filter(r=>r!=='INGRESOS').map(r => ({
-                                name: r,
-                                a: getAnual(cmpYearA,r),
-                                b: getAnual(cmpYearB,r),
-                            })).filter(r=>r.a>0||r.b>0).sort((x,y)=>y.a-x.a);
-
-                            // Proveedores comparados
-                            const allInvoicesCats = [...new Set(invoices.map(i=>i.category||'').filter(Boolean))];
-
-                            return (
-                                <div>
-                                    {/* Selector de años a comparar */}
-                                    <div className="flex flex-wrap items-center gap-3 mb-6">
-                                        <span className={`text-sm font-medium ${darkMode?'text-slate-300':'text-slate-600'}`}>Comparar:</span>
-                                        <select value={cmpYearA} onChange={e=>setCmpYearA(Number(e.target.value))}
-                                            className={`px-3 py-1.5 text-sm border rounded-lg font-bold ${darkMode?'bg-indigo-900 border-indigo-700 text-indigo-200':'bg-indigo-50 border-indigo-300 text-indigo-700'}`}>
-                                            {yearsAvailable.map(y=><option key={y} value={y}>{y}</option>)}
-                                        </select>
-                                        <span className={`text-sm ${darkMode?'text-slate-300':'text-slate-400'}`}>vs</span>
-                                        <select value={cmpYearB} onChange={e=>setCmpYearB(Number(e.target.value))}
-                                            className={`px-3 py-1.5 text-sm border rounded-lg font-medium ${darkMode?'bg-slate-700 border-slate-600 text-slate-300':'bg-slate-50 border-slate-300 text-slate-600'}`}>
-                                            {yearsAvailable.map(y=><option key={y} value={y}>{y}</option>)}
-                                        </select>
-                                    </div>
-
-                                    {/* ── Cards resumen comparativo ── */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
-                                        {[
-                                            { lbl:'Ingresos', a:ingA, b:ingB, p:pIngA, invert:false },
-                                            { lbl:'Egresos', a:egrA, b:egrB, p:pEgrA, invert:true },
-                                            { lbl:'Saldo neto', a:sldA, b:sldB, p:pSldA, invert:false },
-                                        ].map((item,i) => (
-                                            <div key={i} className={card}>
-                                                <div className={label}>{item.lbl}</div>
-                                                <div className={`flex items-end gap-3 mt-2`}>
-                                                    <div>
-                                                        <div className={`text-xs mb-0.5 ${darkMode?'text-indigo-400':'text-indigo-600'} font-semibold`}>{cmpYearA}</div>
-                                                        <div className={`text-lg font-bold font-mono ${item.lbl==='Egresos'?'text-red-500':clr(item.a)}`}>{fmt(item.a)}</div>
-                                                    </div>
-                                                    <div className={`text-xs mb-1 ${darkMode?'text-slate-300':'text-slate-400'}`}>vs</div>
-                                                    <div>
-                                                        <div className={`text-xs mb-0.5 ${darkMode?'text-slate-300':'text-slate-500'} font-medium`}>{cmpYearB}</div>
-                                                        <div className={`text-base font-semibold font-mono ${darkMode?'text-slate-300':'text-slate-500'}`}>{fmt(item.b)}</div>
-                                                    </div>
-                                                </div>
-                                                <div className={`mt-2 text-sm font-bold ${clrPct(item.p, item.invert)}`}>
-                                                    {arrow(item.p)} {Math.abs(item.p).toFixed(1)}%
-                                                    <span className={`text-xs font-normal ml-1 ${darkMode?'text-slate-300':'text-slate-400'}`}>
-                                                        {item.p > 2 ? 'crecimiento' : item.p < -2 ? 'caída' : 'sin cambio'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* ── Ingresos mes a mes: todos los años ── */}
-                                    <div className={`${card} mb-5`}>
-                                        <div className={`${label} mb-3`}>📈 Ingresos por mes — todos los años</div>
-                                        <div className="overflow-x-auto -mx-3 sm:mx-0">
-                                            <table className="w-full text-xs">
-                                                <thead>
-                                                    <tr className={`border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                                        <th className={`py-2 text-left font-semibold ${darkMode?'text-slate-300':'text-slate-500'}`}>Mes</th>
-                                                        {allYears.map(yr=>(
-                                                            <th key={yr} className={`py-2 text-right font-bold ${yr===cmpYearA?(darkMode?'text-indigo-400':'text-indigo-600'):darkMode?'text-slate-300':'text-slate-500'}`}>{yr}</th>
-                                                        ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {MESES.map((mes,idx) => {
-                                                        const vals = allYears.map(yr=>getByMes(yr,mes,'ING'));
-                                                        const mx = Math.max(...vals, 1);
-                                                        return (
-                                                            <tr key={mes} className={`${idx%2===1?(darkMode?'bg-slate-700':'bg-slate-50'):''} border-b ${darkMode?'border-slate-700/40':'border-slate-100'}`}>
-                                                                <td className={`py-1.5 font-semibold ${darkMode?'text-slate-300':'text-slate-600'}`}>{mes.substring(0,3)}</td>
-                                                                {allYears.map((yr,yi) => {
-                                                                    const v = vals[yi];
-                                                                    const barW = Math.round((v/mx)*50);
-                                                                    return (
-                                                                        <td key={yr} className="py-1.5 text-right">
-                                                                            <div className="flex items-center justify-end gap-1.5">
-                                                                                {v>0&&<div className="h-1.5 rounded-full bg-green-400 opacity-50" style={{width:barW+'px'}}/>}
-                                                                                <span className={`font-mono ${v===0?(darkMode?'text-slate-700':'text-slate-300'):'text-green-600'} ${yr===cmpYearA?'font-bold':''}`}>{v===0?'–':fmt(v)}</span>
-                                                                            </div>
-                                                                        </td>
-                                                                    );
-                                                                })}
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                    <tr className={`border-t-2 font-bold ${darkMode?'border-slate-600 bg-slate-700':'border-slate-200 bg-slate-100'}`}>
-                                                        <td className={`py-2 text-xs uppercase font-bold ${darkMode?'text-white':'text-slate-700'}`}>Total</td>
-                                                        {allYears.map(yr=>(
-                                                            <td key={yr} className={`py-2 text-right font-bold font-mono text-green-600 ${yr===cmpYearA?'text-sm':''}`}>{fmt(getAnual(yr,'ING'))}</td>
-                                                        ))}
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    {/* ── Costos por rubro: comparativa ── */}
-                                    <div className={`${card} mb-5`}>
-                                        <div className={`${label} mb-3`}>📊 Costos por rubro — {cmpYearA} vs {cmpYearB}</div>
-                                        {rubrosComp.length === 0 ? (
-                                            <p className={`text-xs ${darkMode?'text-slate-300':'text-slate-400'}`}>Sin datos de costos</p>
-                                        ) : (
-                                            <div className="overflow-x-auto -mx-3 sm:mx-0">
-                                                <table className="w-full text-xs">
-                                                    <thead>
-                                                        <tr className={`border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                                            <th className={`py-2 text-left font-semibold ${darkMode?'text-slate-300':'text-slate-500'}`}>Rubro</th>
-                                                            <th className={`py-2 text-right font-bold ${darkMode?'text-indigo-400':'text-indigo-600'}`}>{cmpYearA}</th>
-                                                            <th className={`py-2 text-right font-medium ${darkMode?'text-slate-300':'text-slate-500'}`}>{cmpYearB}</th>
-                                                            <th className={`py-2 text-right font-semibold ${darkMode?'text-slate-300':'text-slate-500'}`}>Var.</th>
-                                                            <th className={`py-2 text-right font-semibold ${darkMode?'text-slate-300':'text-slate-500'}`}>%</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {rubrosComp.map((r,idx) => {
-                                                            const dif = r.a - r.b;
-                                                            const p = pctChange(r.a, r.b);
-                                                            const maxV = Math.max(r.a,r.b,1);
-                                                            return (
-                                                                <tr key={r.name} className={`${idx%2===1?(darkMode?'bg-slate-700':'bg-slate-50'):''} border-b ${darkMode?'border-slate-700/40':'border-slate-100'}`}>
-                                                                    <td className={`py-2 font-semibold uppercase tracking-wide ${darkMode?'text-slate-300':'text-slate-600'}`}>{r.name}</td>
-                                                                    <td className="py-2 text-right">
-                                                                        <div className="flex items-center justify-end gap-1.5">
-                                                                            {r.a>0&&<div className="h-1.5 rounded-full bg-red-400 opacity-50" style={{width:Math.round((r.a/maxV)*40)+'px'}}/>}
-                                                                            <span className="font-mono font-bold text-red-500">{r.a===0?'–':fmt(r.a)}</span>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className={`py-2 text-right font-mono ${darkMode?'text-slate-300':'text-slate-500'}`}>{r.b===0?'–':fmt(r.b)}</td>
-                                                                    <td className={`py-2 text-right font-mono font-semibold ${dif===0?(darkMode?'text-slate-600':'text-slate-300'):dif>0?'text-red-500':'text-green-600'}`}>
-                                                                        {dif===0?'–':(dif>0?'+':'')+fmt(dif)}
-                                                                    </td>
-                                                                    <td className={`py-2 text-right font-bold ${r.b===0?(darkMode?'text-slate-600':'text-slate-300'):clrPct(p,true)}`}>
-                                                                        {r.b===0?'–':<>{arrow(p)}{Math.abs(p).toFixed(0)}%</>}
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* ── Análisis narrativo ── */}
-                                    <div className={card}>
-                                        <div className={`${label} mb-3`}>🔍 Resumen del período</div>
-                                        <div className="space-y-2">
-                                            {[
-                                                pIngA > 5 ? { txt: `Los ingresos crecieron un ${pIngA.toFixed(1)}% en ${cmpYearA} vs ${cmpYearB} (+${fmt(ingA-ingB)} CZK).`, color:'text-green-600' }
-                                                : pIngA < -5 ? { txt: `Los ingresos cayeron un ${Math.abs(pIngA).toFixed(1)}% en ${cmpYearA} vs ${cmpYearB} (${fmt(ingA-ingB)} CZK).`, color:'text-red-500' }
-                                                : { txt: `Los ingresos se mantuvieron estables entre ${cmpYearA} y ${cmpYearB}.`, color: darkMode?'text-slate-300':'text-slate-500'},
-
-                                                pEgrA > 5 ? { txt: `Los egresos aumentaron un ${pEgrA.toFixed(1)}%, lo que puede indicar mayor actividad o mayores costos.`, color:'text-amber-500' }
-                                                : pEgrA < -5 ? { txt: `Los egresos se redujeron un ${Math.abs(pEgrA).toFixed(1)}%, mostrando mayor eficiencia en costos.`, color:'text-green-600' }
-                                                : { txt: `Los egresos se mantuvieron similares entre ambos años.`, color:darkMode?'text-slate-300':'text-slate-500'},
-
-                                                sldA > sldB ? { txt: `El saldo neto mejoró en ${fmt(sldA-sldB)} CZK respecto al año anterior.`, color:'text-green-600' }
-                                                : sldA < sldB ? { txt: `El saldo neto empeoró en ${fmt(sldB-sldA)} CZK respecto al año anterior.`, color:'text-red-500' }
-                                                : { txt: `El saldo neto no cambió significativamente.`, color:darkMode?'text-slate-300':'text-slate-500'},
-
-                                                rubrosComp.length > 0 ? (() => {
-                                                    const topCrec = rubrosComp.filter(r=>r.b>0).sort((a,b)=>pctChange(b.a,b.b)-pctChange(a.a,a.b))[0];
-                                                    const topCost = rubrosComp.sort((a,b)=>b.a-a.a)[0];
-                                                    return topCrec
-                                                        ? { txt: `El rubro con mayor crecimiento fue ${topCrec.name} (${pctChange(topCrec.a,topCrec.b).toFixed(0)}%). El de mayor gasto fue ${topCost.name} (${fmt(topCost.a)} CZK).`, color:darkMode?'text-slate-300':'text-slate-700'}
-                                                        : null;
-                                                })() : null,
-                                            ].filter(Boolean).map((item,i) => (
-                                                <div key={i} className="flex items-start gap-2">
-                                                    <span className={`mt-0.5 text-sm ${item.color}`}>•</span>
-                                                    <p className={`text-sm ${item.color}`}>{item.txt}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                    </div>
+                <div className={`min-h-screen ${bg} flex flex-col items-center justify-center p-8`}>
+                    {onBack && <button onClick={onBack} className={`absolute top-4 left-4 text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>}
+                    <div className="text-6xl mb-6">🚧</div>
+                    <h1 className={`text-2xl font-bold mb-2 ${txt}`}>Datos y Estadísticas</h1>
+                    <p className={`text-sm ${sub} text-center max-w-sm`}>Este módulo está en construcción. Próximamente vas a poder ver KPIs, gráficos y comparativas de todos los módulos.</p>
                 </div>
             );
         };
 
-        // COMPONENTE: SEGUIMIENTO DE PRÉSTAMOS
-        // ============================================
         const CalendarioModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
             const { useState, useEffect, useMemo } = React;
             const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
@@ -5687,6 +5247,266 @@ ${invoice.items.map(item => `
                                     );
                                 })}
                             </>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+
+        // Componentes de renderizado fuera del módulo para evitar recreación
+        const QRDisplay = ({ value, size }) => {
+            const ref = React.useRef(null);
+            React.useEffect(() => {
+                if (!ref.current || !value) return;
+                const render = () => {
+                    if (!window.QRCode) return;
+                    ref.current.innerHTML = '';
+                    try { new window.QRCode(ref.current, { text: value, width: size||80, height: size||80, correctLevel: window.QRCode?.CorrectLevel?.M }); } catch(e) {}
+                };
+                if (window.QRCode) render();
+                else { const t = setInterval(() => { if (window.QRCode) { render(); clearInterval(t); } }, 200); return () => clearInterval(t); }
+            }, [value, size]);
+            return <div ref={ref} style={{display:'inline-block'}} />;
+        };
+
+        const BarcodeDisplay = ({ value, width, height }) => {
+            const ref = React.useRef(null);
+            React.useEffect(() => {
+                if (!ref.current || !value) return;
+                const render = () => {
+                    if (!window.JsBarcode) return;
+                    try { window.JsBarcode(ref.current, value, { format:'EAN13', width:width||1.5, height:height||50, displayValue:true, fontSize:11, margin:4 }); } catch(e) {}
+                };
+                if (window.JsBarcode) render();
+                else { const t = setInterval(() => { if (window.JsBarcode) { render(); clearInterval(t); } }, 200); return () => clearInterval(t); }
+            }, [value, width, height]);
+            return <svg ref={ref} />;
+        };
+
+        const CodigosModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
+            const { useState, useEffect } = React;
+            const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
+            const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+            const txt  = darkMode ? 'text-white'     : 'text-slate-900';
+            const sub  = darkMode ? 'text-slate-400' : 'text-slate-500';
+            const inp  = `w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-300 placeholder-slate-400'}`;
+
+            const [codigos, setCodigos]   = useState([]);
+            const [form, setForm]         = useState({ tipo:'barras', nombre:'', link:'', cantidad:1, codigoManual:'', usarManual:false });
+            const [seleccionados, setSel] = useState([]);
+            const [loaded, setLoaded]     = useState(false);
+            const [showArchivados, setShowArchivados] = useState(false);
+
+            useEffect(() => {
+                const cargar = (src) => new Promise(resolve => {
+                    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                    const s = document.createElement('script');
+                    s.src = src; s.onload = resolve; document.head.appendChild(s);
+                });
+                cargar('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+                cargar('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js');
+                dbGetAll('codigos_productos').then(d => { setCodigos(d||[]); setLoaded(true); }).catch(() => {
+                    const ls = localStorage.getItem('codigosProductos');
+                    setCodigos(ls ? JSON.parse(ls) : []); setLoaded(true);
+                });
+            }, []);
+
+            const genEAN13 = () => {
+                const d = Array.from({length:12}, ()=>Math.floor(Math.random()*10));
+                const check = (10 - d.reduce((s,x,i)=>s+x*(i%2===0?1:3),0)%10)%10;
+                return [...d,check].join('');
+            };
+
+            const guardar = async () => {
+                if (!form.nombre.trim()) return alert('Ingresá un nombre');
+                if (form.tipo==='qr' && !form.link.trim()) return alert('Ingresá un link para el QR');
+                const cant = Math.min(50, Math.max(1, parseInt(form.cantidad)||1));
+                const codigoBase = form.tipo==='barras'
+                    ? (form.usarManual && form.codigoManual.trim() ? form.codigoManual.trim() : null)
+                    : '';
+                const nuevos = Array.from({length:cant}, (_,i) => ({
+                    id: Date.now()+i, tipo:form.tipo, nombre:form.nombre.trim(),
+                    link: form.tipo==='qr' ? form.link.trim() : '',
+                    codigo: form.tipo==='barras' ? (codigoBase || genEAN13()) : '',
+                    archivado: false, creadoEl: new Date().toISOString(),
+                }));
+                const todos = [...codigos, ...nuevos];
+                setCodigos(todos);
+                localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                try { await dbSetArray('codigos_productos', todos); } catch(e) {}
+                setForm(f=>({...f, nombre:'', link:'', cantidad:1, codigoManual:'', usarManual:false}));
+            };
+
+            const eliminar = (id) => {
+                const todos = codigos.filter(c=>c.id!==id);
+                setCodigos(todos); localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                try { dbSetArray('codigos_productos', todos); } catch(e) {}
+            };
+
+            const archivar = (id) => {
+                setCodigos(prev => {
+                    const todos = prev.map(c=>c.id===id?{...c,archivado:!c.archivado}:c);
+                    localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                    try { dbSetArray('codigos_productos', todos); } catch(e) {}
+                    return [...todos];
+                });
+            };
+
+            const toggleSel = (id) => setSel(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+
+            const activos    = codigos.filter(c=>!c.archivado);
+            const archivados = codigos.filter(c=>c.archivado);
+
+            const exportarPDF = () => {
+                const ids = seleccionados.length>0 ? seleccionados : activos.map(c=>c.id);
+                const paraPDF = activos.filter(c=>ids.includes(c.id));
+                if (!paraPDF.length) return alert('No hay códigos para exportar');
+                const items = paraPDF.map(c => {
+                    if (c.tipo==='barras') {
+                        let svg='';
+                        try { const el=document.createElementNS('http://www.w3.org/2000/svg','svg'); window.JsBarcode(el,c.codigo,{format:'EAN13',width:2,height:60,displayValue:true,fontSize:12,margin:4}); svg=el.outerHTML; } catch(e) {}
+                        return `<div class="item"><p class="nombre">${c.nombre}</p>${svg||`<p class="mono">${c.codigo}</p>`}</div>`;
+                    } else {
+                        let img='';
+                        try { const d=document.createElement('div'); document.body.appendChild(d); new window.QRCode(d,{text:c.link,width:120,height:120}); const cv=d.querySelector('canvas'); if(cv) img=cv.toDataURL(); document.body.removeChild(d); } catch(e) {}
+                        return `<div class="item"><p class="nombre">${c.nombre}</p>${img?`<img src="${img}" width="120" height="120"/>`:'<p class="mono">QR</p>'}</div>`;
+                    }
+                }).join('');
+                const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Códigos</title><style>body{font-family:Arial,sans-serif;padding:16px}h1{font-size:15px;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin-bottom:16px}.grid{display:flex;flex-wrap:wrap;gap:12px}.item{border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;break-inside:avoid}.nombre{font-size:12px;font-weight:bold;margin:0 0 8px}.mono{font-family:monospace;font-size:11px}@media print{@page{margin:10mm}}</style></head><body><h1>🏷️ Códigos de Productos</h1><div class="grid">${items}</div><script>window.onload=()=>window.print()<\/script></body></html>`;
+                const w=window.open('','_blank'); if(w){w.document.write(html);w.document.close();}else alert('Habilitá los popups');
+            };
+
+            if (!loaded) return <div className={`flex items-center justify-center min-h-screen ${bg}`}><p className={sub}>Cargando...</p></div>;
+
+            return (
+                <div className={`min-h-screen ${bg}`}>
+                    {/* Header */}
+                    <div className={`sticky top-0 z-10 border-b px-4 py-3 flex items-center gap-3 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                        {onBack && <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>}
+                        <h1 className={`text-base font-bold ${txt} flex-1`}>🏷️ Generador de Códigos</h1>
+                        <button onClick={()=>setShowArchivados(v=>!v)} className={`text-xs px-2.5 py-1.5 rounded-lg font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>
+                            📁 Archivados {archivados.length>0 && <span className="ml-1 bg-slate-500 text-white rounded-full px-1.5 text-xs">{archivados.length}</span>}
+                        </button>
+                        <button onClick={exportarPDF} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold">
+                            ⬇️ {seleccionados.length>0?`Exportar ${seleccionados.length}`:'Exportar todo'}
+                        </button>
+                    </div>
+
+                    <div className="max-w-3xl mx-auto px-4 py-5 space-y-5">
+                        {/* Formulario */}
+                        <div className={`rounded-xl border ${card} p-4 space-y-3`}>
+                            <p className={`text-xs font-bold uppercase tracking-wide ${sub}`}>Nuevo código</p>
+                            <div className={`flex rounded-lg overflow-hidden border ${darkMode?'border-slate-600':'border-slate-300'}`}>
+                                {[['barras','📊 Código de barras'],['qr','📱 Código QR']].map(([v,l])=>(
+                                    <button key={v} type="button" onClick={()=>setForm(f=>({...f,tipo:v,link:'',usarManual:false,codigoManual:''}))}
+                                        className={`flex-1 py-2 text-sm font-medium ${form.tipo===v?(darkMode?'bg-blue-700 text-white':'bg-blue-600 text-white'):(darkMode?'bg-slate-700 text-slate-400':'bg-white text-slate-500')}`}>{l}</button>
+                                ))}
+                            </div>
+                            <div>
+                                <label className={`block text-xs font-medium mb-1 ${sub}`}>Nombre del producto *</label>
+                                <input value={form.nombre} onChange={e=>setForm(f=>({...f,nombre:e.target.value}))} className={inp} placeholder="ej. Vino Malbec 750ml"/>
+                            </div>
+                            {form.tipo==='qr' ? (
+                                <div>
+                                    <label className={`block text-xs font-medium mb-1 ${sub}`}>Link / URL *</label>
+                                    <input value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} className={inp} placeholder="https://..."/>
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="flex items-center gap-2 cursor-pointer mb-2">
+                                        <input type="checkbox" checked={form.usarManual||false} onChange={e=>setForm(f=>({...f,usarManual:e.target.checked,codigoManual:''}))} className="w-4 h-4 accent-blue-600"/>
+                                        <span className={`text-xs font-medium ${sub}`}>Ingresar código existente</span>
+                                    </label>
+                                    {form.usarManual && (
+                                        <input value={form.codigoManual} onChange={e=>setForm(f=>({...f,codigoManual:e.target.value}))} className={inp} placeholder="ej. 7790123456789"/>
+                                    )}
+                                </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className={`block text-xs font-medium mb-1 ${sub}`}>Cantidad</label>
+                                    <input type="number" min="1" max="50" value={form.cantidad} onChange={e=>setForm(f=>({...f,cantidad:e.target.value}))} className={inp}/>
+                                </div>
+                                <div className="flex items-end">
+                                    <button onClick={guardar} className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">✚ Generar</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Lista activos */}
+                        {activos.length===0 ? (
+                            <div className={`p-10 text-center rounded-xl border-2 border-dashed ${darkMode?'border-slate-700 text-slate-500':'border-slate-200 text-slate-400'}`}>
+                                <p className="text-4xl mb-2">🏷️</p>
+                                <p className="text-sm font-medium">No hay códigos generados</p>
+                            </div>
+                        ) : (
+                            <div className={`rounded-xl border ${card} overflow-hidden`}>
+                                <div className={`flex items-center gap-3 px-4 py-2.5 border-b ${darkMode?'border-slate-700 bg-slate-700/30':'border-slate-100 bg-slate-50'}`}>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={seleccionados.length===activos.length&&activos.length>0} onChange={()=>setSel(seleccionados.length===activos.length?[]:activos.map(c=>c.id))} className="w-4 h-4 accent-indigo-600"/>
+                                        <span className={`text-xs font-medium ${sub}`}>{seleccionados.length>0?`${seleccionados.length} seleccionado${seleccionados.length!==1?'s':''}`: `${activos.length} código${activos.length!==1?'s':''}`}</span>
+                                    </label>
+                                    {seleccionados.length>0 && (
+                                        <div className="flex gap-3 ml-auto">
+                                            <button onClick={()=>{if(confirm(`¿Eliminar ${seleccionados.length} código${seleccionados.length!==1?'s':''}?`)){const t=codigos.filter(c=>!seleccionados.includes(c.id));setCodigos(t);localStorage.setItem('codigosProductos',JSON.stringify(t));try{dbSetArray('codigos_productos',t);}catch(e){}setSel([])}}} className="text-xs text-red-500 hover:text-red-700 font-medium">🗑️ Eliminar</button>
+                                            <button onClick={()=>{seleccionados.forEach(id=>archivar(id));setSel([]);}} className="text-xs text-amber-500 hover:text-amber-700 font-medium">📁 Archivar</button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-0 divide-x divide-y divide-slate-100 dark:divide-slate-700">
+                                    {activos.map(c=>(
+                                        <div key={c.id} onClick={()=>toggleSel(c.id)} className={`p-4 flex flex-col items-center text-center cursor-pointer transition-colors ${seleccionados.includes(c.id)?(darkMode?'bg-indigo-900/30':'bg-indigo-50'):(darkMode?'hover:bg-slate-700/30':'hover:bg-slate-50')}`}>
+                                            <div className="flex items-center gap-2 w-full mb-3">
+                                                <input type="checkbox" checked={seleccionados.includes(c.id)} onChange={()=>toggleSel(c.id)} onClick={e=>e.stopPropagation()} className="w-3.5 h-3.5 accent-indigo-600 shrink-0"/>
+                                                <p className={`text-xs font-semibold ${txt} truncate flex-1 text-left`}>{c.nombre}</p>
+                                                <button onClick={e=>{e.stopPropagation();archivar(c.id);}} className={`text-xs shrink-0 ${darkMode?'text-amber-400':'text-amber-500'} hover:opacity-80`} title="Archivar">📁</button>
+                                                <button onClick={e=>{e.stopPropagation();if(confirm('¿Eliminar?'))eliminar(c.id);}} className="text-red-400 hover:text-red-600 text-xs shrink-0">✕</button>
+                                            </div>
+                                            {c.tipo==='barras'
+                                                ? <BarcodeDisplay value={c.codigo} width={1.2} height={45}/>
+                                                : <QRDisplay value={c.link} size={80}/>
+                                            }
+                                            <span className={`mt-2 text-xs px-2 py-0.5 rounded-full font-medium ${c.tipo==='barras'?(darkMode?'bg-blue-900/40 text-blue-300':'bg-blue-50 text-blue-700'):(darkMode?'bg-purple-900/40 text-purple-300':'bg-purple-50 text-purple-700')}`}>
+                                                {c.tipo==='barras'?'📊 Barras':'📱 QR'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Archivados */}
+                        {showArchivados && (
+                            <div className={`rounded-xl border ${card} overflow-hidden`}>
+                                <div className={`px-4 py-2.5 border-b ${darkMode?'border-slate-700 bg-slate-700/30':'border-slate-100 bg-slate-50'} flex items-center gap-2`}>
+                                    <span className="text-sm">📁</span>
+                                    <p className={`text-xs font-bold ${darkMode?'text-slate-300':'text-slate-600'}`}>Archivados ({archivados.length})</p>
+                                    <p className={`text-xs ${sub} ml-1`}>Presioná ↩ para restaurar</p>
+                                </div>
+                                {archivados.length===0 ? (
+                                    <p className={`text-xs text-center py-6 ${sub}`}>No hay códigos archivados</p>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-0 divide-x divide-y divide-slate-100">
+                                    {archivados.map(c=>(
+                                        <div key={c.id} className={`p-4 flex flex-col items-center text-center opacity-70 ${darkMode?"":"bg-slate-50"}`}>
+                                            <div className="flex items-center gap-2 w-full mb-3">
+                                                <p className={`text-xs font-semibold ${txt} truncate flex-1 text-left`}>{c.nombre}</p>
+                                                <button onClick={()=>archivar(c.id)} className={`text-xs shrink-0 ${darkMode?"text-green-400":"text-green-600"} hover:opacity-80`} title="Restaurar">↩</button>
+                                                <button onClick={()=>{if(confirm("¿Eliminar?"))eliminar(c.id);}} className="text-red-400 hover:text-red-600 text-xs shrink-0">✕</button>
+                                            </div>
+                                            {c.tipo==="barras"
+                                                ? <BarcodeDisplay value={c.codigo} width={1.2} height={45}/>
+                                                : <QRDisplay value={c.link} size={80}/>
+                                            }
+                                            <span className={`mt-2 text-xs px-2 py-0.5 rounded-full font-medium ${darkMode?"bg-slate-700 text-slate-400":"bg-slate-200 text-slate-500"}`}>
+                                                {c.tipo==="barras"?"📊 Barras":"📱 QR"}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -7453,6 +7273,7 @@ ${invoice.items.map(item => `
                                                 { key: 'proveedores', label: '📦 Proveedores' },
                                                 { key: 'sueldos',     label: '💵 Gestión de Sueldos' },
                                                 { key: 'misueldo',    label: '💰 Mi Sueldo' },
+                                                { key: 'codigos',     label: '🏷️ Generador de Códigos' },
                                                 { key: 'caja',        label: '💰 Caja Diaria' },
                                                 { key: 'dashboard',   label: '📊 Dashboard' },
                                                 { key: 'calendario',  label: '📅 Agenda / Calendario' },
@@ -17471,6 +17292,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <div className="flex gap-6 flex-1">
                                         <div className={`w-1 rounded shrink-0 ${
                                             invoice.status === 'paid' ? 'bg-green-500' :
+                                            parseFloat(invoice.pagado||0) > 0 ? 'bg-orange-400' :
                                             alertLevel === 'overdue' ? 'bg-red-600' :
                                             alertLevel === 'urgent' ? 'bg-orange-500' :
                                             alertLevel === 'warning' ? 'bg-yellow-500' : 'bg-blue-400'
@@ -17508,6 +17330,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     )}
                                                     {invoice.status === 'paid' && invoice.paymentDate && (
                                                         <div className={`text-xs mt-0.5 ${darkMode?'text-green-400':'text-green-600'}`}>✓ Pagada: {invoice.paymentDate}</div>
+                                                    )}
+                                                    {invoice.status === 'pending' && parseFloat(invoice.pagado||0) > 0 && (
+                                                        <div className={`text-xs mt-0.5 font-semibold ${darkMode?'text-orange-400':'text-orange-600'}`}>
+                                                            💳 Parcial: {parseFloat(invoice.pagado).toLocaleString('es-CZ',{minimumFractionDigits:0})} / {Math.abs(parseFloat(invoice.amount||0)).toLocaleString('es-CZ',{minimumFractionDigits:0})} CZK
+                                                            <span className={`ml-1 ${darkMode?'text-red-400':'text-red-600'}`}>
+                                                                (Saldo: {(Math.abs(parseFloat(invoice.amount||0)) - parseFloat(invoice.pagado)).toLocaleString('es-CZ',{minimumFractionDigits:0})} CZK)
+                                                            </span>
+                                                        </div>
                                                     )}
                                                 </div>
                                                 {/* QR inline entre Fechas y Notas */}
@@ -18464,12 +18294,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [pagoModalInvoice, setPagoModalInvoice] = useState(null);
             const [pagoOrigen, setPagoOrigen] = useState('BANK');
             const [pagoCZK, setPagoCZK] = useState('');
+            const [pagoParcial, setPagoParcial] = useState(false);
+            const [montoParcial, setMontoParcial] = useState('');
             const CAJA_KEY = 'cashTransactionsMultiYear';
 
             const abrirPagoModal = (invoice) => {
                 setPagoModalInvoice(invoice);
                 setPagoOrigen('BANK');
                 setPagoCZK('');
+                setPagoParcial(false);
+                setMontoParcial('');
                 setShowPagoModal(true);
             };
 
@@ -18494,10 +18328,24 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     }
                 }
 
-                // Marcar factura como pagada
-                setInvoices(prev => prev.map(inv =>
-                    inv.id === invoice.id ? { ...inv, status: 'paid', cajaTransId: `prov_${invoice.id}` } : inv
-                ));
+                const montoTotal = Math.abs(parseFloat(invoice.amount) || 0);
+
+                // Validar pago parcial
+                if (pagoParcial) {
+                    const mp = parseFloat(montoParcial);
+                    if (!montoParcial || isNaN(mp) || mp <= 0) {
+                        alert('⚠️ Ingresá el monto parcial a pagar.');
+                        return;
+                    }
+                    if (mp >= montoTotal) {
+                        alert(`⚠️ El monto parcial (${mp}) es igual o mayor al total (${montoTotal}). Usá "Pago total" en su lugar.`);
+                        return;
+                    }
+                }
+
+                const montoPagado = pagoParcial ? parseFloat(montoParcial) : (monedaFactura !== 'CZK' ? parseFloat(pagoCZK) : montoTotal);
+                const saldoRestante = montoTotal - montoPagado;
+                const esParcial = pagoParcial && saldoRestante > 0;
 
                 if (!tipoCosto) {
                     alert(`✅ Factura marcada como pagada.\n\n⚠️ No se registró en Caja Diaria: el proveedor "${supplier}" no tiene Tipo de Costo asignado. Configuralo en la ficha del proveedor.`);
@@ -18508,13 +18356,20 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 // Monto en CZK para caja
                 const montoCaja = monedaFactura !== 'CZK'
                     ? parseFloat(pagoCZK)
-                    : Math.abs(parseFloat(invoice.amount) || 0);
+                    : montoPagado;
+
+                // Nota solo con números: 50,000 - 25,000 = 25,000
+                const fmtN = (n) => Math.round(n).toLocaleString('es-CZ');
+                const notaCaja = esParcial
+                    ? `${fmtN(montoTotal)} - ${fmtN(montoPagado)} = ${fmtN(saldoRestante)}`
+                    : `Factura ${invoice.number || ''} - ${supplier}`;
 
                 // Registrar en caja diaria
                 const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
                 const yearTx = allTx[year] || [];
+                const txId = esParcial ? `prov_${invoice.id}_${Date.now()}` : `prov_${invoice.id}`;
                 const newTx = {
-                    id: `prov_${invoice.id}`,
+                    id: txId,
                     fecha: fechaHoy,
                     dia, mes,
                     tipoCosto,
@@ -18524,7 +18379,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     nroFactura: invoice.number || '',
                     concepto: supplier,
                     monto: -montoCaja,
-                    notas: `Factura ${invoice.number || ''} - ${supplier}${monedaFactura !== 'CZK' ? ` (${monedaFactura} ${Math.abs(parseFloat(invoice.amount)||0).toFixed(2)} = CZK ${montoCaja})` : ''}`,
+                    notas: notaCaja,
                     fechaCreacion: new Date().toISOString(),
                     year
                 };
@@ -18533,7 +18388,38 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY, newValue: JSON.stringify(allTx) }));
 
-                alert(`✅ Factura pagada y registrada en Caja Diaria como ${tipoCosto} · ${pagoOrigen}`);
+                // Pago parcial: crear factura "pagada" con el monto parcial
+                // y reducir el monto de la factura original al saldo restante
+                if (esParcial) {
+                    const nuevaFacturaPagada = {
+                        ...invoice,
+                        id: `${invoice.id}_parcial_${Date.now()}`,
+                        amount: montoPagado,
+                        status: 'paid',
+                        paymentDate: fechaHoy,
+                        cajaTransId: txId,
+                        notes: `${notaCaja} (pago parcial de factura ${invoice.number || ''})`,
+                        _esParcial: true,
+                    };
+                    setInvoices(prev => prev.map(inv =>
+                        inv.id === invoice.id
+                            ? { ...inv, amount: saldoRestante, pagado: 0, _saldoOriginal: montoTotal }
+                            : inv
+                    ).concat([nuevaFacturaPagada]));
+                }
+
+                // Pago total: marcar como pagada normalmente
+                if (!esParcial) {
+                    setInvoices(prev => prev.map(inv =>
+                        inv.id === invoice.id
+                            ? { ...inv, pagado: montoTotal, status: 'paid', cajaTransId: `prov_${invoice.id}`, paymentDate: fechaHoy }
+                            : inv
+                    ));
+                }
+
+                alert(esParcial
+                    ? `✅ Pago parcial registrado en Caja Diaria.\n💰 Pagado: ${montoPagado.toLocaleString()} CZK\n⏳ Saldo restante: ${saldoRestante.toLocaleString()} CZK`
+                    : `✅ Factura pagada y registrada en Caja Diaria como ${tipoCosto} · ${pagoOrigen}`);
                 setShowPagoModal(false);
             };
             const deshacerPago = (invoice) => {
@@ -22386,6 +22272,42 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         </p>
                                     </div>
                                 )}
+
+                                {/* Pago parcial */}
+                                <div className="mb-4">
+                                    <label className="flex items-center gap-2 cursor-pointer mb-2">
+                                        <input type="checkbox" checked={pagoParcial} onChange={e=>setPagoParcial(e.target.checked)} className="w-4 h-4 accent-orange-500"/>
+                                        <span className="text-xs font-medium text-slate-600">💳 Pago parcial</span>
+                                    </label>
+                                    {pagoParcial && (
+                                        <div>
+                                            <div className="relative mb-1">
+                                                <input
+                                                    type="number" min="0" step="any"
+                                                    placeholder="Monto a pagar ahora..."
+                                                    value={montoParcial}
+                                                    onChange={e => setMontoParcial(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                />
+                                                <span className="absolute right-3 top-2 text-xs text-slate-400 font-medium">CZK</span>
+                                            </div>
+                                            {montoParcial && parseFloat(montoParcial) > 0 && parseFloat(montoParcial) < monto && (
+                                                <div className="rounded-lg p-2 bg-orange-50 border border-orange-200 text-xs">
+                                                    <div className="flex justify-between text-orange-700">
+                                                        <span>Total factura:</span><span className="font-bold">{monto.toLocaleString('es-CZ',{minimumFractionDigits:2})} CZK</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-orange-700">
+                                                        <span>Pagás ahora:</span><span className="font-bold text-red-600">-{parseFloat(montoParcial).toLocaleString('es-CZ',{minimumFractionDigits:2})} CZK</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-orange-800 font-bold border-t border-orange-200 mt-1 pt-1">
+                                                        <span>Saldo restante:</span><span>{(monto - parseFloat(montoParcial)).toLocaleString('es-CZ',{minimumFractionDigits:2})} CZK</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="mb-4">
                                     <label className={`block text-xs font-medium mb-2 ${'text-slate-600'}`}>Método de pago</label>
                                     <div className="flex gap-2">
