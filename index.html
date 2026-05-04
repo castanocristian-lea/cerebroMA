@@ -8237,7 +8237,7 @@ ${invoice.items.map(item => `
 
                 {/* Modal: Seleccionar sueldos pendientes */}
                 {showSueldosModal && (() => {
-                    const allSueldos = (() => { try { return JSON.parse(localStorage.getItem('sueldosPendientesData') || '[]'); } catch(e) { return []; } })();
+                    const allSueldos = (() => { if (window.__sueldosPendientesPrecargados?.length > 0) return window.__sueldosPendientesPrecargados; try { return JSON.parse(localStorage.getItem('sueldosPendientesData') || '[]'); } catch(e) { return []; } })();
                     const allEmployees = (() => { try { return JSON.parse(localStorage.getItem('employees') || '[]'); } catch(e) { return []; } })();
                     const getEmpName = (empId) => { const emp = allEmployees.find(e => e.id === empId || String(e.id) === String(empId)); return emp ? (emp.nombre || emp.name || emp.firstName || 'Empleado') : 'Empleado'; };
                     const pendientes = allSueldos.filter(s => !s.pagado).map(s => ({ ...s, nombreEmpleado: getEmpName(s.empId), moneda: s.moneda || 'CZK' }));
@@ -8301,7 +8301,7 @@ ${invoice.items.map(item => `
 
                 {/* Modal: Seleccionar facturas vencidas */}
                 {showFacturasModal && (() => {
-                    const allInvoices = (() => { try { return JSON.parse(localStorage.getItem('invoices') || '[]'); } catch(e) { return []; } })();
+                    const allInvoices = (() => { if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; try { return JSON.parse(localStorage.getItem('invoices') || '[]'); } catch(e) { return []; } })();
                     const today = new Date().toISOString().split('T')[0];
                     const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate < today).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
                     return (
@@ -8361,7 +8361,7 @@ ${invoice.items.map(item => `
                 {/* Modal: Gestionar lugares */}
                 {/* Modales independientes para Plata a acreditarse */}
                 {showSueldosAcredModal && (() => {
-                    const pendientes = (() => { try { return JSON.parse(localStorage.getItem('sueldosPendientesData')||'[]'); } catch(e) { return []; } })();
+                    const pendientes = (() => { if (window.__sueldosPendientesPrecargados?.length > 0) return window.__sueldosPendientesPrecargados; try { return JSON.parse(localStorage.getItem('sueldosPendientesData')||'[]'); } catch(e) { return []; } })();
                     return (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-lg p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
@@ -8420,7 +8420,7 @@ ${invoice.items.map(item => `
                 })()}
 
                 {showFacturasAcredModal && (() => {
-                    const allInvoices = (() => { try { return JSON.parse(localStorage.getItem('invoices') || '[]'); } catch(e) { return []; } })();
+                    const allInvoices = (() => { if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; try { return JSON.parse(localStorage.getItem('invoices') || '[]'); } catch(e) { return []; } })();
                     const today = new Date().toISOString().split('T')[0];
                     const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate < today).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
                     return (
@@ -18658,12 +18658,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Categorías personalizables
             const [categories, setCategories] = useState(() => {
+                if (window.__categoriesPrecargadas?.length > 0) return window.__categoriesPrecargadas;
                 const saved = localStorage.getItem('categories');
                 return saved ? JSON.parse(saved) : ['Servicios', 'Productos', 'Alquiler', 'Utilities', 'Profesional', 'Otros'];
             });
             
             // Información adicional de proveedores (IČO, DIČ, etc.)
             const [suppliersInfo, setSuppliersInfo] = useState(() => {
+                if (window.__suppliersInfoPrecargada && Object.keys(window.__suppliersInfoPrecargada).length > 0) return window.__suppliersInfoPrecargada;
                 const saved = localStorage.getItem('suppliersInfo');
                 return saved ? JSON.parse(saved) : {};
             });
