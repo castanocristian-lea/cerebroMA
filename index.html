@@ -8580,16 +8580,31 @@ ${invoice.items.map(item => `
             const [allTransactions, setAllTransactions] = useState({});
             const [allTxLoaded, setAllTxLoaded] = useState(false);
             useEffect(() => {
-                dbGetKey('cash_transactions', 'multiyear').then(d => {
-                    if (d) {
-                        setAllTransactions(d);
-                        try { localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(d)); } catch(e) { console.warn('⚠️ localStorage lleno, cashTransactionsMultiYear no cacheado'); }
-                    } else {
+                const cargarCaja = async () => {
+                    try {
+                        const d = await dbGetKey('cash_transactions', 'multiyear');
+                        if (d && Object.keys(d).length > 0) {
+                            setAllTransactions(d);
+                            try { localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(d)); } catch(e) {}
+                        } else {
+                            const ls = localStorage.getItem('cashTransactionsMultiYear');
+                            if (ls) setAllTransactions(JSON.parse(ls));
+                            else {
+                                // Retry después de 2s por si Supabase no estaba listo
+                                setTimeout(async () => {
+                                    const d2 = await dbGetKey('cash_transactions', 'multiyear');
+                                    if (d2) setAllTransactions(d2);
+                                }, 2000);
+                            }
+                        }
+                    } catch(e) {
+                        console.error('Error cargando caja:', e);
                         const ls = localStorage.getItem('cashTransactionsMultiYear');
                         if (ls) setAllTransactions(JSON.parse(ls));
                     }
                     setAllTxLoaded(true);
-                });
+                };
+                cargarCaja();
             }, []);
             const [showTransactionModal, setShowTransactionModal] = useState(false);
             const [showIngresoModal, setShowIngresoModal] = useState(false);
