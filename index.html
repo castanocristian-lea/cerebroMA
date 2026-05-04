@@ -6990,6 +6990,7 @@ ${invoice.items.map(item => `
             
             // Guardar usuarios en localStorage
             useEffect(() => {
+                if (!users || users.length === 0) return;
                 try { localStorage.setItem('systemUsers', JSON.stringify(users)); } catch(e) {}
                 dbSetArray('system_users', users);
             }, [users]);
@@ -9019,7 +9020,7 @@ ${invoice.items.map(item => `
                 const saved = localStorage.getItem('cajaRubrosCosto');
                 return saved ? JSON.parse(saved) : DEFAULT_TIPOS_COSTO;
             });
-            useEffect(() => { localStorage.setItem('cajaRubrosCosto', JSON.stringify(tiposCosto)); dbUpsertOne('cash_planning', 'rubrosCosto', tiposCosto); }, [tiposCosto]);
+            useEffect(() => { if (!tiposCosto || tiposCosto.length === 0) return; localStorage.setItem('cajaRubrosCosto', JSON.stringify(tiposCosto)); dbUpsertOne('cash_planning', 'rubrosCosto', tiposCosto); }, [tiposCosto]);
             useEffect(() => {
                 try { localStorage.setItem('cashNotes', JSON.stringify(cashNotes)); } catch(e) {}
                 if (cashNotes.length > 0) dbSetArray('cash_notes', cashNotes);
@@ -12558,7 +12559,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const s = localStorage.getItem('salarioOverride');
                 return s ? JSON.parse(s) : {};
             });
-            useEffect(() => { localStorage.setItem('salarioOverride', JSON.stringify(salarioOverride));
+            useEffect(() => { if (!salarioOverride || Object.keys(salarioOverride).length === 0) return; localStorage.setItem('salarioOverride', JSON.stringify(salarioOverride));
                 dbUpsertOne('payroll_monthly', 'salarioOverride', salarioOverride); }, [salarioOverride]);
             const overrideKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
             const getSalarioMes = (emp) => {
@@ -12571,7 +12572,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const s = localStorage.getItem('notasMes');
                 return s ? JSON.parse(s) : {};
             });
-            useEffect(() => { try { localStorage.setItem('notasMes', JSON.stringify(notasMes)); } catch(e) {}
+            useEffect(() => { if (!notasMes || Object.keys(notasMes).length === 0) return; try { localStorage.setItem('notasMes', JSON.stringify(notasMes)); } catch(e) {}
                 dbUpsertOne('payroll_monthly', 'notasMes', notasMes); }, [notasMes]);
             const notaKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
             const getNota = (empId) => notasMes[notaKey(empId)] || '';
@@ -18642,6 +18643,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar categorías marcadas en localStorage y Supabase
             useEffect(() => {
+                if (!markedCategories || markedCategories.size === 0) return;
                 const arr = [...markedCategories];
                 localStorage.setItem('markedCategories', JSON.stringify(arr));
                 dbUpsertOne('app_config', 'markedCategories', arr);
@@ -19063,6 +19065,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar tax rates cuando cambien
             useEffect(() => {
+                if (!taxRates || taxRates.length === 0) return;
                 localStorage.setItem('taxRates', JSON.stringify(taxRates));
                 dbUpsertOne('suppliers', 'taxRates', taxRates);
             }, [taxRates]);
@@ -19343,6 +19346,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar categorías en localStorage
             useEffect(() => {
+                if (!categories || categories.length === 0) return;
                 try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
                 dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
