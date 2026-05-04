@@ -1436,6 +1436,44 @@ ${invoice.items.map(item => `
                 return () => clearInterval(t);
             }, []);
 
+            // Sync banners desde Supabase cuando el usuario está logueado
+            useEffect(() => {
+                if (!isUnlocked || !currentUser) return;
+                const syncBanners = async () => {
+                    try {
+                        // Buscar employee match
+                        const emps = JSON.parse(localStorage.getItem('employees') || '[]');
+                        const nameLC = (currentUser.name||'').toLowerCase();
+                        const userLC = (currentUser.username||'').toLowerCase();
+                        const yo = emps.find(e => {
+                            const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                            return en.includes(nameLC)||(nameLC&&nameLC.includes((e.nombre||'').toLowerCase()))||
+                                   (e.nombre||'').toLowerCase().includes(userLC)||
+                                   String(e.id)===String(currentUser.id);
+                        });
+                        if (!yo) return;
+                        const keys = ['sueldoNotif','seguroNotif','solicNotif','solicRespNotif','calendarioNotif'];
+                        let changed = false;
+                        await Promise.all(keys.map(async k => {
+                            const fullKey = `${k}_${yo.id}`;
+                            const r = await dbGetKey('app_config', 'notif_' + fullKey);
+                            if (r && Array.isArray(r)) {
+                                const local = JSON.parse(localStorage.getItem(fullKey)||'[]');
+                                // Merge: keep unread from Supabase
+                                const merged = [...r];
+                                local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
+                                localStorage.setItem(fullKey, JSON.stringify(merged));
+                                changed = true;
+                            }
+                        }));
+                        if (changed) setNotifKey(k => k+1);
+                    } catch(e) {}
+                };
+                syncBanners();
+                const t = setInterval(syncBanners, 15000);
+                return () => clearInterval(t);
+            }, [isUnlocked, currentUser?.id]);
+
             // Precargar notificaciones cross-device desde Supabase al localStorage
             useEffect(() => {
                 if (!currentUser) return;
@@ -1640,8 +1678,25 @@ ${invoice.items.map(item => `
                 // Verificar si ya hay credencial en localStorage
                 const cred = localStorage.getItem('cerebroma_bio_cred');
                 if (cred) { setBioRegistered(true); return; }
-                // Si no hay en localStorage, buscar en Supabase usando el username ingresado
-                // (se re-verifica después del login si el usuario tiene cred en Supabase)
+                // Precargar credenciales bio de todos los usuarios desde Supabase
+                (async () => {
+                    try {
+                        const users = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                        if (!users.length) return;
+                        // Buscar todas las credenciales bio en paralelo
+                        const results = await Promise.all(
+                            users.map(u => window._sb?.from('app_config').select('data').eq('id','bioCred_'+u.id).maybeSingle())
+                        );
+                        results.forEach((r, i) => {
+                            if (r?.data?.data) {
+                                localStorage.setItem('cerebroma_bio_cred_'+users[i].id, JSON.stringify(r.data.data));
+                            }
+                        });
+                        // Marcar como registrado si hay alguna credencial
+                        const hasCred = results.some(r => r?.data?.data);
+                        if (hasCred) setBioRegistered(true);
+                    } catch(e) {}
+                })();
             }, []);
 
             // Restaurar credencial desde Supabase al loguearse
@@ -2485,16 +2540,7 @@ ${invoice.items.map(item => `
                                                     value={userInput}
                                                     onChange={async e => {
                                                         setUserInput(e.target.value);
-                                                        if (e.target.value.length >= 3 && !localStorage.getItem('cerebroma_bio_cred')) {
-                                                            try {
-                                                                const users = JSON.parse(localStorage.getItem('systemUsers') || '[]');
-                                                                const u = users.find(x => (x.username||x.name||'').toLowerCase().startsWith(e.target.value.toLowerCase()));
-                                                                if (u) {
-                                                                    const r = await window._sb?.from('app_config').select('data').eq('id','bioCred_'+u.id).maybeSingle();
-                                                                    if (r?.data?.data) { localStorage.setItem('cerebroma_bio_cred', JSON.stringify(r.data.data)); setBioRegistered(true); }
-                                                                }
-                                                            } catch(e2) {}
-                                                        }
+                                                        // Bio lookup handled on mount, not on keystroke
                                                     }}
                                                     placeholder="••••••"
                                                     autoComplete="username"
@@ -23703,18 +23749,19 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>);})}
                             </div>
                             {/* Input */}
-                            <div style={{display:'flex',gap:'8px',padding:'10px 12px',flexShrink:0,
-                                    borderTop:`1px solid ${darkMode?'#334155':'#e2e8f0'}`}}>
+                            <div style={{display:'flex',gap:'8px',padding:'10px 12px 10px 12px',flexShrink:0,
+                                    borderTop:`1px solid ${darkMode?'#334155':'#e2e8f0'}`,boxSizing:'border-box',width:'100%'}}>
                                 <input type="text" value={chatMsg} onChange={e=>setChatMsg(e.target.value)}
                                     onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&enviarMensaje()}
                                     placeholder="Escribí una nota..."
                                     style={{flex:1,minWidth:0,padding:'8px 12px',borderRadius:'12px',fontSize:'13px',
-                                            border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',
+                                            border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',boxSizing:'border-box',
                                             background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}/>
                                 <button onClick={enviarMensaje} disabled={!chatMsg.trim()}
-                                    style={{width:'40px',height:'40px',flexShrink:0,borderRadius:'12px',border:'none',
-                                            cursor:'pointer',background:'#9333ea',color:'white',fontSize:'18px',
-                                            fontWeight:'bold',opacity:chatMsg.trim()?1:0.4}}>→</button>
+                                    style={{width:'44px',height:'44px',flexShrink:0,borderRadius:'12px',border:'none',
+                                            cursor:'pointer',background:'#9333ea',color:'white',fontSize:'20px',
+                                            fontWeight:'bold',opacity:chatMsg.trim()?1:0.4,display:'flex',
+                                            alignItems:'center',justifyContent:'center'}}>→</button>
                             </div>
                         </div>
                     </div>)}
