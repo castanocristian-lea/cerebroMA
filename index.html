@@ -2020,11 +2020,25 @@ ${invoice.items.map(item => `
                         ].join('\n');
 
                         if (confirm(`¿Restaurar backup completo?\n\nEsto sobrescribirá todos los datos actuales:\n${stats}\n\n¿Continuar?`)) {
+                            // Limpiar keys grandes primero para liberar espacio
+                            const KEYS_GRANDES = ['cashTransactionsMultiYear','suppliersInfo','invoices',
+                                'salesInvoices','employees','systemUsers','payrollMonthlyData',
+                                'sueldosPendientesData','seguroMedicoData','salesProducts','salesClients',
+                                'salesHolders','categories','horasAjustesData','codigosProductos'];
+                            KEYS_GRANDES.forEach(k => localStorage.removeItem(k));
+
                             // Restaurar TODAS las claves del backup dinámicamente
+                            const SKIP_LS = new Set(['cashTransactionsMultiYear']); // caja va a Supabase, no localStorage
                             for (const [key, value] of Object.entries(data)) {
-                                if (SKIP_KEYS.has(key)) continue;
+                                if (SKIP_KEYS.has(key) || SKIP_LS.has(key)) continue;
                                 const str = typeof value === 'string' ? value : JSON.stringify(value);
-                                localStorage.setItem(key, str);
+                                try { localStorage.setItem(key, str); } catch(e) { console.warn('Skip:', key); }
+                            }
+
+                            // Si el backup tiene datos de caja, subirlos a Supabase
+                            if (data.cashTransactionsMultiYear && Object.keys(data.cashTransactionsMultiYear).length > 0) {
+                                dbUpsertOne('cash_transactions', 'multiyear', data.cashTransactionsMultiYear)
+                                    .then(() => console.log('✅ Caja restaurada en Supabase'));
                             }
 
                             // Marcar que hay migración pendiente al próximo arranque
