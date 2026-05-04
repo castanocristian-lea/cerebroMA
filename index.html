@@ -8333,7 +8333,7 @@ ${invoice.items.map(item => `
                 dbGetKey('cash_transactions', 'multiyear').then(d => {
                     if (d) {
                         setAllTransactions(d);
-                        localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(d));
+                        try { localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(d)); } catch(e) { console.warn('⚠️ localStorage lleno, cashTransactionsMultiYear no cacheado'); }
                     } else {
                         const ls = localStorage.getItem('cashTransactionsMultiYear');
                         if (ls) setAllTransactions(JSON.parse(ls));
@@ -8467,7 +8467,7 @@ ${invoice.items.map(item => `
             
             // Guardar en localStorage y Supabase cuando cambian las transacciones
             useEffect(() => {
-                localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(allTransactions));
+                try { localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(allTransactions)); } catch(e) { console.warn('⚠️ localStorage lleno, cashTransactionsMultiYear no cacheado'); }
                 if (Object.keys(allTransactions).length > 0) {
                     dbUpsertOne('cash_transactions', 'multiyear', allTransactions);
                 }
