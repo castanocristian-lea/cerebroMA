@@ -8598,18 +8598,25 @@ ${invoice.items.map(item => `
             }
             // Estados
             const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-            const [allTransactions, setAllTransactions] = useState({});
-            const [allTxLoaded, setAllTxLoaded] = useState(false);
+            const [allTransactions, setAllTransactions] = useState(() => {
+                if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0)
+                    return window.__cajaPrecargada;
+                try { const ls = localStorage.getItem('cashTransactionsMultiYear'); if (ls) return JSON.parse(ls); } catch(e) {}
+                return {};
+            });
+            const [allTxLoaded, setAllTxLoaded] = useState(() => !!(window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0));
             useEffect(() => {
+                if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) {
+                    setAllTxLoaded(true);
+                    return;
+                }
                 const cargar = async () => {
-                    // Esperar a que precargarDesdeSupabase termine
                     if (window.__supabaseReadyPromise) await window.__supabaseReadyPromise;
                     if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) {
                         setAllTransactions(window.__cajaPrecargada);
                         setAllTxLoaded(true);
                         return;
                     }
-                    // Fallback directo
                     try {
                         const d = await dbGetKey('cash_transactions', 'multiyear');
                         if (d && Object.keys(d).length > 0) {
