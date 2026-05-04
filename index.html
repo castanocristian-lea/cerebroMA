@@ -2054,6 +2054,14 @@ ${invoice.items.map(item => `
                                 dbUpsertOne('cash_transactions', 'multiyear', data.cashTransactionsMultiYear)
                                     .then(() => console.log('✅ Caja restaurada en Supabase'));
                             }
+                            // Subir datos de proveedores a Supabase
+                            const suppKeys = ['invoices','categories','suppliersInfo','salesInvoices','salesProducts','salesClients','salesHolders','invNotes','taxRates'];
+                            const suppMap = {invoices:'invoices', categories:'categories', suppliersInfo:'main', salesInvoices:'salesInvoices', salesProducts:'salesProducts', salesClients:'salesClients', salesHolders:'salesHolders', invNotes:'invNotes', taxRates:'taxRates'};
+                            suppKeys.forEach(k => {
+                                if (data[k] && (Array.isArray(data[k]) ? data[k].length > 0 : Object.keys(data[k]).length > 0)) {
+                                    dbUpsertOne('suppliers', suppMap[k], data[k]).then(() => console.log('✅', k, 'restaurado en Supabase'));
+                                }
+                            });
 
                             // Marcar que hay migración pendiente al próximo arranque
                             // try { localStorage.setItem('__pendingMigration', '1'); } catch(e) {} // Ya no necesario — todo vive en Supabase
