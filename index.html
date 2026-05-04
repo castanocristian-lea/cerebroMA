@@ -240,6 +240,12 @@
         });
 
         async function init() {
+            // Limpiar keys grandes del localStorage para evitar quota exceeded
+            const KEYS_GRANDES = ['cashTransactionsMultiYear','suppliersInfo','invoices','salesInvoices',
+                'employees','systemUsers','payrollMonthlyData','sueldosPendientesData','seguroMedicoData',
+                'salesProducts','salesClients','salesHolders','categories','horasAjustesData','codigosProductos'];
+            KEYS_GRANDES.forEach(k => localStorage.removeItem(k));
+
             // Migración pendiente (después de importar backup)
             if (localStorage.getItem('__pendingMigration') === '1') {
                 await migrarLocalStorage();
@@ -408,7 +414,7 @@
             const ajusteKey = santiago.id + '_2026_2'; // marzo = mes 2
             const ajustes = JSON.parse(localStorage.getItem('horasAjustesData') || '{}');
             ajustes[ajusteKey] = 33.3;
-            localStorage.setItem('horasAjustesData', JSON.stringify(ajustes));
+            try { localStorage.setItem('horasAjustesData', JSON.stringify(ajustes)); } catch(e) {}
             dbUpsertOne('payroll_hours','main',ajustes);
             localStorage.setItem(FIX_MARKER, '1');
             console.log('Fix Santiago marzo 2026: 33.3 hs guardado en horasAjustesData');
@@ -1607,7 +1613,7 @@ ${invoice.items.map(item => `
                 // Persistir preferencia por usuario
                 const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, autoLogoutMinutes } : u);
-                localStorage.setItem('systemUsers', JSON.stringify(updated));
+                try { localStorage.setItem('systemUsers', JSON.stringify(updated)); } catch(e) {}
                 dbSetArray('system_users', updated);
             }, [autoLogoutMinutes]);
             // Timer de auto-logout
@@ -1898,7 +1904,7 @@ ${invoice.items.map(item => `
                 if (!currentUser) return;
                 const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, language: lang } : u);
-                localStorage.setItem('systemUsers', JSON.stringify(updated));
+                try { localStorage.setItem('systemUsers', JSON.stringify(updated)); } catch(e) {}
                 dbSetArray('system_users', updated);
             };
             
@@ -2053,7 +2059,7 @@ ${invoice.items.map(item => `
                         createdAt: new Date().toISOString()
                     };
                     systemUsers.push(defaultAdmin);
-                    localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+                    try { localStorage.setItem('systemUsers', JSON.stringify(systemUsers)); } catch(e) {}
                 dbSetArray('system_users', systemUsers);
                 }
                 
@@ -2131,7 +2137,7 @@ ${invoice.items.map(item => `
                             if (nuevosIntentos >= 3) {
                                 const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
                                     .map(u => String(u.id) === userId ? {...u, bloqueado: true} : u);
-                                localStorage.setItem('systemUsers', JSON.stringify(todos));
+                                try { localStorage.setItem('systemUsers', JSON.stringify(todos)); } catch(e) {}
                                 dbSetArray('system_users', todos);
                                 setBloqueadoError(true);
                                 setTimeout(() => setBloqueadoError(false), 5000);
@@ -2169,7 +2175,7 @@ ${invoice.items.map(item => `
                     }
                     const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
                         .map(u => String(u.id) === String(usuarioPregunta.id) ? {...u, bloqueado: true} : u);
-                    localStorage.setItem('systemUsers', JSON.stringify(todos));
+                    try { localStorage.setItem('systemUsers', JSON.stringify(todos)); } catch(e) {}
                     dbSetArray('system_users', todos);
                     setMostrarPregunta(false);
                     setUsuarioPregunta(null);
@@ -2197,7 +2203,7 @@ ${invoice.items.map(item => `
                 if (new1 === current) { setChangePinError('El nuevo PIN no puede ser igual al actual.'); return; }
                 const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
                 const updatedUsers = systemUsers.map(u => u.id === currentUser.id ? { ...u, pin: new1 } : u);
-                localStorage.setItem('systemUsers', JSON.stringify(updatedUsers));
+                try { localStorage.setItem('systemUsers', JSON.stringify(updatedUsers)); } catch(e) {}
                 dbSetArray('system_users', updatedUsers);
                 setCurrentUser({ ...currentUser, pin: new1 });
                 setChangePinSuccess(true);
@@ -3530,7 +3536,7 @@ ${invoice.items.map(item => `
                                                 if (!securityForm.respuesta.trim()) { setSecurityError('Escribí la respuesta.'); return; }
                                                 const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
                                                     .map(u => u.id === currentUser.id ? {...u, preguntaSeguridad: securityForm.pregunta.trim(), respuestaSeguridad: securityForm.respuesta.trim().toLowerCase()} : u);
-                                                localStorage.setItem('systemUsers', JSON.stringify(todos));
+                                                try { localStorage.setItem('systemUsers', JSON.stringify(todos)); } catch(e) {}
                                                 dbSetArray('system_users', todos);
                                                 setCurrentUser(u => ({...u, preguntaSeguridad: securityForm.pregunta.trim(), respuestaSeguridad: securityForm.respuesta.trim().toLowerCase()}));
                                                 setSecuritySuccess(true);
@@ -5242,7 +5248,7 @@ ${invoice.items.map(item => `
                 ]).then(([emps, pay, seg]) => {
                     const empsList = emps || [];
                     setEmpleados(empsList);
-                    localStorage.setItem('employees', JSON.stringify(empsList));
+                    try { localStorage.setItem('employees', JSON.stringify(empsList)); } catch(e) {}
                     setPayroll(pay || JSON.parse(localStorage.getItem('payrollMonthlyData') || '{}'));
                     setSeguros(seg || JSON.parse(localStorage.getItem('seguroMedicoData') || '{}'));
                     setLoaded(true);
@@ -6898,7 +6904,7 @@ ${invoice.items.map(item => `
             
             // Guardar usuarios en localStorage
             useEffect(() => {
-                localStorage.setItem('systemUsers', JSON.stringify(users));
+                try { localStorage.setItem('systemUsers', JSON.stringify(users)); } catch(e) {}
                 dbSetArray('system_users', users);
             }, [users]);
             
@@ -7214,7 +7220,7 @@ ${invoice.items.map(item => `
                                                                         onClick={() => {
                                                                             const updated = users.map(u => u.id === user.id ? {...u, bloqueado: !u.bloqueado} : u);
                                                                             setUsers(updated);
-                                                                            localStorage.setItem('systemUsers', JSON.stringify(updated));
+                                                                            try { localStorage.setItem('systemUsers', JSON.stringify(updated)); } catch(e) {}
                                                                             dbSetArray('system_users', updated);
                                                                         }}
                                                                         className={`mr-4 text-xs px-2 py-1 rounded-full font-medium border transition-all ${user.bloqueado ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-red-50 hover:text-red-600'}`}
@@ -9320,14 +9326,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         notas: notas || '', fromCaja: true, cajaRef: cajaId,
                         fileName: null, emailNotification: false
                     };
-                    localStorage.setItem('invoices', JSON.stringify([...invs, newInv]));
+                    try { localStorage.setItem('invoices', JSON.stringify([...invs, newInv])); } catch(e) {}
                     return true;
                 } catch(e) { return false; }
             };
             const removeInvoiceByCajaRef = (cajaId) => {
                 try {
                     const invs = JSON.parse(localStorage.getItem('invoices') || '[]');
-                    localStorage.setItem('invoices', JSON.stringify(invs.filter(i => i.cajaRef !== cajaId)));
+                    try { localStorage.setItem('invoices', JSON.stringify(invs.filter(i => i.cajaRef !== cajaId))); } catch(e) {}
                 } catch(e) {}
             };
             const updateInvoiceByCajaRef = (cajaId, proveedor, monto, fecha, nroFactura, notas) => {
@@ -11551,11 +11557,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Estados
             const [employees, setEmployees] = useState([]);
             const [empLoaded, setEmpLoaded] = useState(false);
-            useEffect(() => { dbGetAll('employees').then(d => { const emps = d||[]; setEmployees(emps); setEmpLoaded(true); localStorage.setItem('employees', JSON.stringify(emps)); }); }, []);
+            useEffect(() => { dbGetAll('employees').then(d => { const emps = d||[]; setEmployees(emps); setEmpLoaded(true); try { localStorage.setItem('employees', JSON.stringify(emps)); } catch(e) {} }); }, []);
             useEffect(() => {
                 if (employees.length === 0) return;
                 dbSetArray('employees', employees);
-                localStorage.setItem('employees', JSON.stringify(employees));
+                try { localStorage.setItem('employees', JSON.stringify(employees)); } catch(e) {}
             }, [employees]);
             const [showEmployeeModal, setShowEmployeeModal] = useState(false);
             const [editingEmployee, setEditingEmployee] = useState(null);
@@ -11580,7 +11586,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar empleados en localStorage
             useEffect(() => {
-                localStorage.setItem('employees', JSON.stringify(employees));
+                try { localStorage.setItem('employees', JSON.stringify(employees)); } catch(e) {}
             }, [employees]);
             
             // Abrir modal para nuevo empleado
@@ -12132,7 +12138,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
             useEffect(() => {
-                localStorage.setItem('payrollMonthlyData', JSON.stringify(payrollData));
+                try { localStorage.setItem('payrollMonthlyData', JSON.stringify(payrollData)); } catch(e) {}
                 if (Object.keys(payrollData).length > 0) dbUpsertOne('payroll_monthly', 'main', payrollData);
             }, [payrollData]);
 
@@ -12150,7 +12156,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
             useEffect(() => {
-                localStorage.setItem('horasAjustesData', JSON.stringify(horasAjustes));
+                try { localStorage.setItem('horasAjustesData', JSON.stringify(horasAjustes)); } catch(e) {}
                 dbUpsertOne('payroll_hours','main',horasAjustes);
             }, [horasAjustes]);
             const [editingHorasCell, setEditingHorasCell] = useState(null);
@@ -12230,7 +12236,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
             useEffect(() => {
-                localStorage.setItem('sueldosPendientesData', JSON.stringify(pendientesData));
+                try { localStorage.setItem('sueldosPendientesData', JSON.stringify(pendientesData)); } catch(e) {}
                 dbUpsertOne('payroll_monthly', 'pendientes', pendientesData);
             }, [pendientesData]);
             const [showPendienteModal, setShowPendienteModal] = useState(false);
@@ -12296,7 +12302,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
             useEffect(() => {
-                localStorage.setItem('seguroMedicoData', JSON.stringify(seguroData));
+                try { localStorage.setItem('seguroMedicoData', JSON.stringify(seguroData)); } catch(e) {}
                 if (Object.keys(seguroData).length > 0) dbUpsertOne('payroll_insurance', 'main', seguroData);
             }, [seguroData]);
 
@@ -15308,7 +15314,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     return { ...inv, ivaByRate };
                 });
                 // Guardar migración
-                localStorage.setItem('salesInvoices', JSON.stringify(migrated));
+                try { localStorage.setItem('salesInvoices', JSON.stringify(migrated)); } catch(e) {}
                 return migrated;
             });
             const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -15347,22 +15353,22 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar en localStorage
             useEffect(() => {
-                localStorage.setItem('salesProducts', JSON.stringify(products));
+                try { localStorage.setItem('salesProducts', JSON.stringify(products)); } catch(e) {}
                 dbUpsertOne('suppliers', 'salesProducts', products);
             }, [products]);
             
             useEffect(() => {
-                localStorage.setItem('salesHolders', JSON.stringify(holders));
+                try { localStorage.setItem('salesHolders', JSON.stringify(holders)); } catch(e) {}
                 dbUpsertOne('suppliers', 'salesHolders', holders);
             }, [holders]);
             
             useEffect(() => {
-                localStorage.setItem('salesClients', JSON.stringify(clients));
+                try { localStorage.setItem('salesClients', JSON.stringify(clients)); } catch(e) {}
                 dbUpsertOne('suppliers', 'salesClients', clients);
             }, [clients]);
             
             useEffect(() => {
-                localStorage.setItem('salesInvoices', JSON.stringify(salesInvoices));
+                try { localStorage.setItem('salesInvoices', JSON.stringify(salesInvoices)); } catch(e) {}
                 dbUpsertOne('suppliers', 'salesInvoices', salesInvoices);
             }, [salesInvoices]);
             
@@ -18371,17 +18377,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             useEffect(() => {
                 dbGetKey('suppliers', 'main').then(d => {
                     if (d && Object.keys(d).length > 0 && Object.keys(suppliersInfo).length === 0) {
-                        setSuppliersInfo(d); localStorage.setItem('suppliersInfo', JSON.stringify(d));
+                        setSuppliersInfo(d); try { localStorage.setItem('suppliersInfo', JSON.stringify(d)); } catch(e) {}
                     }
                 });
                 dbGetKey('suppliers', 'categories').then(d => {
-                    if (d && d.length > 0) { setCategories(d); localStorage.setItem('categories', JSON.stringify(d)); }
+                    if (d && d.length > 0) { setCategories(d); try { localStorage.setItem('categories', JSON.stringify(d)); } catch(e) {} }
                 });
             }, []);
 
-            useEffect(() => { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo));
+            useEffect(() => { try { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); } catch(e) {}
                 dbUpsertOne('suppliers', 'main', suppliersInfo); }, [suppliersInfo]);
-            useEffect(() => { localStorage.setItem('categories', JSON.stringify(categories));
+            useEffect(() => { try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
                 dbUpsertOne('suppliers', 'categories', categories); }, [categories]);
             const openNewInvNote = () => {
                 setEditingInvNote(null);
@@ -18631,13 +18637,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar categorías cuando cambien
             useEffect(() => {
-                localStorage.setItem('categories', JSON.stringify(categories));
+                try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
                 dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
             
             // Guardar información de proveedores cuando cambie
             useEffect(() => {
-                localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo));
+                try { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); } catch(e) {}
                 dbUpsertOne('suppliers', 'main', suppliersInfo);
             }, [suppliersInfo]);
             
@@ -18669,7 +18675,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 // Agregar nombre a categories
                 const newCategories = [...categories, trimmedName];
                 setCategories(newCategories);
-                localStorage.setItem('categories', JSON.stringify(newCategories));
+                try { localStorage.setItem('categories', JSON.stringify(newCategories)); } catch(e) {}
                 
                 // Guardar info adicional en suppliersInfo
                 const newInfo = { ...suppliersInfo };
@@ -18690,7 +18696,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     tipoCosto: (newSupplierInfo.tipoCosto || '').trim()
                 };
                 setSuppliersInfo(newInfo);
-                localStorage.setItem('suppliersInfo', JSON.stringify(newInfo));
+                try { localStorage.setItem('suppliersInfo', JSON.stringify(newInfo)); } catch(e) {}
                 
                 setNewCategoryName('');
                 setNewSupplierInfo({ ico: '', dic: '', address: '', phone: '', bankAccount: '', bankCode: '', vs: '', ks: '', email: '', web: '', username: '', password: '', notes: '' });
@@ -18707,7 +18713,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const newInfo = { ...suppliersInfo };
                         delete newInfo[categoryName];
                         setSuppliersInfo(newInfo);
-                        localStorage.setItem('suppliersInfo', JSON.stringify(newInfo));
+                        try { localStorage.setItem('suppliersInfo', JSON.stringify(newInfo)); } catch(e) {}
                     }
                     
                     // Cambiar facturas de ese proveedor a "Otros"
@@ -18745,7 +18751,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     newInfo[trimmedName] = newInfo[editingCategory];
                     delete newInfo[editingCategory];
                     setSuppliersInfo(newInfo);
-                    localStorage.setItem('suppliersInfo', JSON.stringify(newInfo));
+                    try { localStorage.setItem('suppliersInfo', JSON.stringify(newInfo)); } catch(e) {}
                 }
                 
                 // Actualizar el nombre en todas las facturas que usen este proveedor
@@ -18809,7 +18815,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 };
                 
                 setSuppliersInfo(newInfo);
-                localStorage.setItem('suppliersInfo', JSON.stringify(newInfo));
+                try { localStorage.setItem('suppliersInfo', JSON.stringify(newInfo)); } catch(e) {}
                 setEditingSupplierInfo(null);
                 
                 alert(`✅ Información de ${editingSupplierInfo.name} actualizada`);
@@ -18889,7 +18895,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     if (window.storage) {
                         window.storage.set('invoices', JSON.stringify(invoices));
                     }
-                    localStorage.setItem('invoices', JSON.stringify(invoices));
+                    try { localStorage.setItem('invoices', JSON.stringify(invoices)); } catch(e) {}
                     dbUpsertOne('suppliers', 'invoices', invoices);
                 } catch (error) {
                     console.log('Error guardando:', error);
@@ -18898,7 +18904,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar categorías en localStorage
             useEffect(() => {
-                localStorage.setItem('categories', JSON.stringify(categories));
+                try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
                 dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
 
