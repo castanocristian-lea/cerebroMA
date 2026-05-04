@@ -2056,7 +2056,7 @@ ${invoice.items.map(item => `
                             }
 
                             // Marcar que hay migración pendiente al próximo arranque
-                            try { localStorage.setItem('__pendingMigration', '1'); } catch(e) {}
+                            // try { localStorage.setItem('__pendingMigration', '1'); } catch(e) {} // Ya no necesario — todo vive en Supabase
 
                             alert('✅ Backup restaurado exitosamente. La página se recargará.');
                             window.location.reload();
