@@ -7987,13 +7987,23 @@ ${invoice.items.map(item => `
                 <div className={`mt-4 rounded-xl border-2 p-5 ${darkMode ? 'border-slate-600 bg-slate-800' : 'border-emerald-100 bg-white shadow-sm'}`}>
                     <div className="flex items-center justify-between mb-4">
                         <h3 className={`text-sm font-bold uppercase tracking-wide ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>💵 Plata a acreditarse</h3>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap justify-end">
                             {canEdit && acreditaciones.length > 0 && (
                                 <button onClick={() => { if (confirm('¿Borrar todas las acreditaciones?')) saveAcreditaciones([]); }}
                                     className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-red-800 text-red-400 hover:bg-red-900/30' : 'border-red-200 text-red-500 hover:bg-red-50'}`}>
                                     🗑 Borrar todo
                                 </button>
                             )}
+                            {canEdit && <button onClick={() => setShowSueldosModal(true)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-purple-700 text-purple-400 hover:bg-slate-700' : 'border-purple-300 text-purple-700 hover:bg-purple-50'}`}>
+                                👤 Sueldos pendientes
+                            </button>}
+                            {canEdit && <button onClick={() => setShowFacturasModal(true)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-amber-700 text-amber-400 hover:bg-slate-700' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
+                                🧾 Facturas vencidas
+                            </button>}
+                            {canEdit && <button onClick={openNewGasto} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                Gasto planificado
+                            </button>}
                             {canEdit && <button onClick={openNewAcreditacion} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-emerald-700 text-emerald-400 hover:bg-slate-700' : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'}`}>
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                                 Agregar
@@ -12487,11 +12497,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             const CAJA_KEY_PAYROLL = 'cashTransactionsMultiYear';
 
-            const syncPaymentToCaja = (emp, entry, cajaId, isDelete = false) => {
-                // Leer de window.__cajaPrecargada (fuente de verdad) o localStorage como fallback
-                let allTx = window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0
-                    ? JSON.parse(JSON.stringify(window.__cajaPrecargada))
-                    : JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL) || '{}');
+            const syncPaymentToCaja = async (emp, entry, cajaId, isDelete = false) => {
+                // Leer siempre de Supabase como fuente de verdad
+                let allTx = {};
+                if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) {
+                    allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada));
+                } else {
+                    try { const d = await dbGetKey('cash_transactions','multiyear'); if (d && Object.keys(d).length>0) { allTx = d; window.__cajaPrecargada = d; } } catch(e) {}
+                    if (!Object.keys(allTx).length) { try { allTx = JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL)||'{}'); } catch(e){} }
+                }
                 // Primero borrar cualquier transacción existente con ese cajaId
                 Object.keys(allTx).forEach(yr => {
                     allTx[yr] = (allTx[yr] || []).filter(t => t.id !== cajaId);
@@ -12526,7 +12540,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
             };
 
-            const savePayment = () => {
+            const savePayment = async () => {
                 if (!payForm.concepto || !payForm.monto || isNaN(parseFloat(payForm.monto))) {
                     alert('⚠️ ' + (language==='en'?'Select a concept and enter a valid amount':language==='cs'?'Vyberte popis a zadejte platnou částku':'Seleccioná un concepto e ingresá un monto válido'));
                     return;
@@ -12569,7 +12583,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     } catch(e) {}
                 }
                 // Sincronizar con caja diaria
-                try { syncPaymentToCaja(payModalEmp, entry, cajaId, false); } catch(e) { console.error('Error sync caja:', e); }
+                try { await syncPaymentToCaja(payModalEmp, entry, cajaId, false); } catch(e) { console.error('Error sync caja:', e); }
                 setShowPayModal(false);
             };
 
