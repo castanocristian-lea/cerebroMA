@@ -2016,6 +2016,12 @@ ${invoice.items.map(item => `
                     catch { data[key] = raw; }
                 }
 
+                // Incluir datos grandes que viven en Supabase/window (no en localStorage)
+                if (window.__invoicesPrecargadas?.length > 0) data.invoices = window.__invoicesPrecargadas;
+                if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) data.cashTransactionsMultiYear = window.__cajaPrecargada;
+                if (window.__suppliersInfoPrecargada && Object.keys(window.__suppliersInfoPrecargada).length > 0) data.suppliersInfo = window.__suppliersInfoPrecargada;
+                if (window.__payrollPrecargado && Object.keys(window.__payrollPrecargado).length > 0) data.payrollMonthlyData = window.__payrollPrecargado;
+
                 // Estadísticas legibles
                 const stats = [
                     `👤 ${(data.systemUsers || []).length} usuarios`,
@@ -18934,8 +18940,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     ? `${fmtN(montoTotal)} - ${fmtN(montoPagado)} = ${fmtN(saldoRestante)}`
                     : `Factura ${invoice.number || ''} - ${supplier}`;
 
-                // Registrar en caja diaria
-                const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                // Registrar en caja diaria - leer siempre de window.__cajaPrecargada
+                const allTx = window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0
+                    ? JSON.parse(JSON.stringify(window.__cajaPrecargada))
+                    : JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
                 const yearTx = allTx[year] || [];
                 const txId = esParcial ? `prov_${invoice.id}_${Date.now()}` : `prov_${invoice.id}`;
                 const newTx = {
@@ -18954,7 +18962,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     year
                 };
                 allTx[year] = [...yearTx, newTx];
-                localStorage.setItem(CAJA_KEY, JSON.stringify(allTx));
+                window.__cajaPrecargada = allTx;
+                try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) {}
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY, newValue: JSON.stringify(allTx) }));
 
