@@ -240,12 +240,6 @@
         });
 
         async function init() {
-            // Limpiar keys grandes del localStorage para evitar quota exceeded
-            const KEYS_GRANDES = ['cashTransactionsMultiYear','suppliersInfo','invoices','salesInvoices',
-                'employees','systemUsers','payrollMonthlyData','sueldosPendientesData','seguroMedicoData',
-                'salesProducts','salesClients','salesHolders','categories','horasAjustesData','codigosProductos'];
-            KEYS_GRANDES.forEach(k => localStorage.removeItem(k));
-
             // Migración pendiente (después de importar backup)
             if (localStorage.getItem('__pendingMigration') === '1') {
                 await migrarLocalStorage();
