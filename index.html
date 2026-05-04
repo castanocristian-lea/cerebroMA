@@ -79,7 +79,7 @@
                 { ls: 'salarioOverride',       table: 'payroll_monthly',   type: 'val',   key: 'salarioOverride' },
                 { ls: 'suppliersInfo',         table: 'suppliers',         type: 'val',   key: 'main' },
                 { ls: 'categories',            table: 'suppliers',         type: 'val',   key: 'categories' },
-                { ls: 'invoices',              table: 'suppliers',         type: 'val',   key: 'invoices' },
+                { ls: 'invoices',              table: 'invoices_data',     type: 'val',   key: 'main' },
                 { ls: 'invNotes',              table: 'suppliers',         type: 'val',   key: 'invNotes' },
                 { ls: 'taxRates',              table: 'suppliers',         type: 'val',   key: 'taxRates' },
                 { ls: 'salesInvoices',         table: 'suppliers',         type: 'val',   key: 'salesInvoices' },
@@ -144,7 +144,7 @@
                     _sb.from('payroll_monthly').select('data').eq('id','salarioOverride').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','main').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','categories').maybeSingle(),
-                    _sb.from('suppliers').select('data').eq('id','invoices').maybeSingle(),
+                    _sb.from('invoices_data').select('data').eq('id','main').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','invNotes').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','taxRates').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','salesInvoices').maybeSingle(),
@@ -240,7 +240,7 @@
 
                 // Proveedores y planificación — precargar todo en paralelo
                 const [invR2, catR2, supR2, spR2, gpR2, fpR2, suR2, acGR2, acFR2, acSR2] = await Promise.all([
-                    _sb.from('suppliers').select('data').eq('id','invoices').maybeSingle(),
+                    _sb.from('invoices_data').select('data').eq('id','main').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','categories').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','main').maybeSingle(),
                     _sb.from('payroll_monthly').select('data').eq('id','pendientes').maybeSingle(),
@@ -2086,7 +2086,9 @@ ${invoice.items.map(item => `
                             const suppMap = {invoices:'invoices', categories:'categories', suppliersInfo:'main', salesInvoices:'salesInvoices', salesProducts:'salesProducts', salesClients:'salesClients', salesHolders:'salesHolders', invNotes:'invNotes', taxRates:'taxRates'};
                             suppKeys.forEach(k => {
                                 if (data[k] && (Array.isArray(data[k]) ? data[k].length > 0 : Object.keys(data[k]).length > 0)) {
-                                    dbUpsertOne('suppliers', suppMap[k], data[k]).then(() => console.log('✅', k, 'restaurado en Supabase'));
+                                    const tabla = k === 'invoices' ? 'invoices_data' : 'suppliers';
+                                    const keyId = k === 'invoices' ? 'main' : suppMap[k];
+                                    dbUpsertOne(tabla, keyId, data[k]).then(() => console.log('✅', k, 'restaurado en Supabase'));
                                 }
                             });
 
@@ -12491,6 +12493,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
             useEffect(() => {
+                if (!horasAjustes || Object.keys(horasAjustes).length === 0) return;
                 try { localStorage.setItem('horasAjustesData', JSON.stringify(horasAjustes)); } catch(e) {}
                 dbUpsertOne('payroll_hours','main',horasAjustes);
             }, [horasAjustes]);
@@ -12571,6 +12574,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
             useEffect(() => {
+                if (!pendientesData || pendientesData.length === 0) return;
                 try { localStorage.setItem('sueldosPendientesData', JSON.stringify(pendientesData)); } catch(e) {}
                 dbUpsertOne('payroll_monthly', 'pendientes', pendientesData);
             }, [pendientesData]);
@@ -12637,6 +12641,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
             useEffect(() => {
+                if (!seguroData || Object.keys(seguroData).length === 0) return;
                 try { localStorage.setItem('seguroMedicoData', JSON.stringify(seguroData)); } catch(e) {}
                 if (Object.keys(seguroData).length > 0) dbUpsertOne('payroll_insurance', 'main', seguroData);
             }, [seguroData]);
@@ -15696,21 +15701,25 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar en localStorage
             useEffect(() => {
+                if (!products || products.length === 0) return;
                 try { localStorage.setItem('salesProducts', JSON.stringify(products)); } catch(e) {}
                 dbUpsertOne('suppliers', 'salesProducts', products);
             }, [products]);
             
             useEffect(() => {
+                if (!holders || holders.length === 0) return;
                 try { localStorage.setItem('salesHolders', JSON.stringify(holders)); } catch(e) {}
                 dbUpsertOne('suppliers', 'salesHolders', holders);
             }, [holders]);
             
             useEffect(() => {
+                if (!clients || clients.length === 0) return;
                 try { localStorage.setItem('salesClients', JSON.stringify(clients)); } catch(e) {}
                 dbUpsertOne('suppliers', 'salesClients', clients);
             }, [clients]);
             
             useEffect(() => {
+                if (!salesInvoices || salesInvoices.length === 0) return;
                 try { localStorage.setItem('salesInvoices', JSON.stringify(salesInvoices)); } catch(e) {}
                 dbUpsertOne('suppliers', 'salesInvoices', salesInvoices);
             }, [salesInvoices]);
@@ -18729,7 +18738,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     if (d && d.length > 0) { setCategories(d); try { localStorage.setItem('categories', JSON.stringify(d)); } catch(e) {} }
                 });
                 // Cargar invoices de Supabase siempre (fuente de verdad)
-                dbGetKey('suppliers', 'invoices').then(d => {
+                dbGetKey('invoices_data', 'main').then(d => {
                     if (d && d.length > 0) {
                         setInvoices(d);
                         window.__invoicesPrecargadas = d;
@@ -18813,7 +18822,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [showInvNoteModal, setShowInvNoteModal] = useState(false);
             const [editingInvNote, setEditingInvNote] = useState(null);
             const [invNoteForm, setInvNoteForm] = useState({ fecha: new Date().toISOString().split('T')[0], titulo: '', texto: '' });
-            useEffect(() => { try { localStorage.setItem('invNotes', JSON.stringify(invNotes)); } catch(e) {}
+            useEffect(() => { if (!invNotes || invNotes.length === 0) return; try { localStorage.setItem('invNotes', JSON.stringify(invNotes)); } catch(e) {}
                 dbUpsertOne('suppliers', 'invNotes', invNotes); }, [invNotes]);
             
             // Estados para Settings
@@ -19257,7 +19266,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         window.storage.set('invoices', JSON.stringify(invoices));
                     }
                     try { localStorage.setItem('invoices', JSON.stringify(invoices)); } catch(e) {}
-                    dbUpsertOne('suppliers', 'invoices', invoices);
+                    dbUpsertOne('invoices_data', 'main', invoices);
                     window.__invoicesPrecargadas = invoices;
                 } catch (error) {
                     console.log('Error guardando:', error);
