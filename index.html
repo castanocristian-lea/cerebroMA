@@ -5946,6 +5946,7 @@ ${invoice.items.map(item => `
             const isProxima = (fecha) => fecha >= today && fecha <= new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
 
             const writeCaja = (allTx) => {
+                window.__cajaPrecargada = allTx;
                 try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) { console.warn('⚠️ localStorage lleno, caja no cacheada'); }
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY, newValue: JSON.stringify(allTx) }));
@@ -8611,7 +8612,10 @@ ${invoice.items.map(item => `
                     // Fallback directo
                     try {
                         const d = await dbGetKey('cash_transactions', 'multiyear');
-                        if (d && Object.keys(d).length > 0) setAllTransactions(d);
+                        if (d && Object.keys(d).length > 0) {
+                            setAllTransactions(d);
+                            window.__cajaPrecargada = d;
+                        }
                     } catch(e) { console.error('Error cargando caja:', e); }
                     setAllTxLoaded(true);
                 };
