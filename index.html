@@ -238,6 +238,30 @@
                     window.__cajaPrecargada = cajaR.data.data;
                 }
 
+                // Proveedores y planificación — precargar todo en paralelo
+                const [invR2, catR2, supR2, spR2, gpR2, fpR2, suR2, acGR2, acFR2, acSR2] = await Promise.all([
+                    _sb.from('suppliers').select('data').eq('id','invoices').maybeSingle(),
+                    _sb.from('suppliers').select('data').eq('id','categories').maybeSingle(),
+                    _sb.from('suppliers').select('data').eq('id','main').maybeSingle(),
+                    _sb.from('payroll_monthly').select('data').eq('id','pendientes').maybeSingle(),
+                    _sb.from('cash_planning').select('data').eq('id','gastosPlaneados').maybeSingle(),
+                    _sb.from('cash_planning').select('data').eq('id','facturasPlaneadas').maybeSingle(),
+                    _sb.from('cash_planning').select('data').eq('id','sueldosPlaneados').maybeSingle(),
+                    _sb.from('cash_planning').select('data').eq('id','gastosAcred').maybeSingle(),
+                    _sb.from('cash_planning').select('data').eq('id','facturasAcred').maybeSingle(),
+                    _sb.from('cash_planning').select('data').eq('id','sueldosAcred').maybeSingle(),
+                ]);
+                if (invR2.data?.data?.length > 0) window.__invoicesPrecargadas = invR2.data.data;
+                if (catR2.data?.data?.length > 0) window.__categoriesPrecargadas = catR2.data.data;
+                if (supR2.data?.data) window.__suppliersInfoPrecargada = supR2.data.data;
+                if (spR2.data?.data?.length > 0) window.__sueldosPendientesPrecargados = spR2.data.data;
+                if (gpR2.data?.data?.length > 0) window.__gastosPlaneadosPrecargados = gpR2.data.data;
+                if (fpR2.data?.data?.length > 0) window.__facturasPlanPrecargadas = fpR2.data.data;
+                if (suR2.data?.data?.length > 0) window.__sueldosPlanPrecargados = suR2.data.data;
+                if (acGR2.data?.data?.length > 0) window.__gastosAcredPrecargados = acGR2.data.data;
+                if (acFR2.data?.data?.length > 0) window.__facturasAcredPrecargadas = acFR2.data.data;
+                if (acSR2.data?.data?.length > 0) window.__sueldosAcredPrecargados = acSR2.data.data;
+
                 // markedCategories
                 const mc = await _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle();
                 if (mc.data?.data) { try { localStorage.setItem('markedCategories', JSON.stringify(mc.data.data)); } catch(e) { console.warn('⚠️ localStorage lleno, omitiendo markedCategories'); } }
@@ -7557,19 +7581,19 @@ ${invoice.items.map(item => `
 
     <script type="text/babel">
         const PosicionFondosModule = ({ darkMode, canEdit, fondos, setFondos, lugares, setLugares, showFondoModal, setShowFondoModal, editingFondo, setEditingFondo, fondoForm, setFondoForm, showLugarModal, setShowLugarModal, nuevoLugar, setNuevoLugar, ahorros, acreditaciones, setAcreditaciones, showAcreditacionModal, setShowAcreditacionModal, editingAcreditacion, setEditingAcreditacion, acreditacionForm, setAcreditacionForm }) => {
-            const [gastos, setGastos] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaGastosPlaneados') || '[]'); } catch(e) { return []; } });
+            const [gastos, setGastos] = React.useState(() => { if (window.__gastosPlaneadosPrecargados?.length > 0) return window.__gastosPlaneadosPrecargados; try { return JSON.parse(localStorage.getItem('cajaGastosPlaneados') || '[]'); } catch(e) { return []; } });
             const [showFacturasModal, setShowFacturasModal] = React.useState(false);
-            const [facturasSeleccionadas, setFacturasSeleccionadas] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaFacturasPlaneadas') || '[]'); } catch(e) { return []; } });
+            const [facturasSeleccionadas, setFacturasSeleccionadas] = React.useState(() => { if (window.__facturasPlanPrecargadas?.length > 0) return window.__facturasPlanPrecargadas; try { return JSON.parse(localStorage.getItem('cajaFacturasPlaneadas') || '[]'); } catch(e) { return []; } });
             const [pendingFactura, setPendingFactura] = React.useState(null);
             const [showSueldosModal, setShowSueldosModal] = React.useState(false);
-            const [sueldosSeleccionados, setSueldosSeleccionados] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaSueldosPlaneados') || '[]'); } catch(e) { return []; } });
+            const [sueldosSeleccionados, setSueldosSeleccionados] = React.useState(() => { if (window.__sueldosPlanPrecargados?.length > 0) return window.__sueldosPlanPrecargados; try { return JSON.parse(localStorage.getItem('cajaSueldosPlaneados') || '[]'); } catch(e) { return []; } });
             const [pendingSueldo, setPendingSueldo] = React.useState(null);
             // Estados independientes para Plata a acreditarse
-            const [gastosAcred, setGastosAcred] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaGastosAcred') || '[]'); } catch(e) { return []; } });
+            const [gastosAcred, setGastosAcred] = React.useState(() => { if (window.__gastosAcredPrecargados?.length > 0) return window.__gastosAcredPrecargados; try { return JSON.parse(localStorage.getItem('cajaGastosAcred') || '[]'); } catch(e) { return []; } });
             const [showFacturasAcredModal, setShowFacturasAcredModal] = React.useState(false);
-            const [facturasAcred, setFacturasAcred] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaFacturasAcred') || '[]'); } catch(e) { return []; } });
+            const [facturasAcred, setFacturasAcred] = React.useState(() => { if (window.__facturasAcredPrecargadas?.length > 0) return window.__facturasAcredPrecargadas; try { return JSON.parse(localStorage.getItem('cajaFacturasAcred') || '[]'); } catch(e) { return []; } });
             const [showSueldosAcredModal, setShowSueldosAcredModal] = React.useState(false);
-            const [sueldosAcred, setSueldosAcred] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaSueldosAcred') || '[]'); } catch(e) { return []; } });
+            const [sueldosAcred, setSueldosAcred] = React.useState(() => { if (window.__sueldosAcredPrecargados?.length > 0) return window.__sueldosAcredPrecargados; try { return JSON.parse(localStorage.getItem('cajaSueldosAcred') || '[]'); } catch(e) { return []; } });
             const [pendingSueldoAcred, setPendingSueldoAcred] = React.useState(null);
             const [pendingFacturaAcred, setPendingFacturaAcred] = React.useState(null);
             const [showGastoAcredModal, setShowGastoAcredModal] = React.useState(false);
@@ -7582,7 +7606,7 @@ ${invoice.items.map(item => `
 
             const saveFondos = (list) => { setFondos(list); localStorage.setItem('cajaFondos', JSON.stringify(list)); dbUpsertOne('cash_planning','fondos',list); };
             const saveLugares = (list) => { setLugares(list); localStorage.setItem('cajaLugares', JSON.stringify(list)); dbUpsertOne('cash_planning','lugares',list); };
-            const saveGastos = (list) => { setGastos(list); localStorage.setItem('cajaGastosPlaneados', JSON.stringify(list)); dbUpsertOne('cash_planning', 'gastosPlaneados', list); };
+            const saveGastos = (list) => { setGastos(list); window.__gastosPlaneadosPrecargados=list; try{localStorage.setItem('cajaGastosPlaneados', JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning', 'gastosPlaneados', list); };
             const saveAcreditaciones = (list) => { setAcreditaciones(list); localStorage.setItem('cajaAcreditaciones', JSON.stringify(list)); dbUpsertOne('cash_planning','acreditaciones',list); };
             const openNewAcreditacion = () => { setEditingAcreditacion(null); setAcreditacionForm({ origen: '', fecha: new Date().toISOString().split('T')[0], monto: '', moneda: 'CZK', notas: '' }); setShowAcreditacionModal(true); };
             const openEditAcreditacion = (a) => { setEditingAcreditacion(a); setAcreditacionForm({ origen: a.origen, fecha: a.fecha, monto: String(a.monto), moneda: a.moneda, notas: a.notas||'' }); setShowAcreditacionModal(true); };
@@ -7593,12 +7617,12 @@ ${invoice.items.map(item => `
                 setShowAcreditacionModal(false);
             };
             const deleteAcreditacion = (id) => { if (!confirm('¿Eliminar esta acreditación?')) return; saveAcreditaciones(acreditaciones.filter(a => a.id !== id)); };
-            const saveFacturasSeleccionadas = (list) => { setFacturasSeleccionadas(list); localStorage.setItem('cajaFacturasPlaneadas', JSON.stringify(list)); dbUpsertOne('cash_planning', 'facturasPlaneadas', list); };
+            const saveFacturasSeleccionadas = (list) => { setFacturasSeleccionadas(list); window.__facturasPlanPrecargadas=list; try{localStorage.setItem('cajaFacturasPlaneadas', JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning', 'facturasPlaneadas', list); };
             const saveAsignaciones = (obj) => { setAsignaciones(obj); localStorage.setItem('cajaAsignaciones', JSON.stringify(obj)); dbUpsertOne('cash_planning', 'asignaciones', obj); };
-            const saveSueldosSeleccionados = (list) => { setSueldosSeleccionados(list); localStorage.setItem('cajaSueldosPlaneados', JSON.stringify(list)); dbUpsertOne('cash_planning', 'sueldosPlaneados', list); };
-            const saveGastosAcred = (list) => { setGastosAcred(list); try { localStorage.setItem('cajaGastosAcred', JSON.stringify(list)); } catch(e) {} dbUpsertOne('cash_planning', 'gastosAcred', list); };
-            const saveFacturasAcred = (list) => { setFacturasAcred(list); try { localStorage.setItem('cajaFacturasAcred', JSON.stringify(list)); } catch(e) {} dbUpsertOne('cash_planning', 'facturasAcred', list); };
-            const saveSueldosAcred = (list) => { setSueldosAcred(list); try { localStorage.setItem('cajaSueldosAcred', JSON.stringify(list)); } catch(e) {} dbUpsertOne('cash_planning', 'sueldosAcred', list); };
+            const saveSueldosSeleccionados = (list) => { setSueldosSeleccionados(list); window.__sueldosPlanPrecargados=list; try{localStorage.setItem('cajaSueldosPlaneados', JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning', 'sueldosPlaneados', list); };
+            const saveGastosAcred = (list) => { setGastosAcred(list); window.__gastosAcredPrecargados=list; try{localStorage.setItem('cajaGastosAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','gastosAcred',list); };
+            const saveFacturasAcred = (list) => { setFacturasAcred(list); window.__facturasAcredPrecargadas=list; try{localStorage.setItem('cajaFacturasAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','facturasAcred',list); };
+            const saveSueldosAcred = (list) => { setSueldosAcred(list); window.__sueldosAcredPrecargados=list; try{localStorage.setItem('cajaSueldosAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','sueldosAcred',list); };
             const toggleSueldoAcred = (s) => {
                 const ya = sueldosAcred.some(x => x.id === s.id);
                 if (ya) { saveSueldosAcred(sueldosAcred.filter(x => x.id !== s.id)); return; }
@@ -8911,6 +8935,15 @@ ${invoice.items.map(item => `
             useEffect(() => { dbGetKey('cash_planning','fondos').then(d => { if(d) setFondos(d); }); }, []);
             const [lugares, setLugares] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaLugares') || JSON.stringify(['Banco Fio', 'Efectivo', 'Revolut'])); } catch(e) { return ['Banco Fio', 'Efectivo', 'Revolut']; } });
             useEffect(() => { dbGetKey('cash_planning','lugares').then(d => { if(d) setLugares(d); }); }, []);
+            // Cargar planificación desde Supabase al montar
+            useEffect(() => {
+                dbGetKey('cash_planning','gastosPlaneados').then(d => { if(d?.length>0) { setGastos(d); window.__gastosPlaneadosPrecargados=d; }});
+                dbGetKey('cash_planning','facturasPlaneadas').then(d => { if(d?.length>0) { setFacturasSeleccionadas(d); window.__facturasPlanPrecargadas=d; }});
+                dbGetKey('cash_planning','sueldosPlaneados').then(d => { if(d?.length>0) { setSueldosSeleccionados(d); window.__sueldosPlanPrecargados=d; }});
+                dbGetKey('cash_planning','gastosAcred').then(d => { if(d?.length>0) { setGastosAcred(d); window.__gastosAcredPrecargados=d; }});
+                dbGetKey('cash_planning','facturasAcred').then(d => { if(d?.length>0) { setFacturasAcred(d); window.__facturasAcredPrecargadas=d; }});
+                dbGetKey('cash_planning','sueldosAcred').then(d => { if(d?.length>0) { setSueldosAcred(d); window.__sueldosAcredPrecargados=d; }});
+            }, []);
             const [showFondoModal, setShowFondoModal] = useState(false);
             const [editingFondo, setEditingFondo] = useState(null);
             const [fondoForm, setFondoForm] = useState({ lugar: '', monto: '', moneda: 'CZK', notas: '' });
@@ -18697,10 +18730,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
             }, []);
 
-            useEffect(() => { try { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); } catch(e) {}
-                dbUpsertOne('suppliers', 'main', suppliersInfo); }, [suppliersInfo]);
-            useEffect(() => { try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
-                dbUpsertOne('suppliers', 'categories', categories); }, [categories]);
+            useEffect(() => {
+                if (!suppliersInfo || Object.keys(suppliersInfo).length === 0) return;
+                try { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); } catch(e) {}
+                dbUpsertOne('suppliers', 'main', suppliersInfo);
+            }, [suppliersInfo]);
+            useEffect(() => {
+                if (!categories || categories.length === 0) return;
+                try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
+                dbUpsertOne('suppliers', 'categories', categories);
+            }, [categories]);
             const openNewInvNote = () => {
                 setEditingInvNote(null);
                 setInvNoteForm({ fecha: new Date().toISOString().split('T')[0], titulo: '', texto: '' });
@@ -18949,12 +18988,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar categorías cuando cambien
             useEffect(() => {
+                if (!categories || categories.length === 0) return;
                 try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
                 dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
             
             // Guardar información de proveedores cuando cambie
             useEffect(() => {
+                if (!suppliersInfo || Object.keys(suppliersInfo).length === 0) return;
                 try { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); } catch(e) {}
                 dbUpsertOne('suppliers', 'main', suppliersInfo);
             }, [suppliersInfo]);
