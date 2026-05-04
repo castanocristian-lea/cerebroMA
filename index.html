@@ -579,6 +579,25 @@
     </style>
 <body style="overflow-x:hidden">
     <div id="root" style="overflow-x:hidden"></div>
+    <!-- Pantalla de carga inmediata mientras Babel compila -->
+    <div id="splash" style="position:fixed;inset:0;background:#060918;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.3s">
+        <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#1e1b4b,#0c4a6e);display:flex;align-items:center;justify-content:center;margin-bottom:20px;box-shadow:0 0 40px rgba(99,102,241,0.4)">
+            <svg width="40" height="40" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="35" r="18" fill="#818cf8"/><ellipse cx="50" cy="72" rx="28" ry="20" fill="#6366f1"/><circle cx="50" cy="35" r="10" fill="#c7d2fe"/><circle cx="44" cy="33" r="3" fill="#1e1b4b"/><circle cx="56" cy="33" r="3" fill="#1e1b4b"/></svg>
+        </div>
+        <h1 style="color:white;font-size:24px;font-weight:900;letter-spacing:-0.5px;margin:0">CerebroMA</h1>
+        <p style="color:#6366f1;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin:6px 0 24px">Cargando...</p>
+        <div style="width:40px;height:3px;background:#1e293b;border-radius:2px;overflow:hidden">
+            <div style="height:100%;background:linear-gradient(90deg,#6366f1,#06b6d4);border-radius:2px;animation:ldbar 1.2s ease-in-out infinite"></div>
+        </div>
+        <style>@keyframes ldbar{0%{width:0;margin-left:0}50%{width:100%;margin-left:0}100%{width:0;margin-left:100%}}</style>
+    </div>
+    <script>
+        // Ocultar splash cuando React renderice
+        window.__hideSplash = function() {
+            const s = document.getElementById('splash');
+            if (s) { s.style.opacity='0'; setTimeout(()=>s.remove(),300); }
+        };
+    </script>
 
 
     <script>
@@ -1437,9 +1456,13 @@ ${invoice.items.map(item => `
                         refreshNotifs();
                     } catch(e) {}
                 };
+                // Intentar ahora, y también cuando Supabase termine de cargar employees
                 precargarNotifs();
                 const t = setInterval(precargarNotifs, 30000);
-                return () => clearInterval(t);
+                // Reintentar cuando employees lleguen de Supabase
+                const onLoaded = () => { setTimeout(precargarNotifs, 500); };
+                window.addEventListener('supabase-loaded', onLoaded);
+                return () => { clearInterval(t); window.removeEventListener('supabase-loaded', onLoaded); };
             }, [currentUser?.id]);
 
             // ── SUPABASE REALTIME ─────────────────────────────────────────────
@@ -23068,6 +23091,23 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [editingTarea,    setEditingTarea]    = React.useState(null);
             const [form,            setForm]            = React.useState({ titulo:'', descripcion:'', vencimiento:'', prioridad:'media', compartidoCon:[], compartirVencimiento:false, etiquetas:[] });
             const [chatTarea,       setChatTarea]       = React.useState(null);
+            // Bloquear scroll del body cuando hay modal abierto en móvil
+            React.useEffect(() => {
+                if (chatTarea || showModal) {
+                    document.body.style.overflow = 'hidden';
+                    document.body.style.position = 'fixed';
+                    document.body.style.width = '100%';
+                } else {
+                    document.body.style.overflow = '';
+                    document.body.style.position = '';
+                    document.body.style.width = '';
+                }
+                return () => {
+                    document.body.style.overflow = '';
+                    document.body.style.position = '';
+                    document.body.style.width = '';
+                };
+            }, [chatTarea, showModal]);
             const [chatMsg,         setChatMsg]         = React.useState('');
             const [chatVistos,      setChatVistos]      = React.useState(() => { try { return JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}'); } catch(e){ return {}; } });
             const [showCompletadas, setShowCompletadas] = React.useState(false);
@@ -23468,7 +23508,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {/* Modal tarea */}
                 {showModal&&(
                     <div className="fixed inset-0 bg-black/60 z-50 flex flex-col justify-end sm:items-center sm:justify-center sm:p-4">
-                        <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-5 overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`} style={{maxHeight:'calc(100dvh - 60px)'}}>
+                        <div className={`rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-4 overflow-y-auto ${darkMode?'bg-slate-800':'bg-white'}`} style={{maxHeight:'72dvh'}}>
                             <h2 className={`text-sm font-bold mb-4 ${txt}`}>{editingTarea?'Editar tarea':'Nueva tarea'}</h2>
                             <div className="space-y-3">
                                 <div><label className={`text-xs font-semibold ${sub}`}>Título *</label>
@@ -23617,7 +23657,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         async function arrancarApp() {
             // Renderizar inmediatamente — el login no necesita Supabase
             ReactDOM.render(<Malagestion />, document.getElementById('root'));
-            // Supabase carga en segundo plano
+            // Ocultar splash una vez que React renderizó
+            setTimeout(() => { if(window.__hideSplash) window.__hideSplash(); }, 100);
         }
         arrancarApp();
     </script>
