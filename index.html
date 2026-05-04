@@ -5515,21 +5515,21 @@ ${invoice.items.map(item => `
                 }));
                 const todos = [...codigos, ...nuevos];
                 setCodigos(todos);
-                localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                try { localStorage.setItem('codigosProductos', JSON.stringify(todos)); } catch(e) {}
                 try { await dbSetArray('codigos_productos', todos); } catch(e) {}
                 setForm(f=>({...f, nombre:'', link:'', cantidad:1, codigoManual:'', usarManual:false}));
             };
 
             const eliminar = (id) => {
                 const todos = codigos.filter(c=>c.id!==id);
-                setCodigos(todos); localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                setCodigos(todos); try { localStorage.setItem('codigosProductos', JSON.stringify(todos)); } catch(e) {}
                 try { dbSetArray('codigos_productos', todos); } catch(e) {}
             };
 
             const archivar = (id) => {
                 setCodigos(prev => {
                     const todos = prev.map(c=>c.id===id?{...c,archivado:!c.archivado}:c);
-                    localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                    try { localStorage.setItem('codigosProductos', JSON.stringify(todos)); } catch(e) {}
                     try { dbSetArray('codigos_productos', todos); } catch(e) {}
                     return [...todos];
                 });
@@ -5621,7 +5621,7 @@ ${invoice.items.map(item => `
                                     </label>
                                     {seleccionados.length>0 && (
                                         <div className="flex gap-3 ml-auto">
-                                            <button onClick={()=>{if(confirm(`¿Eliminar ${seleccionados.length} código${seleccionados.length!==1?'s':''}?`)){const t=codigos.filter(c=>!seleccionados.includes(c.id));setCodigos(t);localStorage.setItem('codigosProductos',JSON.stringify(t));try{dbSetArray('codigos_productos',t);}catch(e){}setSel([])}}} className="text-xs text-red-500 hover:text-red-700 font-medium">🗑️ Eliminar</button>
+                                            <button onClick={()=>{if(confirm(`¿Eliminar ${seleccionados.length} código${seleccionados.length!==1?'s':''}?`)){const t=codigos.filter(c=>!seleccionados.includes(c.id));setCodigos(t);try{localStorage.setItem('codigosProductos',JSON.stringify(t));}catch(e){}try{dbSetArray('codigos_productos',t);}catch(e){}setSel([])}}} className="text-xs text-red-500 hover:text-red-700 font-medium">🗑️ Eliminar</button>
                                             <button onClick={()=>{seleccionados.forEach(id=>archivar(id));setSel([]);}} className="text-xs text-amber-500 hover:text-amber-700 font-medium">📁 Archivar</button>
                                         </div>
                                     )}
