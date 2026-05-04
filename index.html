@@ -17673,7 +17673,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 // Registrar cada una en caja si hay tipoCosto
                 if (tipoCosto) {
-                    const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                    const allTx = window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0
+                        ? JSON.parse(JSON.stringify(window.__cajaPrecargada))
+                        : JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
                     const yearTx = allTx[year] || [];
                     const nuevasTx = facturasPendientes.map((inv, i) => ({
                         id: `prov_${inv.id}`,
@@ -17691,7 +17693,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         year
                     }));
                     allTx[year] = [...yearTx, ...nuevasTx];
-                    localStorage.setItem(CAJA_KEY, JSON.stringify(allTx));
+                    window.__cajaPrecargada = allTx;
+                    try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) {}
+                    dbUpsertOne('cash_transactions', 'multiyear', allTx);
+                    window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
                     alert(`✅ ${facturasPendientes.length} factura${facturasPendientes.length>1?'s':''} pagadas y registradas en Caja Diaria como ${tipoCosto} · ${pagoMasivoOrigen}`);
                 }
 
