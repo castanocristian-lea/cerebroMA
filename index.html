@@ -6020,7 +6020,7 @@ ${invoice.items.map(item => `
                 window.__cajaPrecargada = allTx;
                 try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) { console.warn('⚠️ localStorage lleno, caja no cacheada'); }
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
-                window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY, newValue: JSON.stringify(allTx) }));
+                window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
             };
             const syncPagoToCaja = (prestamo, pago, cajaId, isDelete = false) => {
                 const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
@@ -9081,15 +9081,21 @@ ${invoice.items.map(item => `
             useEffect(() => {
                 const handleStorageSync = (e) => {
                     if (e.key === 'cashTransactionsMultiYear' && e.newValue) {
-                        try {
-                            const fresh = JSON.parse(e.newValue);
-                            setAllTransactions(fresh);
-                            dbUpsertOne('cash_transactions', 'multiyear', fresh);
-                        } catch(err) {}
+                        try { setAllTransactions(JSON.parse(e.newValue)); } catch(err) {}
+                    }
+                };
+                const handleCajaUpdated = (e) => {
+                    if (e.detail && Object.keys(e.detail).length > 0) {
+                        setAllTransactions(e.detail);
+                        window.__cajaPrecargada = e.detail;
                     }
                 };
                 window.addEventListener('storage', handleStorageSync);
-                return () => window.removeEventListener('storage', handleStorageSync);
+                window.addEventListener('caja-updated', handleCajaUpdated);
+                return () => {
+                    window.removeEventListener('storage', handleStorageSync);
+                    window.removeEventListener('caja-updated', handleCajaUpdated);
+                };
             }, []);
             
             // Actualizar transacciones del año seleccionado
@@ -12743,7 +12749,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 });
                 localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
-                window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
+                window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
 
                 // Notificar al empleado que cobró el seguro
                 if (editingSeguroIdx === null) {
@@ -12773,7 +12779,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         allTx[yr] = (allTx[yr] || []).filter(t => t.id !== pago.cajaId);
                     });
                     localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
-                    window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
+                    window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
                 }
             };
 
@@ -12849,7 +12855,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 try { localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx)); } catch(e) {}
                 window.__cajaPrecargada = allTx;
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
-                window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
+                window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
             };
 
             const savePayment = async () => {
@@ -13118,7 +13124,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         allTx[yr] = (allTx[yr] || []).filter(t => t.id !== pago.cajaId);
                     });
                     localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
-                    window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
+                    window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
                 }
             };
 
@@ -18965,7 +18971,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 window.__cajaPrecargada = allTx;
                 try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) {}
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
-                window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY, newValue: JSON.stringify(allTx) }));
+                window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
 
                 // Pago parcial: crear factura "pagada" con el monto parcial
                 // y reducir el monto de la factura original al saldo restante
