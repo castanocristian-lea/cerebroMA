@@ -261,6 +261,9 @@
                 if (acGR2.data?.data?.length > 0) window.__gastosAcredPrecargados = acGR2.data.data;
                 if (acFR2.data?.data?.length > 0) window.__facturasAcredPrecargadas = acFR2.data.data;
                 if (acSR2.data?.data?.length > 0) window.__sueldosAcredPrecargados = acSR2.data.data;
+                // Sueldos payroll
+                const payR = await _sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle();
+                if (payR.data?.data && Object.keys(payR.data.data).length > 0) window.__payrollPrecargado = payR.data.data;
 
                 // markedCategories
                 const mc = await _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle();
@@ -12452,17 +12455,26 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // SEGMENTO 2 – PAGOS MENSUALES
             // ════════════════════════════════════════════════════
             const [payrollData, setPayrollData] = useState(() => {
+                if (window.__payrollPrecargado && Object.keys(window.__payrollPrecargado).length > 0) return window.__payrollPrecargado;
                 try { const ls = localStorage.getItem('payrollMonthlyData'); return ls ? JSON.parse(ls) : {}; } catch(e) { return {}; }
             });
-            const [payrollDataLoaded, setPayrollDataLoaded] = useState(true);
+            const [payrollDataLoaded, setPayrollDataLoaded] = useState(false);
             useEffect(() => {
+                if (window.__payrollPrecargado && Object.keys(window.__payrollPrecargado).length > 0) {
+                    setPayrollData(window.__payrollPrecargado);
+                    setPayrollDataLoaded(true);
+                    return;
+                }
                 dbGetKey('payroll_monthly', 'main').then(d => {
-                    if (d && Object.keys(d).length > 0 && Object.keys(payrollData).length === 0) setPayrollData(d);
+                    if (d && Object.keys(d).length > 0) { setPayrollData(d); window.__payrollPrecargado = d; }
+                    setPayrollDataLoaded(true);
                 });
             }, []);
             useEffect(() => {
+                if (!payrollDataLoaded || Object.keys(payrollData).length === 0) return;
+                window.__payrollPrecargado = payrollData;
                 try { localStorage.setItem('payrollMonthlyData', JSON.stringify(payrollData)); } catch(e) {}
-                if (Object.keys(payrollData).length > 0) dbUpsertOne('payroll_monthly', 'main', payrollData);
+                dbUpsertOne('payroll_monthly', 'main', payrollData);
             }, [payrollData]);
 
             const now = new Date();
