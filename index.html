@@ -7623,15 +7623,7 @@ ${invoice.items.map(item => `
             const saveGastosAcred = (list) => { setGastosAcred(list); window.__gastosAcredPrecargados=list; try{localStorage.setItem('cajaGastosAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','gastosAcred',list); };
             const saveFacturasAcred = (list) => { setFacturasAcred(list); window.__facturasAcredPrecargadas=list; try{localStorage.setItem('cajaFacturasAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','facturasAcred',list); };
             const saveSueldosAcred = (list) => { setSueldosAcred(list); window.__sueldosAcredPrecargados=list; try{localStorage.setItem('cajaSueldosAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','sueldosAcred',list); };
-            // Cargar planificación desde Supabase al montar (dentro del scope correcto)
-            React.useEffect(() => {
-                dbGetKey('cash_planning','gastosPlaneados').then(d => { if(d?.length>0) { setGastos(d); window.__gastosPlaneadosPrecargados=d; }});
-                dbGetKey('cash_planning','facturasPlaneadas').then(d => { if(d?.length>0) { setFacturasSeleccionadas(d); window.__facturasPlanPrecargadas=d; }});
-                dbGetKey('cash_planning','sueldosPlaneados').then(d => { if(d?.length>0) { setSueldosSeleccionados(d); window.__sueldosPlanPrecargados=d; }});
-                dbGetKey('cash_planning','gastosAcred').then(d => { if(d?.length>0) { setGastosAcred(d); window.__gastosAcredPrecargados=d; }});
-                dbGetKey('cash_planning','facturasAcred').then(d => { if(d?.length>0) { setFacturasAcred(d); window.__facturasAcredPrecargadas=d; }});
-                dbGetKey('cash_planning','sueldosAcred').then(d => { if(d?.length>0) { setSueldosAcred(d); window.__sueldosAcredPrecargados=d; }});
-            }, []);
+
             const toggleSueldoAcred = (s) => {
                 const ya = sueldosAcred.some(x => x.id === s.id);
                 if (ya) { saveSueldosAcred(sueldosAcred.filter(x => x.id !== s.id)); return; }
