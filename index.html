@@ -18680,6 +18680,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 dbGetKey('suppliers', 'categories').then(d => {
                     if (d && d.length > 0) { setCategories(d); try { localStorage.setItem('categories', JSON.stringify(d)); } catch(e) {} }
                 });
+                // Cargar invoices de Supabase siempre (fuente de verdad)
+                dbGetKey('suppliers', 'invoices').then(d => {
+                    if (d && d.length > 0) {
+                        setInvoices(d);
+                        window.__invoicesPrecargadas = d;
+                    }
+                });
             }, []);
 
             useEffect(() => { try { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); } catch(e) {}
@@ -19188,12 +19195,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Guardar datos persistentes
             useEffect(() => {
+                if (invoices.length === 0) return; // No sobreescribir con vacío
                 try {
                     if (window.storage) {
                         window.storage.set('invoices', JSON.stringify(invoices));
                     }
                     try { localStorage.setItem('invoices', JSON.stringify(invoices)); } catch(e) {}
                     dbUpsertOne('suppliers', 'invoices', invoices);
+                    window.__invoicesPrecargadas = invoices;
                 } catch (error) {
                     console.log('Error guardando:', error);
                 }
