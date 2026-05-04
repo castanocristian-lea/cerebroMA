@@ -8752,10 +8752,11 @@ ${invoice.items.map(item => `
             
             // Guardar en localStorage y Supabase cuando cambian las transacciones
             useEffect(() => {
+                if (!allTxLoaded) return; // No guardar hasta que los datos estén cargados
+                if (Object.keys(allTransactions).length === 0) return; // No sobreescribir con vacío
                 try { localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(allTransactions)); } catch(e) { console.warn('⚠️ localStorage lleno, cashTransactionsMultiYear no cacheado'); }
-                if (Object.keys(allTransactions).length > 0) {
-                    dbUpsertOne('cash_transactions', 'multiyear', allTransactions);
-                }
+                window.__cajaPrecargada = allTransactions;
+                dbUpsertOne('cash_transactions', 'multiyear', allTransactions);
             }, [allTransactions]);
 
             // Escuchar cambios desde Administrador de Proveedores (sync inverso)
