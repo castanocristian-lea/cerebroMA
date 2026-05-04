@@ -3,10 +3,16 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>CerebroMA - Sistema de Gestión de Malá Argenta</title>
     <style>
-        .modal-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+        .modal-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; overscrollBehavior: contain; }
+        /* Prevenir zoom automático en iOS/Chrome al enfocar inputs */
+        @media screen and (max-width: 768px) {
+            input, textarea, select {
+                font-size: 16px !important;
+            }
+        }
     </style>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1664,14 +1670,15 @@ ${invoice.items.map(item => `
             }, [notifKey]);
 
 
-            const [bioAvailable, setBioAvailable] = useState(false);
-            const [bioRegistered, setBioRegistered] = useState(false);
+            const [bioAvailable, setBioAvailable] = useState(!!window.PublicKeyCredential);
+            const [bioRegistered, setBioRegistered] = useState(!!localStorage.getItem('cerebroma_bio_cred'));
             const [bioLoading, setBioLoading] = useState(false);
             const [bioError, setBioError] = useState('');
 
             // Verificar disponibilidad de biometría al montar
             useEffect(() => {
                 if (window.PublicKeyCredential) {
+                    setBioAvailable(true);
                     PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
                         .then(available => setBioAvailable(available));
                 }
@@ -1683,18 +1690,16 @@ ${invoice.items.map(item => `
                     try {
                         const users = JSON.parse(localStorage.getItem('systemUsers') || '[]');
                         if (!users.length) return;
-                        // Buscar todas las credenciales bio en paralelo
                         const results = await Promise.all(
                             users.map(u => window._sb?.from('app_config').select('data').eq('id','bioCred_'+u.id).maybeSingle())
                         );
                         results.forEach((r, i) => {
                             if (r?.data?.data) {
-                                localStorage.setItem('cerebroma_bio_cred_'+users[i].id, JSON.stringify(r.data.data));
+                                // Guardar con clave estándar para que loginConBiometria la encuentre
+                                localStorage.setItem('cerebroma_bio_cred', JSON.stringify(r.data.data));
+                                setBioRegistered(true);
                             }
                         });
-                        // Marcar como registrado si hay alguna credencial
-                        const hasCred = results.some(r => r?.data?.data);
-                        if (hasCred) setBioRegistered(true);
                     } catch(e) {}
                 })();
             }, []);
