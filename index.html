@@ -252,6 +252,20 @@
                     _sb.from('cash_planning').select('data').eq('id','sueldosAcred').maybeSingle(),
                 ]);
                 if (invR2.data?.data?.length > 0) window.__invoicesPrecargadas = invR2.data.data;
+                // También intentar chunks
+                if (!window.__invoicesPrecargadas?.length) {
+                    try {
+                        const metaR = await _sb.from('invoices_data').select('data').eq('id','meta').maybeSingle();
+                        if (metaR.data?.data?.chunks > 0) {
+                            const chunkPs = Array.from({length: metaR.data.data.chunks}, (_,i) =>
+                                _sb.from('invoices_data').select('data').eq('id',`chunk_${i}`).maybeSingle()
+                            );
+                            const chunkRs = await Promise.all(chunkPs);
+                            const all = chunkRs.flatMap(r => r.data?.data || []);
+                            if (all.length > 0) window.__invoicesPrecargadas = all;
+                        }
+                    } catch(e) {}
+                }
                 if (catR2.data?.data?.length > 0) window.__categoriesPrecargadas = catR2.data.data;
                 if (supR2.data?.data) window.__suppliersInfoPrecargada = supR2.data.data;
                 if (spR2.data?.data?.length > 0) window.__sueldosPendientesPrecargados = spR2.data.data;
@@ -18740,11 +18754,19 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 dbGetKey('suppliers', 'categories').then(d => {
                     if (d && d.length > 0) { setCategories(d); try { localStorage.setItem('categories', JSON.stringify(d)); } catch(e) {} }
                 });
-                // Cargar invoices de Supabase siempre (fuente de verdad)
-                dbGetKey('invoices_data', 'main').then(d => {
-                    if (d && d.length > 0) {
-                        setInvoices(d);
-                        window.__invoicesPrecargadas = d;
+                // Cargar invoices de Supabase - leer de chunks
+                dbGetKey('invoices_data', 'meta').then(async meta => {
+                    if (meta && meta.chunks > 0) {
+                        const allChunks = await Promise.all(
+                            Array.from({length: meta.chunks}, (_, i) => dbGetKey('invoices_data', `chunk_${i}`))
+                        );
+                        const all = allChunks.flat().filter(Boolean);
+                        if (all.length > 0) { setInvoices(all); window.__invoicesPrecargadas = all; }
+                    } else {
+                        // Fallback: intentar 'main' (formato viejo)
+                        dbGetKey('invoices_data', 'main').then(d => {
+                            if (d && d.length > 0) { setInvoices(d); window.__invoicesPrecargadas = d; }
+                        });
                     }
                 });
             }, []);
@@ -19248,6 +19270,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             return;
                         }
                         // Luego Supabase
+                        const meta = await dbGetKey('invoices_data', 'meta');
+                        if (meta && meta.chunks > 0) {
+                            const allChunks = await Promise.all(
+                                Array.from({length: meta.chunks}, (_, i) => dbGetKey('invoices_data', `chunk_${i}`))
+                            );
+                            const all = allChunks.flat().filter(Boolean);
+                            if (all.length > 0) { setInvoices(all); window.__invoicesPrecargadas = all; return; }
+                        }
                         const d = await dbGetKey('invoices_data', 'main');
                         if (d && d.length > 0) {
                             setInvoices(d);
@@ -19269,18 +19299,25 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 loadData();
             }, []);
 
-            // Guardar datos persistentes
+            // Guardar datos persistentes - invoices en chunks de 100
             useEffect(() => {
-                if (invoices.length === 0) return; // No sobreescribir con vacío
+                if (invoices.length === 0) return;
                 try {
-                    if (window.storage) {
-                        window.storage.set('invoices', JSON.stringify(invoices));
-                    }
-                    try { localStorage.setItem('invoices', JSON.stringify(invoices)); } catch(e) {}
-                    dbUpsertOne('invoices_data', 'main', invoices);
                     window.__invoicesPrecargadas = invoices;
+                    try { localStorage.setItem('invoices', JSON.stringify(invoices)); } catch(e) {}
+                    // Guardar en chunks para evitar el límite de 5MB de Supabase
+                    const chunkSize = 100;
+                    const chunks = [];
+                    for (let i = 0; i < invoices.length; i += chunkSize) {
+                        chunks.push(invoices.slice(i, i + chunkSize));
+                    }
+                    // Guardar metadata del total de chunks
+                    dbUpsertOne('invoices_data', 'meta', {total: invoices.length, chunks: chunks.length});
+                    chunks.forEach((chunk, idx) => {
+                        dbUpsertOne('invoices_data', `chunk_${idx}`, chunk);
+                    });
                 } catch (error) {
-                    console.log('Error guardando:', error);
+                    console.log('Error guardando invoices:', error);
                 }
             }, [invoices]);
             
