@@ -18730,8 +18730,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Cargar desde Supabase al iniciar
             useEffect(() => {
                 dbGetKey('suppliers', 'main').then(d => {
-                    if (d && Object.keys(d).length > 0 && Object.keys(suppliersInfo).length === 0) {
-                        setSuppliersInfo(d); try { localStorage.setItem('suppliersInfo', JSON.stringify(d)); } catch(e) {}
+                    if (d && Object.keys(d).length > 0) {
+                        setSuppliersInfo(d);
+                        window.__suppliersInfoPrecargada = d;
+                        try { localStorage.setItem('suppliersInfo', JSON.stringify(d)); } catch(e) {}
                     }
                 });
                 dbGetKey('suppliers', 'categories').then(d => {
