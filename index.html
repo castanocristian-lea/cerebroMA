@@ -12488,7 +12488,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const CAJA_KEY_PAYROLL = 'cashTransactionsMultiYear';
 
             const syncPaymentToCaja = (emp, entry, cajaId, isDelete = false) => {
-                const allTx = JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL) || '{}');
+                // Leer de window.__cajaPrecargada (fuente de verdad) o localStorage como fallback
+                let allTx = window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0
+                    ? JSON.parse(JSON.stringify(window.__cajaPrecargada))
+                    : JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL) || '{}');
                 // Primero borrar cualquier transacción existente con ese cajaId
                 Object.keys(allTx).forEach(yr => {
                     allTx[yr] = (allTx[yr] || []).filter(t => t.id !== cajaId);
@@ -12517,7 +12520,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         year: yr
                     });
                 }
-                localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
+                try { localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx)); } catch(e) {}
+                window.__cajaPrecargada = allTx;
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY_PAYROLL, newValue: JSON.stringify(allTx) }));
             };
@@ -12565,7 +12569,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     } catch(e) {}
                 }
                 // Sincronizar con caja diaria
-                syncPaymentToCaja(payModalEmp, entry, cajaId, false);
+                try { syncPaymentToCaja(payModalEmp, entry, cajaId, false); } catch(e) { console.error('Error sync caja:', e); }
                 setShowPayModal(false);
             };
 
