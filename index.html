@@ -2021,6 +2021,12 @@ ${invoice.items.map(item => `
                 if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) data.cashTransactionsMultiYear = window.__cajaPrecargada;
                 if (window.__suppliersInfoPrecargada && Object.keys(window.__suppliersInfoPrecargada).length > 0) data.suppliersInfo = window.__suppliersInfoPrecargada;
                 if (window.__payrollPrecargado && Object.keys(window.__payrollPrecargado).length > 0) data.payrollMonthlyData = window.__payrollPrecargado;
+                if (window.__gastosPlaneadosPrecargados?.length > 0) data.cajaGastosPlaneados = window.__gastosPlaneadosPrecargados;
+                if (window.__facturasPlanPrecargadas?.length > 0) data.cajaFacturasPlaneadas = window.__facturasPlanPrecargadas;
+                if (window.__sueldosPlanPrecargados?.length > 0) data.cajaSueldosPlaneados = window.__sueldosPlanPrecargados;
+                if (window.__gastosAcredPrecargados?.length > 0) data.cajaGastosAcred = window.__gastosAcredPrecargados;
+                if (window.__facturasAcredPrecargadas?.length > 0) data.cajaFacturasAcred = window.__facturasAcredPrecargadas;
+                if (window.__sueldosAcredPrecargados?.length > 0) data.cajaSueldosAcred = window.__sueldosAcredPrecargados;
 
                 // Estadísticas legibles
                 const stats = [
