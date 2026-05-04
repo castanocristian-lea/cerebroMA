@@ -5436,6 +5436,256 @@ ${invoice.items.map(item => `
         };
 
 
+        // Componentes de renderizado fuera del módulo para evitar recreación
+        const QRDisplay = ({ value, size }) => {
+            const ref = React.useRef(null);
+            React.useEffect(() => {
+                if (!ref.current || !value) return;
+                const render = () => {
+                    if (!window.QRCode) return;
+                    ref.current.innerHTML = '';
+                    try { new window.QRCode(ref.current, { text: value, width: size||80, height: size||80, correctLevel: window.QRCode?.CorrectLevel?.M }); } catch(e) {}
+                };
+                if (window.QRCode) render();
+                else { const t = setInterval(() => { if (window.QRCode) { render(); clearInterval(t); } }, 200); return () => clearInterval(t); }
+            }, [value, size]);
+            return <div ref={ref} style={{display:'inline-block'}} />;
+        };
+
+        const BarcodeDisplay = ({ value, width, height }) => {
+            const ref = React.useRef(null);
+            React.useEffect(() => {
+                if (!ref.current || !value) return;
+                const render = () => {
+                    if (!window.JsBarcode) return;
+                    try { window.JsBarcode(ref.current, value, { format:'EAN13', width:width||1.5, height:height||50, displayValue:true, fontSize:11, margin:4 }); } catch(e) {}
+                };
+                if (window.JsBarcode) render();
+                else { const t = setInterval(() => { if (window.JsBarcode) { render(); clearInterval(t); } }, 200); return () => clearInterval(t); }
+            }, [value, width, height]);
+            return <svg ref={ref} />;
+        };
+
+        const CodigosModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
+            const { useState, useEffect } = React;
+            const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
+            const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+            const txt  = darkMode ? 'text-white'     : 'text-slate-900';
+            const sub  = darkMode ? 'text-slate-400' : 'text-slate-500';
+            const inp  = `w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-300 placeholder-slate-400'}`;
+
+            const [codigos, setCodigos]   = useState([]);
+            const [form, setForm]         = useState({ tipo:'barras', nombre:'', link:'', cantidad:1, codigoManual:'', usarManual:false });
+            const [seleccionados, setSel] = useState([]);
+            const [loaded, setLoaded]     = useState(false);
+            const [showArchivados, setShowArchivados] = useState(false);
+
+            useEffect(() => {
+                const cargar = (src) => new Promise(resolve => {
+                    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                    const s = document.createElement('script');
+                    s.src = src; s.onload = resolve; document.head.appendChild(s);
+                });
+                cargar('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+                cargar('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js');
+                dbGetAll('codigos_productos').then(d => { setCodigos(d||[]); setLoaded(true); }).catch(() => {
+                    const ls = localStorage.getItem('codigosProductos');
+                    setCodigos(ls ? JSON.parse(ls) : []); setLoaded(true);
+                });
+            }, []);
+
+            const genEAN13 = () => {
+                const d = Array.from({length:12}, ()=>Math.floor(Math.random()*10));
+                const check = (10 - d.reduce((s,x,i)=>s+x*(i%2===0?1:3),0)%10)%10;
+                return [...d,check].join('');
+            };
+
+            const guardar = async () => {
+                if (!form.nombre.trim()) return alert('Ingresá un nombre');
+                if (form.tipo==='qr' && !form.link.trim()) return alert('Ingresá un link para el QR');
+                const cant = Math.min(50, Math.max(1, parseInt(form.cantidad)||1));
+                const codigoBase = form.tipo==='barras'
+                    ? (form.usarManual && form.codigoManual.trim() ? form.codigoManual.trim() : null)
+                    : '';
+                const nuevos = Array.from({length:cant}, (_,i) => ({
+                    id: Date.now()+i, tipo:form.tipo, nombre:form.nombre.trim(),
+                    link: form.tipo==='qr' ? form.link.trim() : '',
+                    codigo: form.tipo==='barras' ? (codigoBase || genEAN13()) : '',
+                    archivado: false, creadoEl: new Date().toISOString(),
+                }));
+                const todos = [...codigos, ...nuevos];
+                setCodigos(todos);
+                localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                try { await dbSetArray('codigos_productos', todos); } catch(e) {}
+                setForm(f=>({...f, nombre:'', link:'', cantidad:1, codigoManual:'', usarManual:false}));
+            };
+
+            const eliminar = (id) => {
+                const todos = codigos.filter(c=>c.id!==id);
+                setCodigos(todos); localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                try { dbSetArray('codigos_productos', todos); } catch(e) {}
+            };
+
+            const archivar = (id) => {
+                setCodigos(prev => {
+                    const todos = prev.map(c=>c.id===id?{...c,archivado:!c.archivado}:c);
+                    localStorage.setItem('codigosProductos', JSON.stringify(todos));
+                    try { dbSetArray('codigos_productos', todos); } catch(e) {}
+                    return [...todos];
+                });
+            };
+
+            const toggleSel = (id) => setSel(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+
+            const activos    = codigos.filter(c=>!c.archivado);
+            const archivados = codigos.filter(c=>c.archivado);
+
+            const exportarPDF = () => {
+                const ids = seleccionados.length>0 ? seleccionados : activos.map(c=>c.id);
+                const paraPDF = activos.filter(c=>ids.includes(c.id));
+                if (!paraPDF.length) return alert('No hay códigos para exportar');
+                const items = paraPDF.map(c => {
+                    if (c.tipo==='barras') {
+                        let svg='';
+                        try { const el=document.createElementNS('http://www.w3.org/2000/svg','svg'); window.JsBarcode(el,c.codigo,{format:'EAN13',width:2,height:60,displayValue:true,fontSize:12,margin:4}); svg=el.outerHTML; } catch(e) {}
+                        return `<div class="item"><p class="nombre">${c.nombre}</p>${svg||`<p class="mono">${c.codigo}</p>`}</div>`;
+                    } else {
+                        let img='';
+                        try { const d=document.createElement('div'); document.body.appendChild(d); new window.QRCode(d,{text:c.link,width:120,height:120}); const cv=d.querySelector('canvas'); if(cv) img=cv.toDataURL(); document.body.removeChild(d); } catch(e) {}
+                        return `<div class="item"><p class="nombre">${c.nombre}</p>${img?`<img src="${img}" width="120" height="120"/>`:'<p class="mono">QR</p>'}</div>`;
+                    }
+                }).join('');
+                const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Códigos</title><style>body{font-family:Arial,sans-serif;padding:16px}h1{font-size:15px;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin-bottom:16px}.grid{display:flex;flex-wrap:wrap;gap:12px}.item{border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;break-inside:avoid}.nombre{font-size:12px;font-weight:bold;margin:0 0 8px}.mono{font-family:monospace;font-size:11px}@media print{@page{margin:10mm}}</style></head><body><h1>🏷️ Códigos de Productos</h1><div class="grid">${items}</div><script>window.onload=()=>window.print()<\/script></body></html>`;
+                const w=window.open('','_blank'); if(w){w.document.write(html);w.document.close();}else alert('Habilitá los popups');
+            };
+
+            if (!loaded) return <div className={`flex items-center justify-center min-h-screen ${bg}`}><p className={sub}>Cargando...</p></div>;
+
+            return (
+                <div className={`min-h-screen ${bg}`}>
+                    {/* Header */}
+                    <div className={`sticky top-0 z-10 border-b px-4 py-3 flex items-center gap-3 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                        {onBack && <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>}
+                        <h1 className={`text-base font-bold ${txt} flex-1`}>🏷️ Generador de Códigos</h1>
+                        <button onClick={()=>setShowArchivados(v=>!v)} className={`text-xs px-2.5 py-1.5 rounded-lg font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>
+                            📁 Archivados {archivados.length>0 && <span className="ml-1 bg-slate-500 text-white rounded-full px-1.5 text-xs">{archivados.length}</span>}
+                        </button>
+                        <button onClick={exportarPDF} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold">
+                            ⬇️ {seleccionados.length>0?`Exportar ${seleccionados.length}`:'Exportar todo'}
+                        </button>
+                    </div>
+
+                    <div className="max-w-3xl mx-auto px-4 py-5 space-y-5">
+                        {/* Formulario */}
+                        <div className={`rounded-xl border ${card} p-4 space-y-3`}>
+                            <p className={`text-xs font-bold uppercase tracking-wide ${sub}`}>Nuevo código</p>
+                            <div className={`flex rounded-lg overflow-hidden border ${darkMode?'border-slate-600':'border-slate-300'}`}>
+                                {[['barras','📊 Código de barras'],['qr','📱 Código QR']].map(([v,l])=>(
+                                    <button key={v} type="button" onClick={()=>setForm(f=>({...f,tipo:v,link:'',usarManual:false,codigoManual:''}))}
+                                        className={`flex-1 py-2 text-sm font-medium ${form.tipo===v?(darkMode?'bg-blue-700 text-white':'bg-blue-600 text-white'):(darkMode?'bg-slate-700 text-slate-400':'bg-white text-slate-500')}`}>{l}</button>
+                                ))}
+                            </div>
+                            <div>
+                                <label className={`block text-xs font-medium mb-1 ${sub}`}>Nombre del producto *</label>
+                                <input value={form.nombre} onChange={e=>setForm(f=>({...f,nombre:e.target.value}))} className={inp} placeholder="ej. Vino Malbec 750ml"/>
+                            </div>
+                            {form.tipo==='qr' && (
+                                <div>
+                                    <label className={`block text-xs font-medium mb-1 ${sub}`}>Link / URL *</label>
+                                    <input value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} className={inp} placeholder="https://..."/>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className={`block text-xs font-medium mb-1 ${sub}`}>Cantidad</label>
+                                    <input type="number" min="1" max="50" value={form.cantidad} onChange={e=>setForm(f=>({...f,cantidad:e.target.value}))} className={inp}/>
+                                </div>
+                                <div className="flex items-end">
+                                    <button onClick={guardar} className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">✚ Generar</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Lista activos */}
+                        {activos.length===0 ? (
+                            <div className={`p-10 text-center rounded-xl border-2 border-dashed ${darkMode?'border-slate-700 text-slate-500':'border-slate-200 text-slate-400'}`}>
+                                <p className="text-4xl mb-2">🏷️</p>
+                                <p className="text-sm font-medium">No hay códigos generados</p>
+                            </div>
+                        ) : (
+                            <div className={`rounded-xl border ${card} overflow-hidden`}>
+                                <div className={`flex items-center gap-3 px-4 py-2.5 border-b ${darkMode?'border-slate-700 bg-slate-700/30':'border-slate-100 bg-slate-50'}`}>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={seleccionados.length===activos.length&&activos.length>0} onChange={()=>setSel(seleccionados.length===activos.length?[]:activos.map(c=>c.id))} className="w-4 h-4 accent-indigo-600"/>
+                                        <span className={`text-xs font-medium ${sub}`}>{seleccionados.length>0?`${seleccionados.length} seleccionado${seleccionados.length!==1?'s':''}`: `${activos.length} código${activos.length!==1?'s':''}`}</span>
+                                    </label>
+                                    {seleccionados.length>0 && (
+                                        <div className="flex gap-3 ml-auto">
+                                            <button onClick={()=>{if(confirm(`¿Eliminar ${seleccionados.length} código${seleccionados.length!==1?'s':''}?`)){const t=codigos.filter(c=>!seleccionados.includes(c.id));setCodigos(t);localStorage.setItem('codigosProductos',JSON.stringify(t));try{dbSetArray('codigos_productos',t);}catch(e){}setSel([])}}} className="text-xs text-red-500 hover:text-red-700 font-medium">🗑️ Eliminar</button>
+                                            <button onClick={()=>{seleccionados.forEach(id=>archivar(id));setSel([]);}} className="text-xs text-amber-500 hover:text-amber-700 font-medium">📁 Archivar</button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-0 divide-x divide-y divide-slate-100 dark:divide-slate-700">
+                                    {activos.map(c=>(
+                                        <div key={c.id} onClick={()=>toggleSel(c.id)} className={`p-4 flex flex-col items-center text-center cursor-pointer transition-colors ${seleccionados.includes(c.id)?(darkMode?'bg-indigo-900/30':'bg-indigo-50'):(darkMode?'hover:bg-slate-700/30':'hover:bg-slate-50')}`}>
+                                            <div className="flex items-center gap-2 w-full mb-3">
+                                                <input type="checkbox" checked={seleccionados.includes(c.id)} onChange={()=>toggleSel(c.id)} onClick={e=>e.stopPropagation()} className="w-3.5 h-3.5 accent-indigo-600 shrink-0"/>
+                                                <p className={`text-xs font-semibold ${txt} truncate flex-1 text-left`}>{c.nombre}</p>
+                                                <button onClick={e=>{e.stopPropagation();archivar(c.id);}} className={`text-xs shrink-0 ${darkMode?'text-amber-400':'text-amber-500'} hover:opacity-80`} title="Archivar">📁</button>
+                                                <button onClick={e=>{e.stopPropagation();if(confirm('¿Eliminar?'))eliminar(c.id);}} className="text-red-400 hover:text-red-600 text-xs shrink-0">✕</button>
+                                            </div>
+                                            {c.tipo==='barras'
+                                                ? <BarcodeDisplay value={c.codigo} width={1.2} height={45}/>
+                                                : <QRDisplay value={c.link} size={80}/>
+                                            }
+                                            <span className={`mt-2 text-xs px-2 py-0.5 rounded-full font-medium ${c.tipo==='barras'?(darkMode?'bg-blue-900/40 text-blue-300':'bg-blue-50 text-blue-700'):(darkMode?'bg-purple-900/40 text-purple-300':'bg-purple-50 text-purple-700')}`}>
+                                                {c.tipo==='barras'?'📊 Barras':'📱 QR'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Archivados */}
+                        {showArchivados && (
+                            <div className={`rounded-xl border ${card} overflow-hidden`}>
+                                <div className={`px-4 py-2.5 border-b ${darkMode?'border-slate-700 bg-slate-700/30':'border-slate-100 bg-slate-50'} flex items-center gap-2`}>
+                                    <span className="text-sm">📁</span>
+                                    <p className={`text-xs font-bold ${darkMode?'text-slate-300':'text-slate-600'}`}>Archivados ({archivados.length})</p>
+                                    <p className={`text-xs ${sub} ml-1`}>Presioná ↩ para restaurar</p>
+                                </div>
+                                {archivados.length===0 ? (
+                                    <p className={`text-xs text-center py-6 ${sub}`}>No hay códigos archivados</p>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-0 divide-x divide-y divide-slate-100">
+                                    {archivados.map(c=>(
+                                        <div key={c.id} className={`p-4 flex flex-col items-center text-center opacity-70 ${darkMode?"":"bg-slate-50"}`}>
+                                            <div className="flex items-center gap-2 w-full mb-3">
+                                                <p className={`text-xs font-semibold ${txt} truncate flex-1 text-left`}>{c.nombre}</p>
+                                                <button onClick={()=>archivar(c.id)} className={`text-xs shrink-0 ${darkMode?"text-green-400":"text-green-600"} hover:opacity-80`} title="Restaurar">↩</button>
+                                                <button onClick={()=>{if(confirm("¿Eliminar?"))eliminar(c.id);}} className="text-red-400 hover:text-red-600 text-xs shrink-0">✕</button>
+                                            </div>
+                                            {c.tipo==="barras"
+                                                ? <BarcodeDisplay value={c.codigo} width={1.2} height={45}/>
+                                                : <QRDisplay value={c.link} size={80}/>
+                                            }
+                                            <span className={`mt-2 text-xs px-2 py-0.5 rounded-full font-medium ${darkMode?"bg-slate-700 text-slate-400":"bg-slate-200 text-slate-500"}`}>
+                                                {c.tipo==="barras"?"📊 Barras":"📱 QR"}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+
         const CredencialesModule = ({ darkMode = false, onBack, currentUser }) => {
             const [creds, setCreds] = React.useState([]);
             const [credsLoaded, setCredsLoaded] = React.useState(false);
@@ -5676,7 +5926,7 @@ ${invoice.items.map(item => `
             const isProxima = (fecha) => fecha >= today && fecha <= new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
 
             const writeCaja = (allTx) => {
-                localStorage.setItem(CAJA_KEY, JSON.stringify(allTx));
+                try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) { console.warn('⚠️ localStorage lleno, caja no cacheada'); }
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', { key: CAJA_KEY, newValue: JSON.stringify(allTx) }));
             };
