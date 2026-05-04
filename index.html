@@ -251,13 +251,11 @@
                 await migrarLocalStorage();
                 localStorage.removeItem('__pendingMigration');
             }
-            // Precargar desde Supabase en background
-            precargarDesdeSupabase().then(() => {
-                window.__supabaseReady = true;
-                window.__resolveSupabase();
-                // Notificar a React que los datos están listos
-                window.dispatchEvent(new CustomEvent('supabase-loaded'));
-            });
+            // Precargar desde Supabase y ESPERAR antes de renderizar React
+            await precargarDesdeSupabase();
+            window.__supabaseReady = true;
+            window.__resolveSupabase();
+            window.dispatchEvent(new CustomEvent('supabase-loaded'));
         }
         init();
     </script>
@@ -23137,7 +23135,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
 
         async function arrancarApp() {
-            // Mostrar React inmediatamente — la precarga de Supabase corre en background
+            // Esperar a que precargarDesdeSupabase termine antes de renderizar
+            if (window.__supabaseReadyPromise) await window.__supabaseReadyPromise;
             ReactDOM.render(<Malagestion />, document.getElementById('root'));
         }
         arrancarApp();
