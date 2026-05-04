@@ -246,6 +246,14 @@
         });
 
         async function init() {
+            // Limpiar keys grandes que viven en Supabase (no en localStorage)
+            ['cashTransactionsMultiYear','cashNotes','payrollNotes','invNotes','notasMes',
+             'suppliersInfo','invoices','salesInvoices','employees','systemUsers',
+             'payrollMonthlyData','sueldosPendientesData','seguroMedicoData',
+             'salesProducts','salesClients','salesHolders','categories',
+             'horasAjustesData','codigosProductos'].forEach(k => {
+                try { localStorage.removeItem(k); } catch(e) {}
+            });
             // Migración pendiente (después de importar backup)
             if (localStorage.getItem('__pendingMigration') === '1') {
                 await migrarLocalStorage();
@@ -8703,7 +8711,7 @@ ${invoice.items.map(item => `
             });
             useEffect(() => { localStorage.setItem('cajaRubrosCosto', JSON.stringify(tiposCosto)); dbUpsertOne('cash_planning', 'rubrosCosto', tiposCosto); }, [tiposCosto]);
             useEffect(() => {
-                localStorage.setItem('cashNotes', JSON.stringify(cashNotes));
+                try { localStorage.setItem('cashNotes', JSON.stringify(cashNotes)); } catch(e) {}
                 if (cashNotes.length > 0) dbSetArray('cash_notes', cashNotes);
             }, [cashNotes]);
 
@@ -11566,7 +11574,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [editingPayrollNote, setEditingPayrollNote] = useState(null);
             const [payrollNoteForm, setPayrollNoteForm] = useState({ fecha: new Date().toISOString().split('T')[0], fechaObjetivo: '', titulo: '', texto: '' });
             useEffect(() => {
-                localStorage.setItem('payrollNotes', JSON.stringify(payrollNotes));
+                try { localStorage.setItem('payrollNotes', JSON.stringify(payrollNotes)); } catch(e) {}
                 if (payrollNotes.length > 0) dbSetArray('payroll_notes', payrollNotes);
             }, [payrollNotes]);
             const openNewPayrollNote = () => { setEditingPayrollNote(null); setPayrollNoteForm({ fecha: new Date().toISOString().split('T')[0], fechaObjetivo: '', titulo: '', texto: '' }); setShowPayrollNoteModal(true); };
@@ -12237,7 +12245,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const s = localStorage.getItem('notasMes');
                 return s ? JSON.parse(s) : {};
             });
-            useEffect(() => { localStorage.setItem('notasMes', JSON.stringify(notasMes));
+            useEffect(() => { try { localStorage.setItem('notasMes', JSON.stringify(notasMes)); } catch(e) {}
                 dbUpsertOne('payroll_monthly', 'notasMes', notasMes); }, [notasMes]);
             const notaKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
             const getNota = (empId) => notasMes[notaKey(empId)] || '';
@@ -18485,7 +18493,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [showInvNoteModal, setShowInvNoteModal] = useState(false);
             const [editingInvNote, setEditingInvNote] = useState(null);
             const [invNoteForm, setInvNoteForm] = useState({ fecha: new Date().toISOString().split('T')[0], titulo: '', texto: '' });
-            useEffect(() => { localStorage.setItem('invNotes', JSON.stringify(invNotes));
+            useEffect(() => { try { localStorage.setItem('invNotes', JSON.stringify(invNotes)); } catch(e) {}
                 dbUpsertOne('suppliers', 'invNotes', invNotes); }, [invNotes]);
             
             // Estados para Settings
