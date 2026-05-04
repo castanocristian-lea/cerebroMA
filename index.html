@@ -100,10 +100,18 @@
                 try {
                     const parsed = JSON.parse(raw);
                     if (m.type === 'array') {
-                        if (Array.isArray(parsed) && parsed.length > 0) await dbSetArray(m.table, parsed);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            // Solo migrar si Supabase está vacío para este key
+                            const existing = await _sb.from(m.table).select('id').limit(1);
+                            if (!existing.data?.length) await dbSetArray(m.table, parsed);
+                        }
                     } else {
                         if (parsed && (typeof parsed === 'object' ? Object.keys(parsed).length > 0 : true)) {
-                            await dbUpsertOne(m.table, m.key, parsed);
+                            // Solo migrar si no existe ya en Supabase
+                            const existing = await dbGetKey(m.table, m.key);
+                            if (!existing || (typeof existing === 'object' && Object.keys(existing).length === 0)) {
+                                await dbUpsertOne(m.table, m.key, parsed);
+                            }
                         }
                     }
                 } catch(e) { console.warn('Error migrando', m.ls, e); }
