@@ -404,7 +404,7 @@
             });
 
             localStorage.setItem(PAYROLL_KEY, JSON.stringify(payrollData));
-            localStorage.setItem(MARKER, '1');
+            try { localStorage.setItem(MARKER, '1'); } catch(e) {}
         })();
 
         // ── AJUSTE PUNTUAL: Santiago marzo 2026 = 33.3 hs (único pago banco 10.000/300) ──
@@ -416,13 +416,13 @@
                 (e.apellido || '').toLowerCase().includes('perez') &&
                 (e.nombre || '').toLowerCase().includes('santiago')
             );
-            if (!santiago) { localStorage.setItem(FIX_MARKER, '1'); return; }
+            if (!santiago) { try { localStorage.setItem(FIX_MARKER, '1'); } catch(e) {} return; }
             const ajusteKey = santiago.id + '_2026_2'; // marzo = mes 2
             const ajustes = JSON.parse(localStorage.getItem('horasAjustesData') || '{}');
             ajustes[ajusteKey] = 33.3;
             try { localStorage.setItem('horasAjustesData', JSON.stringify(ajustes)); } catch(e) {}
             dbUpsertOne('payroll_hours','main',ajustes);
-            localStorage.setItem(FIX_MARKER, '1');
+            try { localStorage.setItem(FIX_MARKER, '1'); } catch(e) {}
             console.log('Fix Santiago marzo 2026: 33.3 hs guardado en horasAjustesData');
         })();
 
@@ -476,7 +476,7 @@
                 localStorage.setItem(PAYROLL_KEY, JSON.stringify(payrollData));
                 console.log('Limpieza completada — recargando...');
             }
-            localStorage.setItem(CLEAN_MARKER, '1');
+            try { localStorage.setItem(CLEAN_MARKER, '1'); } catch(e) {}
         })();
     </script>
     <style>
@@ -1906,7 +1906,7 @@ ${invoice.items.map(item => `
             
             const changeLanguage = (lang) => {
                 setCurrentLanguage(lang);
-                localStorage.setItem('malagestion_language', lang);
+                try { localStorage.setItem('malagestion_language', lang); } catch(e) {}
                 if (!currentUser) return;
                 const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, language: lang } : u);
@@ -2048,7 +2048,7 @@ ${invoice.items.map(item => `
                             }
 
                             // Marcar que hay migración pendiente al próximo arranque
-                            localStorage.setItem('__pendingMigration', '1');
+                            try { localStorage.setItem('__pendingMigration', '1'); } catch(e) {}
 
                             alert('✅ Backup restaurado exitosamente. La página se recargará.');
                             window.location.reload();
@@ -2114,7 +2114,7 @@ ${invoice.items.map(item => `
                     const tareasViejas = localStorage.getItem('miCerebroTareas');
                     const claveNueva = `miCerebroTareas_${user.id}`;
                     if (tareasViejas && !localStorage.getItem(claveNueva)) {
-                        localStorage.setItem(claveNueva, tareasViejas);
+                        try { localStorage.setItem(claveNueva, tareasViejas); } catch(e) {}
                     }
                     setIsUnlocked(true);
                     setPinError(false);
@@ -20068,7 +20068,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     return;
                 }
                 
-                localStorage.setItem('makeWebhookUrl', webhookUrl);
+                try { localStorage.setItem('makeWebhookUrl', webhookUrl); } catch(e) {}
                 setShowSettings(false);
                 
                 if (webhookUrl) {
@@ -20109,7 +20109,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     // Crear nuevo archivo
                     const fileId = await createDriveFile('facturas-backup.json', data, token);
                     setDriveFileId(fileId);
-                    localStorage.setItem('driveFileId', fileId);
+                    try { localStorage.setItem('driveFileId', fileId); } catch(e) {}
                 }
                 
                 setLastSync(new Date().toISOString());
@@ -22627,7 +22627,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 // Migrar tareas viejas (sin uid) a clave por usuario
                 const tareasViejas = localStorage.getItem('miCerebroTareas');
                 if (tareasViejas && _uid && !localStorage.getItem(tareasKey)) {
-                    localStorage.setItem(tareasKey, tareasViejas);
+                    try { localStorage.setItem(tareasKey, tareasViejas); } catch(e) {}
                     setTareas(JSON.parse(tareasViejas));
                 }
                 const sync = async () => {
