@@ -18583,6 +18583,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             };
             
             const [invoices, setInvoices] = useState(() => {
+                if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas;
                 try { const ls = localStorage.getItem('invoices'); return ls ? JSON.parse(ls) : []; } catch(e) { return []; }
             });
             const [expandedSuppliers, setExpandedSuppliers] = useState(new Set());
@@ -19241,17 +19242,25 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             useEffect(() => {
                 const loadData = async () => {
                     try {
+                        // Primero intentar window precargado
+                        if (window.__invoicesPrecargadas?.length > 0) {
+                            setInvoices(window.__invoicesPrecargadas);
+                            return;
+                        }
+                        // Luego Supabase
+                        const d = await dbGetKey('invoices_data', 'main');
+                        if (d && d.length > 0) {
+                            setInvoices(d);
+                            window.__invoicesPrecargadas = d;
+                            return;
+                        }
+                        // Fallback localStorage
                         if (window.storage) {
                             const stored = await window.storage.get('invoices');
-                            if (stored && stored.value) {
-                                setInvoices(JSON.parse(stored.value));
-                            }
+                            if (stored?.value) setInvoices(JSON.parse(stored.value));
                         } else {
-                            // Cargar desde localStorage como fallback
                             const stored = localStorage.getItem('invoices');
-                            if (stored) {
-                                setInvoices(JSON.parse(stored));
-                            }
+                            if (stored) setInvoices(JSON.parse(stored));
                         }
                     } catch (error) {
                         console.log('Primera carga, sin datos previos');
