@@ -7556,6 +7556,17 @@ ${invoice.items.map(item => `
             const [showSueldosModal, setShowSueldosModal] = React.useState(false);
             const [sueldosSeleccionados, setSueldosSeleccionados] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaSueldosPlaneados') || '[]'); } catch(e) { return []; } });
             const [pendingSueldo, setPendingSueldo] = React.useState(null);
+            // Estados independientes para Plata a acreditarse
+            const [gastosAcred, setGastosAcred] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaGastosAcred') || '[]'); } catch(e) { return []; } });
+            const [showFacturasAcredModal, setShowFacturasAcredModal] = React.useState(false);
+            const [facturasAcred, setFacturasAcred] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaFacturasAcred') || '[]'); } catch(e) { return []; } });
+            const [showSueldosAcredModal, setShowSueldosAcredModal] = React.useState(false);
+            const [sueldosAcred, setSueldosAcred] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaSueldosAcred') || '[]'); } catch(e) { return []; } });
+            const [pendingSueldoAcred, setPendingSueldoAcred] = React.useState(null);
+            const [pendingFacturaAcred, setPendingFacturaAcred] = React.useState(null);
+            const [showGastoAcredModal, setShowGastoAcredModal] = React.useState(false);
+            const [editingGastoAcred, setEditingGastoAcred] = React.useState(null);
+            const [gastoAcredForm, setGastoAcredForm] = React.useState({concepto:'',monto:'',moneda:'CZK',fecha:new Date().toISOString().split('T')[0],metodoPago:'BANK'});
             const [asignaciones, setAsignaciones] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaAsignaciones') || '{}'); } catch(e) { return {}; } }); // factura esperando método de pago
             const [showGastoModal, setShowGastoModal] = React.useState(false);
             const [editingGasto, setEditingGasto] = React.useState(null);
@@ -7577,6 +7588,27 @@ ${invoice.items.map(item => `
             const saveFacturasSeleccionadas = (list) => { setFacturasSeleccionadas(list); localStorage.setItem('cajaFacturasPlaneadas', JSON.stringify(list)); dbUpsertOne('cash_planning', 'facturasPlaneadas', list); };
             const saveAsignaciones = (obj) => { setAsignaciones(obj); localStorage.setItem('cajaAsignaciones', JSON.stringify(obj)); dbUpsertOne('cash_planning', 'asignaciones', obj); };
             const saveSueldosSeleccionados = (list) => { setSueldosSeleccionados(list); localStorage.setItem('cajaSueldosPlaneados', JSON.stringify(list)); dbUpsertOne('cash_planning', 'sueldosPlaneados', list); };
+            const saveGastosAcred = (list) => { setGastosAcred(list); try { localStorage.setItem('cajaGastosAcred', JSON.stringify(list)); } catch(e) {} dbUpsertOne('cash_planning', 'gastosAcred', list); };
+            const saveFacturasAcred = (list) => { setFacturasAcred(list); try { localStorage.setItem('cajaFacturasAcred', JSON.stringify(list)); } catch(e) {} dbUpsertOne('cash_planning', 'facturasAcred', list); };
+            const saveSueldosAcred = (list) => { setSueldosAcred(list); try { localStorage.setItem('cajaSueldosAcred', JSON.stringify(list)); } catch(e) {} dbUpsertOne('cash_planning', 'sueldosAcred', list); };
+            const toggleSueldoAcred = (s) => {
+                const ya = sueldosAcred.some(x => x.id === s.id);
+                if (ya) { saveSueldosAcred(sueldosAcred.filter(x => x.id !== s.id)); return; }
+                setPendingSueldoAcred(s);
+            };
+            const confirmarSueldoAcred = (metodo) => {
+                saveSueldosAcred([...sueldosAcred, { ...pendingSueldoAcred, metodoPago: metodo }]);
+                setPendingSueldoAcred(null);
+            };
+            const toggleFacturaAcred = (inv) => {
+                const ya = facturasAcred.some(f => f.id === inv.id);
+                if (ya) { saveFacturasAcred(facturasAcred.filter(f => f.id !== inv.id)); return; }
+                setPendingFacturaAcred(inv);
+            };
+            const confirmarFacturaAcred = (metodo) => {
+                saveFacturasAcred([...facturasAcred, { ...pendingFacturaAcred, metodoPago: metodo }]);
+                setPendingFacturaAcred(null);
+            };
             const toggleSueldo = (s) => {
                 const ya = sueldosSeleccionados.some(x => x.id === s.id);
                 if (ya) {
@@ -8002,13 +8034,13 @@ ${invoice.items.map(item => `
                                     🗑 Borrar todo
                                 </button>
                             )}
-                            {canEdit && <button onClick={() => setShowSueldosModal(true)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-purple-700 text-purple-400 hover:bg-slate-700' : 'border-purple-300 text-purple-700 hover:bg-purple-50'}`}>
+                            {canEdit && <button onClick={() => setShowSueldosAcredModal(true)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-purple-700 text-purple-400 hover:bg-slate-700' : 'border-purple-300 text-purple-700 hover:bg-purple-50'}`}>
                                 👤 Sueldos pendientes
                             </button>}
-                            {canEdit && <button onClick={() => setShowFacturasModal(true)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-amber-700 text-amber-400 hover:bg-slate-700' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
+                            {canEdit && <button onClick={() => setShowFacturasAcredModal(true)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-amber-700 text-amber-400 hover:bg-slate-700' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
                                 🧾 Facturas vencidas
                             </button>}
-                            {canEdit && <button onClick={openNewGasto} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                            {canEdit && <button onClick={() => setShowGastoAcredModal(true)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                                 Gasto planificado
                             </button>}
@@ -8046,15 +8078,59 @@ ${invoice.items.map(item => `
                                     </div>
                                 ))}
                             </div>
+                            {/* Sueldos, facturas y gastos planificados en acreditaciones */}
+                            {(sueldosAcred.length > 0 || facturasAcred.length > 0 || gastosAcred.length > 0) && (
+                                <div className="space-y-1 mb-3 mt-1">
+                                    {sueldosAcred.map(s => (
+                                        <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg ${darkMode?'bg-purple-900/20':'bg-purple-50'}`}>
+                                            <span className={`text-xs font-medium ${darkMode?'text-purple-300':'text-purple-700'}`}>👤 {s.nombreEmpleado}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-purple-600">- {(s.monto||0).toLocaleString('es-CZ')} {s.moneda||'CZK'}</span>
+                                                {canEdit && <button onClick={()=>saveSueldosAcred(sueldosAcred.filter(x=>x.id!==s.id))} className="text-red-400 hover:text-red-500 text-xs">✕</button>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {facturasAcred.map(f => (
+                                        <div key={f.id} className={`flex items-center justify-between p-2 rounded-lg ${darkMode?'bg-amber-900/20':'bg-amber-50'}`}>
+                                            <span className={`text-xs font-medium ${darkMode?'text-amber-300':'text-amber-700'}`}>🧾 {f.category||f.supplier||'Factura'}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-amber-600">- {Math.abs(parseFloat(f.amount||0)).toLocaleString('es-CZ')} {f.currency||'CZK'}</span>
+                                                {canEdit && <button onClick={()=>saveFacturasAcred(facturasAcred.filter(x=>x.id!==f.id))} className="text-red-400 hover:text-red-500 text-xs">✕</button>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {gastosAcred.map(g => (
+                                        <div key={g.id} className={`flex items-center justify-between p-2 rounded-lg ${darkMode?'bg-slate-700':'bg-slate-50'}`}>
+                                            <span className={`text-xs font-medium ${darkMode?'text-slate-300':'text-slate-600'}`}>📋 {g.concepto}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-xs font-bold ${darkMode?'text-slate-300':'text-slate-700'}`}>- {(g.monto||0).toLocaleString('es-CZ')} {g.moneda||'CZK'}</span>
+                                                {canEdit && <button onClick={()=>saveGastosAcred(gastosAcred.filter(x=>x.id!==g.id))} className="text-red-400 hover:text-red-500 text-xs">✕</button>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             {/* Totales por moneda */}
                             {(() => {
-                                const totales = acreditaciones.reduce((acc, a) => { acc[a.moneda] = (acc[a.moneda]||0) + a.monto; return acc; }, {});
+                                const totAcred = acreditaciones.reduce((acc, a) => { acc[a.moneda] = (acc[a.moneda]||0) + a.monto; return acc; }, {});
+                                const totEgr = {};
+                                sueldosAcred.forEach(s => { const m=s.moneda||'CZK'; totEgr[m]=(totEgr[m]||0)+s.monto; });
+                                facturasAcred.forEach(f => { const m=f.currency||'CZK'; totEgr[m]=(totEgr[m]||0)+Math.abs(parseFloat(f.amount||0)); });
+                                gastosAcred.forEach(g => { const m=g.moneda||'CZK'; totEgr[m]=(totEgr[m]||0)+g.monto; });
+                                const monedas = [...new Set([...Object.keys(totAcred), ...Object.keys(totEgr)])];
                                 return (
                                     <div className={`flex flex-wrap gap-3 pt-3 border-t ${darkMode ? 'border-slate-600' : 'border-emerald-200'}`}>
-                                        <span className={`text-xs font-semibold ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total a acreditarse:</span>
-                                        {Object.entries(totales).map(([m, t]) => (
-                                            <span key={m} className="font-bold text-emerald-600 text-sm">+ {fmtN(t, m)}</span>
-                                        ))}
+                                        {monedas.map(m => {
+                                            const acr = totAcred[m]||0, egr = totEgr[m]||0, net = acr - egr;
+                                            return (
+                                                <div key={m} className="flex flex-col">
+                                                    {acr > 0 && <span className="font-bold text-emerald-600 text-sm">+ {fmtN(acr, m)}</span>}
+                                                    {egr > 0 && <span className="font-bold text-red-500 text-sm">- {fmtN(egr, m)}</span>}
+                                                    {acr > 0 && egr > 0 && <span className={`font-bold text-sm ${net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>= {fmtN(net, m)}</span>}
+                                                </div>
+                                            );
+                                        })}
+                                        {monedas.length === 0 && <span className={`text-xs font-semibold ${darkMode?'text-slate-400':'text-slate-500'}`}>Sin movimientos</span>}
                                     </div>
                                 );
                             })()}
@@ -8283,6 +8359,161 @@ ${invoice.items.map(item => `
                 })()}
 
                 {/* Modal: Gestionar lugares */}
+                {/* Modales independientes para Plata a acreditarse */}
+                {showSueldosAcredModal && (() => {
+                    const pendientes = (() => { try { return JSON.parse(localStorage.getItem('sueldosPendientesData')||'[]'); } catch(e) { return []; } })();
+                    return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                        <div className={`rounded-2xl shadow-2xl w-full max-w-lg p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className={`text-lg font-bold ${txt}`}>👤 Sueldos pendientes</h3>
+                                <span className={`text-xs ${sub}`}>{sueldosAcred.length} seleccionados</span>
+                            </div>
+                            {pendientes.length === 0 ? (
+                                <p className={`text-sm text-center py-8 ${sub}`}>No hay sueldos pendientes registrados</p>
+                            ) : (
+                                <div className="space-y-2 max-h-72 overflow-y-auto mb-4">
+                                    {pendientes.map(s => {
+                                        const selected = sueldosAcred.some(x => x.id === s.id);
+                                        return (
+                                        <div key={s.id} onClick={() => !selected && toggleSueldoAcred(s)}
+                                            className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${selected ? 'cursor-default' : 'cursor-pointer'} ${selected ? (darkMode ? 'bg-purple-900/30 border-purple-600' : 'bg-purple-50 border-purple-300') : (darkMode ? 'bg-slate-700 border-slate-600 hover:bg-slate-600' : 'bg-slate-50 border-slate-200 hover:bg-slate-100')}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'bg-purple-500 border-purple-500' : (darkMode ? 'border-slate-500' : 'border-slate-300')}`}>
+                                                    {selected && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                </div>
+                                                <div>
+                                                    <p className={`text-sm font-medium ${txt}`}>{s.nombreEmpleado}</p>
+                                                    <p className={`text-xs ${sub}`}>{s.vencimiento ? `Vencimiento: ${s.vencimiento}` : 'Sin fecha'}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-purple-600 text-sm">{(s.monto||0).toLocaleString('es-CZ',{minimumFractionDigits:0})} {s.moneda||'CZK'}</span>
+                                                {selected && <button onClick={e => { e.stopPropagation(); saveSueldosAcred(sueldosAcred.filter(x=>x.id!==s.id)); }} className="p-1 rounded hover:bg-red-100">
+                                                    <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>}
+                                            </div>
+                                        </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            {pendingSueldoAcred && (
+                                <div className={`rounded-xl border p-4 mb-3 ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-purple-50 border-purple-200'}`}>
+                                    <p className={`text-sm font-medium mb-1 ${txt}`}>{pendingSueldoAcred.nombreEmpleado} · {(pendingSueldoAcred.monto||0).toLocaleString('es-CZ')} {pendingSueldoAcred.moneda||'CZK'}</p>
+                                    <p className={`text-xs ${sub} mb-3`}>¿Cómo lo vas a pagar?</p>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => confirmarSueldoAcred('BANK')} className="flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white">🏦 Banco</button>
+                                        <button onClick={() => confirmarSueldoAcred('CASH')} className="flex-1 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-700 text-white">💵 Efectivo</button>
+                                        <button onClick={() => confirmarSueldoAcred('ATM')} className="flex-1 py-2 rounded-lg text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white">🏧 Cajero</button>
+                                        <button onClick={() => setPendingSueldoAcred(null)} className={`px-3 py-2 rounded-lg text-sm ${darkMode ? 'bg-slate-600 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>✕</button>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                {sueldosAcred.length > 0 && <button onClick={() => saveSueldosAcred([])} className={`px-3 py-2 text-xs rounded-lg border ${darkMode ? 'border-slate-600 text-slate-400' : 'border-slate-200 text-slate-500'}`}>Limpiar todo</button>}
+                                <button onClick={() => { setShowSueldosAcredModal(false); setPendingSueldoAcred(null); }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+                    );
+                })()}
+
+                {showFacturasAcredModal && (() => {
+                    const allInvoices = (() => { try { return JSON.parse(localStorage.getItem('invoices') || '[]'); } catch(e) { return []; } })();
+                    const today = new Date().toISOString().split('T')[0];
+                    const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate < today).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+                    return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                        <div className={`rounded-2xl shadow-2xl w-full max-w-lg p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className={`text-lg font-bold ${txt}`}>🧾 Facturas vencidas</h3>
+                                <span className={`text-xs ${sub}`}>{facturasAcred.length} seleccionadas</span>
+                            </div>
+                            {vencidas.length === 0 ? (
+                                <p className={`text-sm text-center py-8 ${sub}`}>No hay facturas vencidas pendientes de pago</p>
+                            ) : (
+                                <div className="space-y-2 max-h-72 overflow-y-auto mb-4">
+                                    {vencidas.map(inv => {
+                                        const selected = facturasAcred.some(f => f.id === inv.id);
+                                        const monto = Math.abs(parseFloat(inv.amount)||0);
+                                        return (
+                                        <div key={inv.id} onClick={() => toggleFacturaAcred(inv)}
+                                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-colors ${selected ? (darkMode ? 'bg-amber-900/30 border-amber-600' : 'bg-amber-50 border-amber-300') : (darkMode ? 'bg-slate-700 border-slate-600 hover:bg-slate-600' : 'bg-slate-50 border-slate-200 hover:bg-slate-100')}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'bg-amber-500 border-amber-500' : (darkMode ? 'border-slate-500' : 'border-slate-300')}`}>
+                                                    {selected && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                </div>
+                                                <div>
+                                                    <p className={`text-sm font-medium ${txt}`}>{inv.category || inv.supplier || 'Sin proveedor'}</p>
+                                                    <p className={`text-xs ${sub}`}>{inv.number || '—'} · vence {inv.dueDate}</p>
+                                                </div>
+                                            </div>
+                                            <span className="font-bold text-orange-600 text-sm">{monto.toLocaleString('es-CZ',{minimumFractionDigits:0})} {inv.currency || 'CZK'}</span>
+                                        </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            {pendingFacturaAcred && (
+                                <div className={`rounded-xl border p-4 mb-3 ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-amber-50 border-amber-200'}`}>
+                                    <p className={`text-sm font-medium mb-1 ${txt}`}>{pendingFacturaAcred.category} · {Math.abs(pendingFacturaAcred.amount||0).toLocaleString('es-CZ')} {pendingFacturaAcred.currency||'CZK'}</p>
+                                    <p className={`text-xs ${sub} mb-3`}>¿Cómo la vas a pagar?</p>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => confirmarFacturaAcred('BANK')} className="flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white">🏦 Banco</button>
+                                        <button onClick={() => confirmarFacturaAcred('CASH')} className="flex-1 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-700 text-white">💵 Efectivo</button>
+                                        <button onClick={() => confirmarFacturaAcred('ATM')} className="flex-1 py-2 rounded-lg text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white">🏧 Cajero</button>
+                                        <button onClick={() => setPendingFacturaAcred(null)} className={`px-3 py-2 rounded-lg text-sm ${darkMode ? 'bg-slate-600 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>✕</button>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                {facturasAcred.length > 0 && <button onClick={() => saveFacturasAcred([])} className={`px-3 py-2 text-xs rounded-lg border ${darkMode ? 'border-slate-600 text-slate-400' : 'border-slate-200 text-slate-500'}`}>Limpiar todo</button>}
+                                <button onClick={() => { setShowFacturasAcredModal(false); setPendingFacturaAcred(null); }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+                    );
+                })()}
+
+                {showGastoAcredModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+                        <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                            <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingGastoAcred ? 'Editar gasto' : 'Gasto planificado'}</h3>
+                            <div className="space-y-3">
+                                <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Concepto *</label>
+                                    <input value={gastoAcredForm.concepto} onChange={e=>setGastoAcredForm(f=>({...f,concepto:e.target.value}))} className={`w-full px-3 py-2 rounded-lg border text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-300'}`} placeholder="ej. Alquiler, servicio..."/></div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1"><label className={`block text-xs font-medium mb-1 ${sub}`}>Monto *</label>
+                                        <input type="number" value={gastoAcredForm.monto} onChange={e=>setGastoAcredForm(f=>({...f,monto:e.target.value}))} className={`w-full px-3 py-2 rounded-lg border text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-300'}`} placeholder="0"/></div>
+                                    <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Moneda</label>
+                                        <select value={gastoAcredForm.moneda} onChange={e=>setGastoAcredForm(f=>({...f,moneda:e.target.value}))} className={`px-3 py-2 rounded-lg border text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-300'}`}>
+                                            {['CZK','EUR','USD','ARS'].map(m=><option key={m}>{m}</option>)}
+                                        </select></div>
+                                </div>
+                                <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha</label>
+                                    <input type="date" value={gastoAcredForm.fecha} onChange={e=>setGastoAcredForm(f=>({...f,fecha:e.target.value}))} className={`w-full px-3 py-2 rounded-lg border text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-300'}`}/></div>
+                                <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Método de pago</label>
+                                    <div className="flex gap-2">
+                                        {[['BANK','🏦 Banco'],['CASH','💵 Efectivo'],['ATM','🏧 Cajero']].map(([v,l])=>(
+                                            <button key={v} type="button" onClick={()=>setGastoAcredForm(f=>({...f,metodoPago:v}))} className={`flex-1 py-1.5 rounded-lg text-xs font-medium border ${gastoAcredForm.metodoPago===v?(v==='BANK'?'bg-blue-600 text-white border-blue-600':v==='CASH'?'bg-green-600 text-white border-green-600':'bg-orange-500 text-white border-orange-500'):(darkMode?'border-slate-600 text-slate-400':'border-slate-300 text-slate-500')}`}>{l}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 mt-5">
+                                <button onClick={()=>setShowGastoAcredModal(false)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>Cancelar</button>
+                                <button onClick={()=>{
+                                    if (!gastoAcredForm.concepto || !gastoAcredForm.monto) return alert('Completá concepto y monto');
+                                    const item = { id: editingGastoAcred?.id || Date.now(), ...gastoAcredForm, monto: parseFloat(gastoAcredForm.monto) };
+                                    saveGastosAcred(editingGastoAcred ? gastosAcred.map(g=>g.id===item.id?item:g) : [...gastosAcred, item]);
+                                    setShowGastoAcredModal(false);
+                                }} className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">Guardar</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {showLugarModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
