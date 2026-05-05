@@ -1522,9 +1522,18 @@ ${invoice.items.map(item => `
                         const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif'];
                         const userId = String(currentUser.id);
                         // solicNotif y solicRespNotif usan userId, el resto usa empId
-                        // Todos los tipos usan userId
+                        // Buscar por userId Y por empId, mergear ambos
                         const results = await Promise.all(
-                            tipos.map(t => dbGetKey('app_config', `notif_${t}_${userId}`).catch(()=>null))
+                            tipos.map(async t => {
+                                const byUser = await dbGetKey('app_config', `notif_${t}_${userId}`).catch(()=>null);
+                                const byEmp = await dbGetKey('app_config', `notif_${t}_${empId}`).catch(()=>null);
+                                const arr1 = Array.isArray(byUser) ? byUser : [];
+                                const arr2 = Array.isArray(byEmp) ? byEmp : [];
+                                // Merge sin duplicados
+                                const merged = [...arr1];
+                                arr2.forEach(x => { if (!merged.find(y=>String(y.id)===String(x.id))) merged.push(x); });
+                                return merged.length ? merged : null;
+                            })
                         );
                         setNotificaciones(prev => {
                             const nuevo = {};
