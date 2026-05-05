@@ -262,7 +262,7 @@
 
                 // gastosPlaneados
                 const gastosR = await _sb.from('cash_planning').select('data').eq('id','gastosPlaneados').maybeSingle();
-                if (gastosR.data?.data) { try { localStorage.setItem('cajaGastosPlaneados', JSON.stringify(gastosR.data.data)); } catch(e) { console.warn('⚠️ localStorage lleno, omitiendo cajaGastosPlaneados'); } }
+                if (gastosR.data?.data) { window.__gastosPlaneadosPrecargados = gastosR.data.data; }
                 // miCerebro — datos por usuario (se cargan en MiCerebroModule al montar)
                 // No pre-cargar aquí ya que la clave incluye el userId que no está disponible aún
 
@@ -6251,7 +6251,7 @@ ${invoice.items.map(item => `
 
             const writeCaja = (allTx) => {
                 window.__cajaPrecargada = allTx;
-                try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) { console.warn('⚠️ localStorage lleno, caja no cacheada'); }
+                window.__cashTxPrecargadas = allTx;
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
             };
@@ -7951,19 +7951,19 @@ ${invoice.items.map(item => `
 
     <script type="text/babel">
         const PosicionFondosModule = ({ darkMode, canEdit, fondos, setFondos, lugares, setLugares, showFondoModal, setShowFondoModal, editingFondo, setEditingFondo, fondoForm, setFondoForm, showLugarModal, setShowLugarModal, nuevoLugar, setNuevoLugar, ahorros, acreditaciones, setAcreditaciones, showAcreditacionModal, setShowAcreditacionModal, editingAcreditacion, setEditingAcreditacion, acreditacionForm, setAcreditacionForm }) => {
-            const [gastos, setGastos] = React.useState(() => { if (window.__gastosPlaneadosPrecargados?.length > 0) return window.__gastosPlaneadosPrecargados; try { return JSON.parse(localStorage.getItem('cajaGastosPlaneados') || '[]'); } catch(e) { return []; } });
+            const [gastos, setGastos] = React.useState(() => { if (window.__gastosPlaneadosPrecargados?.length > 0) return window.__gastosPlaneadosPrecargados; return []; });
             const [showFacturasModal, setShowFacturasModal] = React.useState(false);
-            const [facturasSeleccionadas, setFacturasSeleccionadas] = React.useState(() => { if (window.__facturasPlanPrecargadas?.length > 0) return window.__facturasPlanPrecargadas; try { return JSON.parse(localStorage.getItem('cajaFacturasPlaneadas') || '[]'); } catch(e) { return []; } });
+            const [facturasSeleccionadas, setFacturasSeleccionadas] = React.useState(() => { if (window.__facturasPlanPrecargadas?.length > 0) return window.__facturasPlanPrecargadas; return []; });
             const [pendingFactura, setPendingFactura] = React.useState(null);
             const [showSueldosModal, setShowSueldosModal] = React.useState(false);
-            const [sueldosSeleccionados, setSueldosSeleccionados] = React.useState(() => { if (window.__sueldosPlanPrecargados?.length > 0) return window.__sueldosPlanPrecargados; try { return JSON.parse(localStorage.getItem('cajaSueldosPlaneados') || '[]'); } catch(e) { return []; } });
+            const [sueldosSeleccionados, setSueldosSeleccionados] = React.useState(() => { if (window.__sueldosPlanPrecargados?.length > 0) return window.__sueldosPlanPrecargados; return []; });
             const [pendingSueldo, setPendingSueldo] = React.useState(null);
             // Estados independientes para Plata a acreditarse
-            const [gastosAcred, setGastosAcred] = React.useState(() => { if (window.__gastosAcredPrecargados?.length > 0) return window.__gastosAcredPrecargados; try { return JSON.parse(localStorage.getItem('cajaGastosAcred') || '[]'); } catch(e) { return []; } });
+            const [gastosAcred, setGastosAcred] = React.useState(() => { if (window.__gastosAcredPrecargados?.length > 0) return window.__gastosAcredPrecargados; return []; });
             const [showFacturasAcredModal, setShowFacturasAcredModal] = React.useState(false);
-            const [facturasAcred, setFacturasAcred] = React.useState(() => { if (window.__facturasAcredPrecargadas?.length > 0) return window.__facturasAcredPrecargadas; try { return JSON.parse(localStorage.getItem('cajaFacturasAcred') || '[]'); } catch(e) { return []; } });
+            const [facturasAcred, setFacturasAcred] = React.useState(() => { if (window.__facturasAcredPrecargadas?.length > 0) return window.__facturasAcredPrecargadas; return []; });
             const [showSueldosAcredModal, setShowSueldosAcredModal] = React.useState(false);
-            const [sueldosAcred, setSueldosAcred] = React.useState(() => { if (window.__sueldosAcredPrecargados?.length > 0) return window.__sueldosAcredPrecargados; try { return JSON.parse(localStorage.getItem('cajaSueldosAcred') || '[]'); } catch(e) { return []; } });
+            const [sueldosAcred, setSueldosAcred] = React.useState(() => { if (window.__sueldosAcredPrecargados?.length > 0) return window.__sueldosAcredPrecargados; return []; });
             const [pendingSueldoAcred, setPendingSueldoAcred] = React.useState(null);
             const [pendingFacturaAcred, setPendingFacturaAcred] = React.useState(null);
             const [showGastoAcredModal, setShowGastoAcredModal] = React.useState(false);
@@ -7974,10 +7974,10 @@ ${invoice.items.map(item => `
             const [editingGasto, setEditingGasto] = React.useState(null);
             const [gastoForm, setGastoForm] = React.useState({ nombre: '', monto: '', moneda: 'CZK', notas: '', metodoPago: '' });
 
-            const saveFondos = (list) => { setFondos(list); localStorage.setItem('cajaFondos', JSON.stringify(list)); dbUpsertOne('cash_planning','fondos',list); };
-            const saveLugares = (list) => { setLugares(list); localStorage.setItem('cajaLugares', JSON.stringify(list)); dbUpsertOne('cash_planning','lugares',list); };
-            const saveGastos = (list) => { setGastos(list); window.__gastosPlaneadosPrecargados=list; try{localStorage.setItem('cajaGastosPlaneados', JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning', 'gastosPlaneados', list); };
-            const saveAcreditaciones = (list) => { setAcreditaciones(list); localStorage.setItem('cajaAcreditaciones', JSON.stringify(list)); dbUpsertOne('cash_planning','acreditaciones',list); };
+            const saveFondos = (list) => { setFondos(list); dbUpsertOne('cash_planning','fondos',list); };
+            const saveLugares = (list) => { setLugares(list); dbUpsertOne('cash_planning','lugares',list); };
+            const saveGastos = (list) => { setGastos(list); window.__gastosPlaneadosPrecargados=list; dbUpsertOne('cash_planning', 'gastosPlaneados', list); };
+            const saveAcreditaciones = (list) => { setAcreditaciones(list); dbUpsertOne('cash_planning','acreditaciones',list); };
             const openNewAcreditacion = () => { setEditingAcreditacion(null); setAcreditacionForm({ origen: '', fecha: new Date().toISOString().split('T')[0], monto: '', moneda: 'CZK', notas: '' }); setShowAcreditacionModal(true); };
             const openEditAcreditacion = (a) => { setEditingAcreditacion(a); setAcreditacionForm({ origen: a.origen, fecha: a.fecha, monto: String(a.monto), moneda: a.moneda, notas: a.notas||'' }); setShowAcreditacionModal(true); };
             const saveAcreditacion = () => {
@@ -7987,12 +7987,12 @@ ${invoice.items.map(item => `
                 setShowAcreditacionModal(false);
             };
             const deleteAcreditacion = (id) => { if (!confirm('¿Eliminar esta acreditación?')) return; saveAcreditaciones(acreditaciones.filter(a => a.id !== id)); };
-            const saveFacturasSeleccionadas = (list) => { setFacturasSeleccionadas(list); window.__facturasPlanPrecargadas=list; try{localStorage.setItem('cajaFacturasPlaneadas', JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning', 'facturasPlaneadas', list); };
-            const saveAsignaciones = (obj) => { setAsignaciones(obj); localStorage.setItem('cajaAsignaciones', JSON.stringify(obj)); dbUpsertOne('cash_planning', 'asignaciones', obj); };
-            const saveSueldosSeleccionados = (list) => { setSueldosSeleccionados(list); window.__sueldosPlanPrecargados=list; try{localStorage.setItem('cajaSueldosPlaneados', JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning', 'sueldosPlaneados', list); };
-            const saveGastosAcred = (list) => { setGastosAcred(list); window.__gastosAcredPrecargados=list; try{localStorage.setItem('cajaGastosAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','gastosAcred',list); };
-            const saveFacturasAcred = (list) => { setFacturasAcred(list); window.__facturasAcredPrecargadas=list; try{localStorage.setItem('cajaFacturasAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','facturasAcred',list); };
-            const saveSueldosAcred = (list) => { setSueldosAcred(list); window.__sueldosAcredPrecargados=list; try{localStorage.setItem('cajaSueldosAcred',JSON.stringify(list));}catch(e){} dbUpsertOne('cash_planning','sueldosAcred',list); };
+            const saveFacturasSeleccionadas = (list) => { setFacturasSeleccionadas(list); window.__facturasPlanPrecargadas=list; dbUpsertOne('cash_planning', 'facturasPlaneadas', list); };
+            const saveAsignaciones = (obj) => { setAsignaciones(obj); dbUpsertOne('cash_planning', 'asignaciones', obj); };
+            const saveSueldosSeleccionados = (list) => { setSueldosSeleccionados(list); window.__sueldosPlanPrecargados=list; dbUpsertOne('cash_planning', 'sueldosPlaneados', list); };
+            const saveGastosAcred = (list) => { setGastosAcred(list); window.__gastosAcredPrecargados=list; dbUpsertOne('cash_planning','gastosAcred',list); };
+            const saveFacturasAcred = (list) => { setFacturasAcred(list); window.__facturasAcredPrecargadas=list; dbUpsertOne('cash_planning','facturasAcred',list); };
+            const saveSueldosAcred = (list) => { setSueldosAcred(list); window.__sueldosAcredPrecargados=list; dbUpsertOne('cash_planning','sueldosAcred',list); };
 
             const toggleSueldoAcred = (s) => {
                 const ya = sueldosAcred.some(x => x.id === s.id);
@@ -8959,7 +8959,7 @@ ${invoice.items.map(item => `
             const saPct = saMeta > 0 ? Math.min(100, (saTotal/saMeta)*100) : 0;
             const saFalta = saMeta > 0 ? Math.max(0, saMeta - saTotal) : 0;
 
-            const saveAhorros = (list) => { setAhorros(list); localStorage.setItem('cajaAhorros', JSON.stringify(list)); dbUpsertOne('cash_planning','ahorros',list); };
+            const saveAhorros = (list) => { setAhorros(list); dbUpsertOne('cash_planning','ahorros',list); };
             const openNewAhorro = () => { setEditingAhorro(null); setAhorroForm({ nombre: '', meta: '', moneda: 'CZK', lugar: 'BANK', para: '', fechaMeta: '', notas: '' }); setShowAhorroModal(true); };
             const openEditAhorro = (a) => { setEditingAhorro(a); setAhorroForm({ nombre: a.nombre, meta: String(a.meta||''), moneda: a.moneda, lugar: a.lugar, para: a.para||'', fechaMeta: a.fechaMeta||'', notas: a.notas||'' }); setShowAhorroModal(true); };
             const saveAhorro = () => {
@@ -9259,7 +9259,7 @@ ${invoice.items.map(item => `
             const [allTransactions, setAllTransactions] = useState(() => {
                 if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0)
                     return window.__cajaPrecargada;
-                try { const ls = localStorage.getItem('cashTransactionsMultiYear'); if (ls) return JSON.parse(ls); } catch(e) {}
+                if (window.__cashTxPrecargadas) return window.__cashTxPrecargadas;
                 return {};
             });
             const [allTxLoaded, setAllTxLoaded] = useState(() => !!(window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0));
@@ -9293,21 +9293,21 @@ ${invoice.items.map(item => `
             const [ingresoForm, setIngresoForm] = useState({ fecha: new Date().toISOString().split('T')[0], origen: 'BANK', monto: '', notas: '', filas: [{ id: 1, origen: 'BANK', monto: '', notas: '' }] });
             const [editingTransaction, setEditingTransaction] = useState(null);
             const [viewMode, setViewMode] = useState('table'); // 'table', 'summary', 'stats', 'note
-            const [ahorros, setAhorros] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaAhorros') || '[]'); } catch(e) { return []; } });
-            useEffect(() => { dbGetKey('cash_planning','ahorros').then(d => { if(d) setAhorros(d); }); }, []);
+            const [ahorros, setAhorros] = useState(() => { return window.__cajaAhorrosPrecargados || []; });
+            useEffect(() => { dbGetKey('cash_planning','ahorros').then(d => { if(d) { setAhorros(d); window.__cajaAhorrosPrecargados=d; } }); }, []);
             const [showAhorroModal, setShowAhorroModal] = useState(false);
             const [editingAhorro, setEditingAhorro] = useState(null);
             const [ahorroForm, setAhorroForm] = useState({ nombre: '', meta: '', moneda: 'CZK', lugar: 'BANK', para: '', fechaMeta: '', notas: '' });
             const [planeacionTab, setPlaneacionTab] = useState('fondos');
-            const [acreditaciones, setAcreditaciones] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaAcreditaciones') || '[]'); } catch(e) { return []; } });
-            useEffect(() => { dbGetKey('cash_planning','acreditaciones').then(d => { if(d) setAcreditaciones(d); }); }, []);
+            const [acreditaciones, setAcreditaciones] = useState(() => { return window.__cajaAcreditacionesPrecargadas || []; });
+            useEffect(() => { dbGetKey('cash_planning','acreditaciones').then(d => { if(d) { setAcreditaciones(d); window.__cajaAcreditacionesPrecargadas=d; } }); }, []);
             const [showAcreditacionModal, setShowAcreditacionModal] = useState(false);
             const [editingAcreditacion, setEditingAcreditacion] = useState(null);
             const [acreditacionForm, setAcreditacionForm] = useState({ origen: '', fecha: new Date().toISOString().split('T')[0], monto: '', moneda: 'CZK', notas: '' }); // 'fondos' | 'ahorro'
-            const [fondos, setFondos] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaFondos') || '[]'); } catch(e) { return []; } });
-            useEffect(() => { dbGetKey('cash_planning','fondos').then(d => { if(d) setFondos(d); }); }, []);
-            const [lugares, setLugares] = useState(() => { try { return JSON.parse(localStorage.getItem('cajaLugares') || JSON.stringify(['Banco Fio', 'Efectivo', 'Revolut'])); } catch(e) { return ['Banco Fio', 'Efectivo', 'Revolut']; } });
-            useEffect(() => { dbGetKey('cash_planning','lugares').then(d => { if(d) setLugares(d); }); }, []);
+            const [fondos, setFondos] = useState(() => { return window.__cajaFondosPrecargados || []; });
+            useEffect(() => { dbGetKey('cash_planning','fondos').then(d => { if(d) { setFondos(d); window.__cajaFondosPrecargados=d; } }); }, []);
+            const [lugares, setLugares] = useState(() => { return window.__cajaLugaresPrecargados || ['Banco Fio', 'Efectivo', 'Revolut']; });
+            useEffect(() => { dbGetKey('cash_planning','lugares').then(d => { if(d) { setLugares(d); window.__cajaLugaresPrecargados=d; } }); }, []);
 
             const [showFondoModal, setShowFondoModal] = useState(false);
             const [editingFondo, setEditingFondo] = useState(null);
@@ -9361,12 +9361,12 @@ ${invoice.items.map(item => `
             const DEFAULT_TIPOS_COSTO = ['INGRESOS', 'SUELDOS', 'DEV PRESTAMO', 'MATERIA PRIMA', 'GASTOS VARIABLES', 
                               'GASTOS FIJOS', 'IMPUESTOS', 'PUBLICIDAD', 'TRANSPORTE'];
             const [tiposCosto, setTiposCosto] = useState(() => {
-                const saved = localStorage.getItem('cajaRubrosCosto');
+                const saved = null; // loaded from Supabase
                 return saved ? JSON.parse(saved) : DEFAULT_TIPOS_COSTO;
             });
-            useEffect(() => { if (!tiposCosto || tiposCosto.length === 0) return; localStorage.setItem('cajaRubrosCosto', JSON.stringify(tiposCosto)); dbUpsertOne('cash_planning', 'rubrosCosto', tiposCosto); }, [tiposCosto]);
+            useEffect(() => { if (!tiposCosto || tiposCosto.length === 0) return; window.__cajaRubrosCostoPrecargados = tiposCosto; dbUpsertOne('cash_planning', 'rubrosCosto', tiposCosto); }, [tiposCosto]);
             useEffect(() => {
-                try { localStorage.setItem('cashNotes', JSON.stringify(cashNotes)); } catch(e) {}
+                
                 if (cashNotes.length > 0) dbSetArray('cash_notes', cashNotes);
             }, [cashNotes]);
 
@@ -9417,7 +9417,7 @@ ${invoice.items.map(item => `
             useEffect(() => {
                 if (!allTxLoaded) return; // No guardar hasta que los datos estén cargados
                 if (Object.keys(allTransactions).length === 0) return; // No sobreescribir con vacío
-                try { localStorage.setItem('cashTransactionsMultiYear', JSON.stringify(allTransactions)); } catch(e) { console.warn('⚠️ localStorage lleno, cashTransactionsMultiYear no cacheado'); }
+                window.__cashTxPrecargadas = allTransactions;
                 window.__cajaPrecargada = allTransactions;
                 dbUpsertOne('cash_transactions', 'multiyear', allTransactions);
             }, [allTransactions]);
@@ -10350,7 +10350,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
 
                         // Fecha de inicio del control diario
-                        const inicioControl = localStorage.getItem('cajaInicioControlDiario') || '2026-04-01';
+                        const inicioControl = window.__cajaInicioControl || '2026-04-01';
                         const inicioDate = new Date(inicioControl+'T12:00:00'); inicioDate.setHours(0,0,0,0);
 
                         // Ayer (no incluir hoy — todavía hay tiempo de cargar)
@@ -23029,7 +23029,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         onChange={(e) => setNewSupplierInfo({...newSupplierInfo, tipoCosto: e.target.value})}
                                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${'border-slate-300'}`}>
                                         <option value="">Sin asignar</option>
-                                        {JSON.parse(localStorage.getItem('cajaRubrosCosto') || '[]').filter(t => t !== 'INGRESOS').map(t => (
+                                        {(window.__cajaRubrosCostoPrecargados || []).filter(t => t !== 'INGRESOS').map(t => (
                                             <option key={t} value={t}>{t}</option>
                                         ))}
                                     </select>
@@ -23219,7 +23219,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         onChange={(e) => setEditingSupplierInfo({...editingSupplierInfo, tipoCosto: e.target.value})}
                                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${'border-slate-300'}`}>
                                         <option value="">Sin asignar</option>
-                                        {JSON.parse(localStorage.getItem('cajaRubrosCosto') || '[]').filter(t => t !== 'INGRESOS').map(t => (
+                                        {(window.__cajaRubrosCostoPrecargados || []).filter(t => t !== 'INGRESOS').map(t => (
                                             <option key={t} value={t}>{t}</option>
                                         ))}
                                     </select>
