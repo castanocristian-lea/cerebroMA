@@ -1563,7 +1563,7 @@ ${invoice.items.map(item => `
                             try {
                                 const data = await generarBackupJSON();
                                 const jsonStr = JSON.stringify(data, null, 2);
-                                const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
+                                const fileName = `cerebroma-backup-${new Date().toISOString().split('T')[0]}.json`;
                                 const email = settings?.email || 'cristian@malaargenta.cz';
                                 const blob2 = new Blob([jsonStr], { type: 'application/json' });
                                 const { error: se } = await window._sb.storage.from('backups').upload(fileName, blob2, { upsert: true, contentType: 'application/json' });
@@ -6272,7 +6272,7 @@ ${invoice.items.map(item => `
                     setBackupStatus('📦 Generando JSON...');
                     const data = await generarBackupJSON();
                     const jsonStr = JSON.stringify(data, null, 2);
-                    const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
+                    const fileName = `cerebroma-backup-${new Date().toISOString().split('T')[0]}.json`;
 
                     setBackupStatus('📤 Subiendo a Supabase Storage...');
                     const fileName2 = fileName;
