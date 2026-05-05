@@ -6302,28 +6302,7 @@ ${invoice.items.map(item => `
                         const montoCZK = parseFloat(pagoForm.montoCZK) || parseFloat(pagoForm.monto);
                         syncPagoToCaja(p, { ...newPago, monto: montoCZK }, cajaId, false);
                     }
-                    // Notificar
-                    if ((p.notificarUsuarios||[]).length > 0) {
-                        const employees = JSON.parse(localStorage.getItem('employees') || '[]');
-                        for (const uid of p.notificarUsuarios) {
-                            const u = systemUsers.find(x => String(x.id) === String(uid));
-                            if (!u) continue;
-                            const nameLC = (u.name||u.username||'').toLowerCase();
-                            const userLC = (u.username||u.name||'').toLowerCase();
-                            const emp = employees.find(e => {
-                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                                return en.includes(nameLC) || nameLC.includes((e.nombre||'').toLowerCase()) ||
-                                       (e.nombre||'').toLowerCase().includes(userLC) ||
-                                       String(e.id)===String(u.id);
-                            });
-                            // Guardar por empId Y por userId para asegurar que el banner lo encuentre
-                            const empId = emp ? emp.id : null;
-                            const notifItem = { id: Date.now(), prestamoNombre: p.nombre, monto: c.monto || parseFloat(pagoForm.monto), moneda: p.moneda, fecha: c.fecha || pagoForm.fecha, visto: false };
-                            if (empId) await notifPush(`prestamoNotif_${empId}`, notifItem);
-                            await notifPush(`prestamoNotif_user_${uid}`, {...notifItem, id: Date.now()+1});
-                            window.dispatchEvent(new Event('prestamoNotifUpdate'));
-                        }
-                    }
+                    // (notificaciones se envían al final, después del if/else)
                 } else {
                     // Flujo manual: con opción de caja
                     const oldPago = editingPagoIdx !== null ? p.pagos[editingPagoIdx] : null;
@@ -6339,6 +6318,29 @@ ${invoice.items.map(item => `
                         syncPagoToCaja(p, newPago, oldPago.cajaId, false);
                     }
                 }
+
+                // Notificar a usuarios configurados (aplica a cuota Y pago manual)
+                if ((p.notificarUsuarios||[]).length > 0) {
+                    const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+                    for (const uid of p.notificarUsuarios) {
+                        const u = systemUsers.find(x => String(x.id) === String(uid));
+                        if (!u) continue;
+                        const nameLC = (u.name||u.username||'').toLowerCase();
+                        const userLC = (u.username||u.name||'').toLowerCase();
+                        const emp = employees.find(e => {
+                            const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                            return en.includes(nameLC) || nameLC.includes((e.nombre||'').toLowerCase()) ||
+                                   (e.nombre||'').toLowerCase().includes(userLC) ||
+                                   String(e.id)===String(u.id);
+                        });
+                        const empId = emp ? emp.id : null;
+                        const notifItem = { id: Date.now(), prestamoNombre: p.nombre, monto: parseFloat(pagoForm.monto), moneda: p.moneda, fecha: pagoForm.fecha, visto: false };
+                        if (empId) await notifPush(`prestamoNotif_${empId}`, {...notifItem});
+                        await notifPush(`prestamoNotif_user_${uid}`, {...notifItem, id: Date.now()+1});
+                        window.dispatchEvent(new Event('prestamoNotifUpdate'));
+                    }
+                }
+
                 setCuotaIdxParaPagar(null);
                 setShowPagoModal(false);
             };
