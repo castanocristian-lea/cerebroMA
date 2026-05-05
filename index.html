@@ -195,19 +195,9 @@
                     _sb.from('app_config').select('data').eq('id','prestamos').maybeSingle(),
                 ]);
 
-                // Helper: setear localStorage con manejo de quota
+                // Helper: ya no usa localStorage, solo window cache
                 const set = (key, val) => {
-                    if (val !== null && val !== undefined) {
-                        try {
-                            localStorage.setItem(key, JSON.stringify(val));
-                        } catch(e) {
-                            if (e.name === 'QuotaExceededError') {
-                                console.warn(`⚠️ localStorage lleno, omitiendo ${key} (${Math.round(JSON.stringify(val).length/1024)}KB)`);
-                            } else {
-                                throw e;
-                            }
-                        }
-                    }
+                    // No-op: datos viven en Supabase y window.__* cache
                 };
 
                 // Arrays
