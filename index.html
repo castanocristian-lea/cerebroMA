@@ -340,6 +340,13 @@
             ].forEach(k => {
                 try { localStorage.removeItem(k); } catch(e) {}
             });
+            // Limpiar claves dinámicas de miCerebro
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const k = localStorage.key(i);
+                if (k && (k.startsWith('miCerebro') || k.startsWith('miCerebro'))) {
+                    try { localStorage.removeItem(k); } catch(e) {}
+                }
+            }
             // Migración pendiente (después de importar backup)
             if (localStorage.getItem('__pendingMigration') === '1') {
                 await migrarLocalStorage();
@@ -23448,9 +23455,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const postitsKey  = `miCerebroPostits_${_uid}`;
             const etiquetasKey = `miCerebroEtiquetas_${_uid}`;
 
-            const [tareas,   setTareas]   = React.useState(() => { try { return JSON.parse(localStorage.getItem(tareasKey)   || '[]'); } catch(e) { return []; } });
-            const [postits,  setPostits]  = React.useState(() => { try { return JSON.parse(localStorage.getItem(postitsKey)  || '[]'); } catch(e) { return []; } });
-            const [etiquetas,setEtiquetas]= React.useState(() => { try { return JSON.parse(localStorage.getItem(etiquetasKey)|| '[]'); } catch(e) { return []; } });
+            const [tareas,   setTareas]   = React.useState(() => { return (window.__mcTareas&&window.__mcTareas[tareasKey])||[]; });
+            const [postits,  setPostits]  = React.useState(() => { return (window.__mcPostits&&window.__mcPostits[postitsKey])||[]; });
+            const [etiquetas,setEtiquetas]= React.useState(() => { return (window.__mcEtiquetas&&window.__mcEtiquetas[etiquetasKey])||[]; });
 
             const [showModal,       setShowModal]       = React.useState(false);
             const [editingTarea,    setEditingTarea]    = React.useState(null);
