@@ -3733,7 +3733,7 @@ ${invoice.items.map(item => `
                     )}
                     {activeModule === 'prestamos' && (
                         <div className="flex-1 overflow-y-auto">
-                            <PrestamosModule darkMode={darkMode} currentUser={currentUser} onBack={() => setActiveModule('home')} />
+                            <PrestamosModule darkMode={darkMode} currentUser={currentUser} systemUsers={systemUsers} onBack={() => setActiveModule('home')} />
                         </div>
                     )}
 
@@ -6168,7 +6168,7 @@ ${invoice.items.map(item => `
 
 
 
-        const PrestamosModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
+        const PrestamosModule = ({ darkMode = false, currentUser = null, onBack = null, systemUsers = [] }) => {
             const { canEdit } = usePermissions(currentUser, 'prestamos');
             const STORE_KEY = 'prestamosData';
             const CAJA_KEY = 'cashTransactionsMultiYear';
