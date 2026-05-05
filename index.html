@@ -6340,16 +6340,17 @@ ${invoice.items.map(item => `
                     }
                 }
 
-                // Notificar a usuarios configurados (aplica a cuota Y pago manual)
-                console.log('🔔 notificarUsuarios:', p.notificarUsuarios, 'systemUsers:', systemUsers?.length);
-                if ((p.notificarUsuarios||[]).length > 0) {
+                // Notificar a usuarios configurados — capturar datos antes de limpiar estado
+                const _notifUsuarios = p.notificarUsuarios || [];
+                const _notifNombre = p.nombre;
+                const _notifMonto = parseFloat(pagoForm.monto);
+                const _notifMoneda = p.moneda;
+                const _notifFecha = pagoForm.fecha;
+                if (_notifUsuarios.length > 0) {
                     const employees = JSON.parse(localStorage.getItem('employees') || '[]');
-                    console.log('👥 employees:', employees.length);
-                    for (const uid of p.notificarUsuarios) {
-                        console.log('👤 procesando uid:', uid);
+                    for (const uid of _notifUsuarios) {
                         const u = systemUsers.find(x => String(x.id) === String(uid));
-                        console.log('👤 usuario encontrado:', u?.name, u?.username);
-                        if (!u) { console.log('❌ usuario no encontrado'); continue; }
+                        if (!u) continue;
                         const nameLC = (u.name||u.username||'').toLowerCase();
                         const userLC = (u.username||u.name||'').toLowerCase();
                         const emp = employees.find(e => {
@@ -6358,10 +6359,9 @@ ${invoice.items.map(item => `
                                    (e.nombre||'').toLowerCase().includes(userLC) ||
                                    String(e.id)===String(u.id);
                         });
-                        console.log('👷 empleado encontrado:', emp?.nombre, emp?.id);
+                        const notifItem = { id: Date.now(), prestamoNombre: _notifNombre, monto: _notifMonto, moneda: _notifMoneda, fecha: _notifFecha, visto: false };
+                        // Guardar por empId (preferido) o por userId
                         const empId = emp ? emp.id : null;
-                        const notifItem = { id: Date.now(), prestamoNombre: p.nombre, monto: parseFloat(pagoForm.monto), moneda: p.moneda, fecha: pagoForm.fecha, visto: false };
-                        // Guardar solo en una clave para evitar duplicados
                         if (empId) {
                             await notifPush(`prestamoNotif_${empId}`, notifItem);
                         } else {
