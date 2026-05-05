@@ -6320,11 +6320,15 @@ ${invoice.items.map(item => `
                 }
 
                 // Notificar a usuarios configurados (aplica a cuota Y pago manual)
+                console.log('🔔 notificarUsuarios:', p.notificarUsuarios, 'systemUsers:', systemUsers?.length);
                 if ((p.notificarUsuarios||[]).length > 0) {
                     const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+                    console.log('👥 employees:', employees.length);
                     for (const uid of p.notificarUsuarios) {
+                        console.log('👤 procesando uid:', uid);
                         const u = systemUsers.find(x => String(x.id) === String(uid));
-                        if (!u) continue;
+                        console.log('👤 usuario encontrado:', u?.name, u?.username);
+                        if (!u) { console.log('❌ usuario no encontrado'); continue; }
                         const nameLC = (u.name||u.username||'').toLowerCase();
                         const userLC = (u.username||u.name||'').toLowerCase();
                         const emp = employees.find(e => {
@@ -6333,12 +6337,17 @@ ${invoice.items.map(item => `
                                    (e.nombre||'').toLowerCase().includes(userLC) ||
                                    String(e.id)===String(u.id);
                         });
+                        console.log('👷 empleado encontrado:', emp?.nombre, emp?.id);
                         const empId = emp ? emp.id : null;
                         const notifItem = { id: Date.now(), prestamoNombre: p.nombre, monto: parseFloat(pagoForm.monto), moneda: p.moneda, fecha: pagoForm.fecha, visto: false };
+                        console.log('📤 enviando notif:', notifItem, 'keys:', empId ? `prestamoNotif_${empId}` : 'sin emp', `prestamoNotif_user_${uid}`);
                         if (empId) await notifPush(`prestamoNotif_${empId}`, {...notifItem});
                         await notifPush(`prestamoNotif_user_${uid}`, {...notifItem, id: Date.now()+1});
                         window.dispatchEvent(new Event('prestamoNotifUpdate'));
+                        console.log('✅ notif enviada');
                     }
+                } else {
+                    console.log('⚠️ sin usuarios para notificar en este préstamo');
                 }
 
                 setCuotaIdxParaPagar(null);
