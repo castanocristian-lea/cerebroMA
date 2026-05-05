@@ -1473,55 +1473,7 @@ ${invoice.items.map(item => `
             // ── SISTEMA DE NOTIFICACIONES ─────────────────────────────────────
             const [notificaciones, setNotificaciones] = React.useState({});
 
-            const cargarNotificaciones = React.useCallback(async () => {
-                if (!currentUser) return;
-                try {
-                    let emps = window.__employeesPrecargados || [];
-                    if (!emps.length) {
-                        const r = await window._sb?.from('employees').select('data');
-                        emps = r?.data?.map(x=>x.data) || [];
-                        if (emps.length) window.__employeesPrecargados = emps;
-                    }
-                    const nameLC = (currentUser.name||'').toLowerCase();
-                    const userLC = (currentUser.username||'').toLowerCase();
-                    const yo = emps.find(e => {
-                        const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                        return en.includes(nameLC)||(nameLC&&nameLC.includes((e.nombre||'').toLowerCase()))||
-                               (e.nombre||'').toLowerCase().includes(userLC)||
-                               String(e.id)===String(currentUser.id);
-                    });
-                    if (!yo) return;
-                    const empId = yo.id;
-                    const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif'];
-                    console.log('🔔 cargarNotificaciones empId:', empId, 'tipos:', tipos.map(t=>`notif_${t}_${empId}`));
-                    const results = await Promise.all(
-                        tipos.map(t => dbGetKey('app_config', `notif_${t}_${empId}`).catch(()=>null))
-                    );
-                    console.log('🔔 results:', results.map((r,i)=>tipos[i]+':'+(Array.isArray(r)?r.length:'null')));
-                    setNotificaciones(prev => {
-                        const nuevo = {};
-                        tipos.forEach((t, i) => {
-                            const remoto = Array.isArray(results[i]) ? results[i] : [];
-                            const local = (prev[t] || []);
-                            const merged = remoto.map(rn => {
-                                const ln = local.find(l => String(l.id)===String(rn.id));
-                                return ln?.visto ? {...rn, visto:true} : rn;
-                            });
-                            local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
-                            nuevo[t] = merged;
-                        });
-                        return nuevo;
-                    });
-                    // chatVistos y tareasVistas
-                    const uid_s = String(currentUser.id||'');
-                    window._sb?.from('app_config').select('data').eq('id','miCerebroChatVistos_'+uid_s).maybeSingle()
-                        .then(r => { if (r?.data?.data) window.__mcChatVistos = r.data.data; });
-                    window._sb?.from('app_config').select('data').eq('id','miCerebroTareasVistas_'+uid_s).maybeSingle()
-                        .then(r => { if (r?.data?.data) window.__mcTareasVistas = r.data.data; });
-                } catch(e) {}
-            }, [currentUser?.id]);
-
-            const marcarNotifVista = React.useCallback((tipo, filtro) => {
+            const marcarNotifVista = (tipo, filtro) => {
                 setNotificaciones(prev => {
                     const updated = {...prev, [tipo]: (prev[tipo]||[]).map(n => filtro(n) ? {...n,visto:true} : n)};
                     const emps = window.__employeesPrecargados || [];
@@ -1530,16 +1482,59 @@ ${invoice.items.map(item => `
                     if (yo) dbUpsertOne('app_config', `notif_${tipo}_${yo.id}`, updated[tipo]).catch(()=>{});
                     return updated;
                 });
-            }, [currentUser?.id]);
+            };
 
             useEffect(() => {
                 if (!isUnlocked || !currentUser) return;
-                cargarNotificaciones();
-                const t = setInterval(cargarNotificaciones, 15000);
-                const onReady = () => setTimeout(cargarNotificaciones, 300);
+                const cargar = async () => {
+                    try {
+                        let emps = window.__employeesPrecargados || [];
+                        if (!emps.length) {
+                            const r = await window._sb?.from('employees').select('data');
+                            emps = r?.data?.map(x=>x.data) || [];
+                            if (emps.length) window.__employeesPrecargados = emps;
+                        }
+                        const nameLC = (currentUser.name||'').toLowerCase();
+                        const userLC = (currentUser.username||'').toLowerCase();
+                        const yo = emps.find(e => {
+                            const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                            return en.includes(nameLC)||(nameLC&&nameLC.includes((e.nombre||'').toLowerCase()))||
+                                   (e.nombre||'').toLowerCase().includes(userLC)||
+                                   String(e.id)===String(currentUser.id);
+                        });
+                        if (!yo) { console.warn('🔔 no se encontró empleado para', currentUser.name); return; }
+                        const empId = yo.id;
+                        const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif'];
+                        const results = await Promise.all(
+                            tipos.map(t => dbGetKey('app_config', `notif_${t}_${empId}`).catch(()=>null))
+                        );
+                        setNotificaciones(prev => {
+                            const nuevo = {};
+                            tipos.forEach((t, i) => {
+                                const remoto = Array.isArray(results[i]) ? results[i] : [];
+                                const local = (prev[t] || []);
+                                const merged = remoto.map(rn => {
+                                    const ln = local.find(l => String(l.id)===String(rn.id));
+                                    return ln?.visto ? {...rn, visto:true} : rn;
+                                });
+                                local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
+                                nuevo[t] = merged;
+                            });
+                            return nuevo;
+                        });
+                        const uid_s = String(currentUser.id||'');
+                        window._sb?.from('app_config').select('data').eq('id','miCerebroChatVistos_'+uid_s).maybeSingle()
+                            .then(r => { if (r?.data?.data) window.__mcChatVistos = r.data.data; });
+                        window._sb?.from('app_config').select('data').eq('id','miCerebroTareasVistas_'+uid_s).maybeSingle()
+                            .then(r => { if (r?.data?.data) window.__mcTareasVistas = r.data.data; });
+                    } catch(e) { console.warn('cargar notifs error:', e); }
+                };
+                cargar();
+                const t = setInterval(cargar, 15000);
+                const onEvt = () => setTimeout(cargar, 300);
                 const evts = ['supabase-loaded','sueldoNotifUpdate','solicNotifUpdate','calendarioNotifUpdate','prestamoNotifUpdate','notifUpdate'];
-                evts.forEach(e => window.addEventListener(e, onReady));
-                return () => { clearInterval(t); evts.forEach(e => window.removeEventListener(e, onReady)); };
+                evts.forEach(e => window.addEventListener(e, onEvt));
+                return () => { clearInterval(t); evts.forEach(e => window.removeEventListener(e, onEvt)); };
             }, [isUnlocked, currentUser?.id]);
 
             // ── SUPABASE REALTIME ─────────────────────────────────────────────
