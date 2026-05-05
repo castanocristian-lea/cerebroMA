@@ -330,12 +330,23 @@
         });
 
         async function init() {
-            // Limpiar keys grandes que viven en Supabase (no en localStorage)
-            ['cashTransactionsMultiYear','cashNotes','payrollNotes','invNotes','notasMes',
-             'suppliersInfo','invoices','salesInvoices','employees','systemUsers',
-             'payrollMonthlyData','sueldosPendientesData','seguroMedicoData',
-             'salesProducts','salesClients','salesHolders','categories',
-             'horasAjustesData','codigosProductos'].forEach(k => {
+            // Limpiar TODAS las keys que ahora viven en Supabase
+            [
+                'cashTransactionsMultiYear','cashNotes','payrollNotes','invNotes','notasMes',
+                'suppliersInfo','invoices','salesInvoices','employees','systemUsers',
+                'payrollMonthlyData','sueldosPendientesData','seguroMedicoData',
+                'salesProducts','salesClients','salesHolders','categories',
+                'horasAjustesData','codigosProductos','systemCredentials',
+                'taxRates','markedCategories','salarioOverride',
+                'calendarioEventos','calendarioTipos','calendarioTiposSolicitud',
+                'calendarioEvEspeciales','calendar_solicitudes_cache',
+                'prestamosData','cajaGastosPlaneados','cajaFacturasPlaneadas',
+                'cajaSueldosPlaneados','cajaGastosAcred','cajaFacturasAcred',
+                'cajaSueldosAcred','cajaFondos','cajaLugares','cajaAhorros',
+                'cajaAcreditaciones','cajaRubrosCosto','cajaAsignaciones',
+                'credencialesData','calendarioUbicaciones','calendarioHoras',
+                'cajaInicioControlDiario'
+            ].forEach(k => {
                 try { localStorage.removeItem(k); } catch(e) {}
             });
             // Migración pendiente (después de importar backup)
