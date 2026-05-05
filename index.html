@@ -154,7 +154,6 @@
                     }
                 } catch(e) { console.warn('Error migrando', m.ls, e); }
             }
-            console.log('✅ Migración completa');
         }
 
         // ── Precargar TODO desde Supabase (SIEMPRE sobreescribe localStorage) ─
@@ -320,8 +319,6 @@
                 // markedCategories
                 const mc = await _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle();
                 if (mc.data?.data) { try { localStorage.setItem('markedCategories', JSON.stringify(mc.data.data)); } catch(e) { console.warn('⚠️ localStorage lleno, omitiendo markedCategories'); } }
-
-                console.log('✅ Datos cargados desde Supabase | usuarios:', (sysU.data||[]).length, '| empleados:', (emp.data||[]).length);
             } catch(e) {
                 console.error('❌ Error cargando desde Supabase:', e);
             }
@@ -1574,7 +1571,6 @@ ${invoice.items.map(item => `
                 });
                 channel.subscribe((status) => {
                     if (status === 'SUBSCRIBED') {
-                        console.log('✅ Supabase Realtime conectado');
                     }
                 });
                 return () => { window._sb.removeChannel(channel); };
@@ -2292,8 +2288,7 @@ ${invoice.items.map(item => `
 
                             // Si el backup tiene datos de caja, subirlos a Supabase
                             if (data.cashTransactionsMultiYear && Object.keys(data.cashTransactionsMultiYear).length > 0) {
-                                dbUpsertOne('cash_transactions', 'multiyear', data.cashTransactionsMultiYear)
-                                    .then(() => console.log('✅ Caja restaurada en Supabase'));
+                                dbUpsertOne('cash_transactions', 'multiyear', data.cashTransactionsMultiYear);
                             }
                             // Subir datos de proveedores a Supabase
                             const suppKeys = ['invoices','categories','suppliersInfo','salesInvoices','salesProducts','salesClients','salesHolders','invNotes','taxRates'];
@@ -2302,7 +2297,7 @@ ${invoice.items.map(item => `
                                 if (data[k] && (Array.isArray(data[k]) ? data[k].length > 0 : Object.keys(data[k]).length > 0)) {
                                     const tabla = k === 'invoices' ? 'invoices_data' : 'suppliers';
                                     const keyId = k === 'invoices' ? 'main' : suppMap[k];
-                                    dbUpsertOne(tabla, keyId, data[k]).then(() => console.log('✅', k, 'restaurado en Supabase'));
+                                    dbUpsertOne(tabla, keyId, data[k]);
                                 }
                             });
 
@@ -6307,7 +6302,6 @@ ${invoice.items.map(item => `
                 setShowPagoModal(true);
             };
             const savePago = async () => {
-                console.log("💾 savePago llamado, selected:", selected?.nombre, "notificar:", selected?.notificarUsuarios, "cuotaIdx:", cuotaIdxParaPagar);
                 if (!pagoForm.monto || isNaN(parseFloat(pagoForm.monto))) return alert('Ingresá un monto válido');
                 const p = selected;
 
@@ -6342,7 +6336,6 @@ ${invoice.items.map(item => `
                 }
 
                 // Notificar a usuarios configurados — capturar datos antes de limpiar estado
-                console.log('🔔 p.notificarUsuarios:', p.notificarUsuarios, 'p.nombre:', p.nombre, 'p.id:', p.id);
                 const _notifUsuarios = p.notificarUsuarios || [];
                 const _notifNombre = p.nombre;
                 const _notifMonto = parseFloat(pagoForm.monto);
@@ -6372,7 +6365,6 @@ ${invoice.items.map(item => `
                         window.dispatchEvent(new Event('prestamoNotifUpdate'));
                     }
                 } else {
-                    console.log('⚠️ sin usuarios para notificar en este préstamo');
                 }
 
                 setCuotaIdxParaPagar(null);
@@ -8712,7 +8704,7 @@ ${invoice.items.map(item => `
 
                 {/* Modal: Seleccionar facturas vencidas */}
                 {showFacturasModal && (() => {
-                    const allInvoices = (() => { if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; try { return JSON.parse(localStorage.getItem('invoices') || '[]'); } catch(e) { return []; } })();
+                    const allInvoices = (() => { if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; return []; })();
                     const today = new Date().toISOString().split('T')[0];
                     const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate < today).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
                     return (
@@ -8831,7 +8823,7 @@ ${invoice.items.map(item => `
                 })()}
 
                 {showFacturasAcredModal && (() => {
-                    const allInvoices = (() => { if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; try { return JSON.parse(localStorage.getItem('invoices') || '[]'); } catch(e) { return []; } })();
+                    const allInvoices = (() => { if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; return []; })();
                     const today = new Date().toISOString().split('T')[0];
                     const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate < today).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
                     return (
@@ -10018,10 +10010,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Sync helpers: caja <-> proveedores
             const syncInvoiceFromCaja = (cajaId, proveedor, monto, fecha, nroFactura, notas) => {
                 try {
-                    const cats = JSON.parse(localStorage.getItem('categories') || '[]');
+                    const cats = (window.__categoriesPrecargadas || []);
                     const provMatch = cats.find(c => c.toLowerCase().trim() === (proveedor||'').toLowerCase().trim());
                     if (!provMatch) return false;
-                    const invs = JSON.parse(localStorage.getItem('invoices') || '[]');
+                    const invs = window.__invoicesPrecargadas ? [...window.__invoicesPrecargadas] : [];
                     const newInv = {
                         id: Date.now() + Math.random(),
                         number: nroFactura || `CAJA-${cajaId}`,
@@ -10033,14 +10025,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         notas: notas || '', fromCaja: true, cajaRef: cajaId,
                         fileName: null, emailNotification: false
                     };
-                    try { localStorage.setItem('invoices', JSON.stringify([...invs, newInv])); } catch(e) {}
+                    window.__invoicesPrecargadas = [...invs, newInv];
                     return true;
                 } catch(e) { return false; }
             };
             const removeInvoiceByCajaRef = (cajaId) => {
                 try {
-                    const invs = JSON.parse(localStorage.getItem('invoices') || '[]');
-                    try { localStorage.setItem('invoices', JSON.stringify(invs.filter(i => i.cajaRef !== cajaId))); } catch(e) {}
+                    const invs = window.__invoicesPrecargadas ? [...window.__invoicesPrecargadas] : [];
+                    window.__invoicesPrecargadas = invs.filter(i => i.cajaRef !== cajaId);
                 } catch(e) {}
             };
             const updateInvoiceByCajaRef = (cajaId, proveedor, monto, fecha, nroFactura, notas) => {
@@ -10100,7 +10092,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     }
                     const nuevas = filasValidas.map(fila => {
                         const txId = Date.now() + Math.random();
-                        const cats = JSON.parse(localStorage.getItem('categories') || '[]');
+                        const cats = (window.__categoriesPrecargadas || []);
                         const provMatch = cats.find(c => c.toLowerCase().trim() === (formData.proveedor||'').toLowerCase().trim());
                         return {
                             ...formData,
@@ -11408,7 +11400,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 value={formData.proveedor}
                                                 onChange={e => {
                                                     const prov = e.target.value;
-                                                    const info = (JSON.parse(localStorage.getItem('suppliersInfo') || '{}'  ))[prov] || {};
+                                                    const info = ((window.__suppliersInfoPrecargada || {}))[prov] || {};
                                                     setFormData(Object.assign({}, formData, {
                                                         proveedor: prov,
                                                         tipoCosto: info.tipoCosto || formData.tipoCosto
@@ -11417,7 +11409,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 placeholder="Proveedor..."
                                                 className={`w-full px-2 py-1.5 border rounded-lg text-xs ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'border-slate-300 placeholder-slate-400'}`} />
                                             <datalist id="caja-proveedores-list">
-                                                {(JSON.parse(localStorage.getItem('categories') || '[]')).map(cat => (
+                                                {((window.__categoriesPrecargadas || [])).map(cat => (
                                                     <option key={cat} value={cat} />
                                                 ))}
                                             </datalist>
@@ -17926,7 +17918,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 } catch(e) {}
             };
 
-            const suppliersInfo = React.useMemo(() => JSON.parse(localStorage.getItem('suppliersInfo') || '{}'), []);
+            const suppliersInfo = React.useMemo(() => (window.__suppliersInfoPrecargada || {}), []);
 
             const activeSubTab = supplierSubTabs[supplier] || 'pending';
             const q = (supplierInvoiceSearch[supplier] || '').toLowerCase().trim();
@@ -18958,7 +18950,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             const [invoices, setInvoices] = useState(() => {
                 if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas;
-                try { const ls = localStorage.getItem('invoices'); return ls ? JSON.parse(ls) : []; } catch(e) { return []; }
+                if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; return [];
             });
             const [expandedSuppliers, setExpandedSuppliers] = useState(new Set());
             const [supplierSubTabs, setSupplierSubTabs] = useState({}); // {supplierName: 'pending' | 'paid'}
@@ -19092,15 +19084,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Categorías personalizables
             const [categories, setCategories] = useState(() => {
                 if (window.__categoriesPrecargadas?.length > 0) return window.__categoriesPrecargadas;
-                const saved = localStorage.getItem('categories');
+                const saved = null; // categories come from Supabase
                 return saved ? JSON.parse(saved) : ['Servicios', 'Productos', 'Alquiler', 'Utilities', 'Profesional', 'Otros'];
             });
             
             // Información adicional de proveedores (IČO, DIČ, etc.)
             const [suppliersInfo, setSuppliersInfo] = useState(() => {
                 if (window.__suppliersInfoPrecargada && Object.keys(window.__suppliersInfoPrecargada).length > 0) return window.__suppliersInfoPrecargada;
-                const saved = localStorage.getItem('suppliersInfo');
-                return saved ? JSON.parse(saved) : {};
+                return {};
             });
 
             // Cargar desde Supabase al iniciar
@@ -19109,11 +19100,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     if (d && Object.keys(d).length > 0) {
                         setSuppliersInfo(d);
                         window.__suppliersInfoPrecargada = d;
-                        try { localStorage.setItem('suppliersInfo', JSON.stringify(d)); } catch(e) {}
                     }
                 });
                 dbGetKey('suppliers', 'categories').then(d => {
-                    if (d && d.length > 0) { setCategories(d); try { localStorage.setItem('categories', JSON.stringify(d)); } catch(e) {} }
+                    if (d && d.length > 0) { setCategories(d); window.__categoriesPrecargadas = d; }
                 });
                 // Cargar invoices de Supabase - leer de chunks
                 dbGetKey('invoices_data', 'meta').then(async meta => {
@@ -19134,12 +19124,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             useEffect(() => {
                 if (!suppliersInfo || Object.keys(suppliersInfo).length === 0) return;
-                try { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); } catch(e) {}
                 dbUpsertOne('suppliers', 'main', suppliersInfo);
             }, [suppliersInfo]);
             useEffect(() => {
                 if (!categories || categories.length === 0) return;
-                try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
+                window.__categoriesPrecargadas = categories;
                 dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
             const openNewInvNote = () => {
@@ -19394,14 +19383,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Guardar categorías cuando cambien
             useEffect(() => {
                 if (!categories || categories.length === 0) return;
-                try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
+                
                 dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
             
             // Guardar información de proveedores cuando cambie
             useEffect(() => {
                 if (!suppliersInfo || Object.keys(suppliersInfo).length === 0) return;
-                try { localStorage.setItem('suppliersInfo', JSON.stringify(suppliersInfo)); } catch(e) {}
+                
                 dbUpsertOne('suppliers', 'main', suppliersInfo);
             }, [suppliersInfo]);
             
@@ -19434,7 +19423,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 // Agregar nombre a categories
                 const newCategories = [...categories, trimmedName];
                 setCategories(newCategories);
-                try { localStorage.setItem('categories', JSON.stringify(newCategories)); } catch(e) {}
+                
                 
                 // Guardar info adicional en suppliersInfo
                 const newInfo = { ...suppliersInfo };
@@ -19455,11 +19444,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     tipoCosto: (newSupplierInfo.tipoCosto || '').trim()
                 };
                 setSuppliersInfo(newInfo);
-                try { localStorage.setItem('suppliersInfo', JSON.stringify(newInfo)); } catch(e) {}
+                
                 
                 setNewCategoryName('');
                 setNewSupplierInfo({ ico: '', dic: '', address: '', phone: '', bankAccount: '', bankCode: '', vs: '', ks: '', email: '', web: '', username: '', password: '', notes: '' });
-                console.log('✅ Proveedor agregado:', trimmedName);
             };
 
             // Eliminar categoría
@@ -19472,7 +19460,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const newInfo = { ...suppliersInfo };
                         delete newInfo[categoryName];
                         setSuppliersInfo(newInfo);
-                        try { localStorage.setItem('suppliersInfo', JSON.stringify(newInfo)); } catch(e) {}
+                        
                     }
                     
                     // Cambiar facturas de ese proveedor a "Otros"
@@ -19510,7 +19498,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     newInfo[trimmedName] = newInfo[editingCategory];
                     delete newInfo[editingCategory];
                     setSuppliersInfo(newInfo);
-                    try { localStorage.setItem('suppliersInfo', JSON.stringify(newInfo)); } catch(e) {}
+                    
                 }
                 
                 // Actualizar el nombre en todas las facturas que usen este proveedor
@@ -19521,8 +19509,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 // Limpiar estado de edición
                 setEditingCategory(null);
                 setEditingCategoryName('');
-                
-                console.log('✅ Proveedor renombrado:', editingCategory, '→', trimmedName);
             };
             
             const cancelEditCategory = () => {
@@ -19574,7 +19560,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 };
                 
                 setSuppliersInfo(newInfo);
-                try { localStorage.setItem('suppliersInfo', JSON.stringify(newInfo)); } catch(e) {}
+                
                 setEditingSupplierInfo(null);
                 
                 alert(`✅ Información de ${editingSupplierInfo.name} actualizada`);
@@ -19614,7 +19600,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 
                 setTaxRates([...taxRates, rate].sort((a, b) => b - a)); // Ordenar descendente
                 setNewTaxRate('');
-                console.log('✅ IVA agregado:', rate + '%');
             };
             
             // Eliminar tax rate
@@ -19649,14 +19634,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             window.__invoicesPrecargadas = d;
                             return;
                         }
-                        // Fallback localStorage
-                        if (window.storage) {
-                            const stored = await window.storage.get('invoices');
-                            if (stored?.value) setInvoices(JSON.parse(stored.value));
-                        } else {
-                            const stored = localStorage.getItem('invoices');
-                            if (stored) setInvoices(JSON.parse(stored));
-                        }
+                        // Sin datos en Supabase
                     } catch (error) {
                         console.log('Primera carga, sin datos previos');
                     }
@@ -19669,7 +19647,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 if (invoices.length === 0) return;
                 try {
                     window.__invoicesPrecargadas = invoices;
-                    try { localStorage.setItem('invoices', JSON.stringify(invoices)); } catch(e) {}
                     // Guardar en chunks para evitar el límite de 5MB de Supabase
                     const chunkSize = 100;
                     const chunks = [];
@@ -19689,7 +19666,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Guardar categorías en localStorage
             useEffect(() => {
                 if (!categories || categories.length === 0) return;
-                try { localStorage.setItem('categories', JSON.stringify(categories)); } catch(e) {}
+                
                 dbUpsertOne('suppliers', 'categories', categories);
             }, [categories]);
 
@@ -20535,7 +20512,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             };
 
             const saveEdit = (id) => {
-                console.log('💾 Guardando:', { id, editingField, editValue });
                 setInvoices(invoices.map(inv => {
                     if (inv.id === id) {
                         if (editingField === 'amount') {
@@ -20544,7 +20520,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             const tax = newAmount - baseAmount;
                             return { ...inv, amount: newAmount, baseAmount, tax };
                         } else if (editingField === 'supplier') {
-                            console.log('✅ Guardando proveedor:', editValue);
                             return { ...inv, supplier: editValue };
                         } else if (editingField === 'number') {
                             return { ...inv, number: editValue };
@@ -20625,8 +20600,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 link.download = `facturas-backup-${new Date().toISOString().split('T')[0]}.json`;
                 link.click();
                 URL.revokeObjectURL(url);
-                
-                console.log('✅ Datos exportados:', invoices.length, 'facturas');
             };
 
             // Importar datos desde JSON
@@ -20651,7 +20624,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 if (data.categories) {
                                     setCategories(data.categories);
                                 }
-                                console.log('✅ Datos importados:', data.invoices.length, 'facturas');
                                 alert('✅ Importación exitosa!');
                             }
                         } else {
@@ -20766,7 +20738,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 })
                 .then(response => {
                     if (response.ok) {
-                        console.log('✅ Notificación enviada a Make.com:', notificationData);
                         
                         setInvoices(invoices.map(inv => {
                             if (inv.id === emailModalInvoice.id) {
