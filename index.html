@@ -236,10 +236,10 @@
                 });
 
                 // Payroll
-                set('payrollMonthlyData',     payM.data?.data || {});
-                set('sueldosPendientesData',  payP.data?.data || []);
-                set('horasAjustesData',       payH.data?.data || {});
-                set('seguroMedicoData',       payIns.data?.data || {});
+                const _pay = payM.data?.data || {}; set('payrollMonthlyData', _pay); window.__payrollDataPrecargada = _pay;
+                const _pend = payP.data?.data || []; set('sueldosPendientesData', _pend); window.__sueldosPendientesPrecargados = _pend;
+                const _horas = payH.data?.data || {}; window.__horasAjustesPrecargados = _horas; set('horasAjustesData', _horas);
+                const _seg = payIns.data?.data || {}; window.__seguroDataPrecargada = _seg; set('seguroMedicoData', _seg);
                 set('notasMes',               payNotasMes.data?.data || {});
                 set('salarioOverride',        paySalOv.data?.data || {});
 
@@ -406,7 +406,7 @@
             const MARKER = '__horasHistoricas2026v2__';
             if (localStorage.getItem(MARKER)) return; // ya se ejecutó
 
-            const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+            const employees = (window.__employeesPrecargados || []);
             const payrollData = JSON.parse(localStorage.getItem(PAYROLL_KEY) || '{}');
 
             // Horas por nombre (parcial, case-insensitive) — si no matchea, no hace nada
@@ -497,7 +497,7 @@
                 }
             });
 
-            localStorage.setItem(PAYROLL_KEY, JSON.stringify(payrollData));
+            window.__payrollDataPrecargada = payrollData;
             try { localStorage.setItem(MARKER, '1'); } catch(e) {}
         })();
 
@@ -505,16 +505,16 @@
         (() => {
             const FIX_MARKER = '__santiagoBancoFix2026v1__';
             if (localStorage.getItem(FIX_MARKER)) return;
-            const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+            const employees = (window.__employeesPrecargados || []);
             const santiago = employees.find(e =>
                 (e.apellido || '').toLowerCase().includes('perez') &&
                 (e.nombre || '').toLowerCase().includes('santiago')
             );
             if (!santiago) { try { localStorage.setItem(FIX_MARKER, '1'); } catch(e) {} return; }
             const ajusteKey = santiago.id + '_2026_2'; // marzo = mes 2
-            const ajustes = JSON.parse(localStorage.getItem('horasAjustesData') || '{}');
+            const ajustes = window.__horasAjustesPrecargados || {};
             ajustes[ajusteKey] = 33.3;
-            try { localStorage.setItem('horasAjustesData', JSON.stringify(ajustes)); } catch(e) {}
+            window.__horasAjustesPrecargados = ajustes;
             dbUpsertOne('payroll_hours','main',ajustes);
             try { localStorage.setItem(FIX_MARKER, '1'); } catch(e) {}
             console.log('Fix Santiago marzo 2026: 33.3 hs guardado en horasAjustesData');
@@ -527,7 +527,7 @@
 
             const PAYROLL_KEY = 'payrollMonthlyData';
             const payrollData = JSON.parse(localStorage.getItem(PAYROLL_KEY) || '{}');
-            const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+            const employees = (window.__employeesPrecargados || []);
             let changed = false;
 
             // Limpiar de keyMar (2026_2) todos los pagos banco que tengan
@@ -567,7 +567,7 @@
             });
 
             if (changed) {
-                localStorage.setItem(PAYROLL_KEY, JSON.stringify(payrollData));
+                window.__payrollDataPrecargada = payrollData;
                 console.log('Limpieza completada — recargando...');
             }
             try { localStorage.setItem(CLEAN_MARKER, '1'); } catch(e) {}
@@ -1445,7 +1445,7 @@ ${invoice.items.map(item => `
                 const syncBanners = async () => {
                     try {
                         // Buscar employee match
-                        const emps = JSON.parse(localStorage.getItem('employees') || '[]');
+                        const emps = (window.__employeesPrecargados || []);
                         const nameLC = (currentUser.name||'').toLowerCase();
                         const userLC = (currentUser.username||'').toLowerCase();
                         const yo = emps.find(e => {
@@ -1503,11 +1503,11 @@ ${invoice.items.map(item => `
                 const precargarNotifs = async () => {
                     try {
                         // Intentar desde localStorage primero, si no hay employees ir a Supabase
-                        let empsLS = JSON.parse(localStorage.getItem('employees') || '[]');
+                        let empsLS = (window.__employeesPrecargados || []);
                         if (!empsLS.length) {
                             const r = await window._sb?.from('employees').select('data');
                             empsLS = r?.data?.map(x=>x.data) || [];
-                            if (empsLS.length) localStorage.setItem('employees', JSON.stringify(empsLS));
+                            if (empsLS.length) window.__employeesPrecargados = empsLS;
                         }
                         if (!empsLS.length) return;
                         const nameLC = (currentUser.name||'').toLowerCase();
@@ -2945,7 +2945,7 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         try {
-                            const empsLS = JSON.parse(localStorage.getItem('employees') || '[]');
+                            const empsLS = (window.__employeesPrecargados || []);
                             if (!empsLS.length) return null;
                             const nameLC = (currentUser.name||'').toLowerCase();
                             const userLC = (currentUser.username||'').toLowerCase();
@@ -3060,7 +3060,7 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         try {
-                            const empsLS = JSON.parse(localStorage.getItem('employees') || '[]');
+                            const empsLS = (window.__employeesPrecargados || []);
                             if (!empsLS.length) return null;
                             const nameLC = (currentUser.name||'').toLowerCase();
                             const userLC = (currentUser.username||'').toLowerCase();
@@ -3106,7 +3106,7 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         try {
-                            const empsLS = JSON.parse(localStorage.getItem('employees') || '[]');
+                            const empsLS = (window.__employeesPrecargados || []);
                             if (!empsLS.length) return null;
                             const nameLC = (currentUser.name||'').toLowerCase();
                             const userLC = (currentUser.username||'').toLowerCase();
@@ -3152,7 +3152,7 @@ ${invoice.items.map(item => `
                     {(()=>{
                         try {
                             // Buscar empId del usuario actual
-                            const empsLSP = JSON.parse(localStorage.getItem('employees') || '[]');
+                            const empsLSP = (window.__employeesPrecargados || []);
                             const nameLCP = (currentUser?.name||'').toLowerCase();
                             const userLCP = (currentUser?.username||'').toLowerCase();
                             const yoEmpP = empsLSP.find(e => {
@@ -3210,7 +3210,7 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         try {
-                            const empsLS = JSON.parse(localStorage.getItem('employees') || '[]');
+                            const empsLS = (window.__employeesPrecargados || []);
                             if (!empsLS.length) return null;
                             const nameLC = (currentUser.name||'').toLowerCase();
                             const userLC = (currentUser.username||'').toLowerCase();
@@ -4055,7 +4055,7 @@ ${invoice.items.map(item => `
             const [search, setSearch] = React.useState('');
             const [showDropdown, setShowDropdown] = React.useState(false);
             const [selectedName, setSelectedName] = React.useState('');
-            const savedEmployees = JSON.parse(localStorage.getItem('employees') || '[]');
+            const savedEmployees = (window.__employeesPrecargados || []);
             
             if (savedEmployees.length === 0) return null;
             
@@ -5565,9 +5565,9 @@ ${invoice.items.map(item => `
                 ]).then(([emps, pay, seg]) => {
                     const empsList = emps || [];
                     setEmpleados(empsList);
-                    try { localStorage.setItem('employees', JSON.stringify(empsList)); } catch(e) {}
-                    setPayroll(pay || JSON.parse(localStorage.getItem('payrollMonthlyData') || '{}'));
-                    setSeguros(seg || JSON.parse(localStorage.getItem('seguroMedicoData') || '{}'));
+                    
+                    setPayroll(pay || window.__payrollDataPrecargada || {});
+                    setSeguros(seg || window.__seguroDataPrecargada || {});
                     setLoaded(true);
                 });
             }, []);
@@ -6342,7 +6342,7 @@ ${invoice.items.map(item => `
                 const _notifMoneda = p.moneda;
                 const _notifFecha = pagoForm.fecha;
                 if (_notifUsuarios.length > 0) {
-                    const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+                    const employees = (window.__employeesPrecargados || []);
                     for (const uid of _notifUsuarios) {
                         const u = systemUsers.find(x => String(x.id) === String(uid));
                         if (!u) continue;
@@ -6413,7 +6413,7 @@ ${invoice.items.map(item => `
                 setPrestamos(prev => prev.map(x => x.id === p.id ? { ...x, pagos: newPagos, cuotas: newCuotas } : x));
                 // Notificar a usuarios configurados
                 if ((p.notificarUsuarios||[]).length > 0) {
-                    const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+                    const employees = (window.__employeesPrecargados || []);
                     p.notificarUsuarios.forEach(async uid => {
                         const u = systemUsers.find(x => String(x.id) === String(uid));
                         if (!u) return;
@@ -8640,8 +8640,8 @@ ${invoice.items.map(item => `
 
                 {/* Modal: Seleccionar sueldos pendientes */}
                 {showSueldosModal && (() => {
-                    const allSueldos = (() => { if (window.__sueldosPendientesPrecargados?.length > 0) return window.__sueldosPendientesPrecargados; try { return JSON.parse(localStorage.getItem('sueldosPendientesData') || '[]'); } catch(e) { return []; } })();
-                    const allEmployees = (() => { try { return JSON.parse(localStorage.getItem('employees') || '[]'); } catch(e) { return []; } })();
+                    const allSueldos = (() => { return window.__sueldosPendientesPrecargados || []; })();
+                    const allEmployees = (() => { try { return (window.__employeesPrecargados || []); } catch(e) { return []; } })();
                     const getEmpName = (empId) => { const emp = allEmployees.find(e => e.id === empId || String(e.id) === String(empId)); return emp ? (emp.nombre || emp.name || emp.firstName || 'Empleado') : 'Empleado'; };
                     const pendientes = allSueldos.filter(s => !s.pagado).map(s => ({ ...s, nombreEmpleado: getEmpName(s.empId), moneda: s.moneda || 'CZK' }));
                     return (
@@ -8764,7 +8764,7 @@ ${invoice.items.map(item => `
                 {/* Modal: Gestionar lugares */}
                 {/* Modales independientes para Plata a acreditarse */}
                 {showSueldosAcredModal && (() => {
-                    const pendientes = (() => { if (window.__sueldosPendientesPrecargados?.length > 0) return window.__sueldosPendientesPrecargados; try { return JSON.parse(localStorage.getItem('sueldosPendientesData')||'[]'); } catch(e) { return []; } })();
+                    const pendientes = (() => { return window.__sueldosPendientesPrecargados || []; })();
                     return (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                         <div className={`rounded-2xl shadow-2xl w-full max-w-lg p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
@@ -11422,7 +11422,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 placeholder="Empleado..."
                                                 className={`w-full px-2 py-1.5 border rounded-lg text-xs ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500' : 'border-slate-300 placeholder-slate-400'}`} />
                                             <datalist id="caja-empleados-list">
-                                                {(JSON.parse(localStorage.getItem('employees') || '[]'))
+                                                {((window.__employeesPrecargados || []))
                                                     .filter(e => e.activo)
                                                     .map(e => (
                                                         <option key={e.id} value={`${e.nombre} ${e.apellido}`} />
@@ -12235,7 +12235,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [editingPayrollNote, setEditingPayrollNote] = useState(null);
             const [payrollNoteForm, setPayrollNoteForm] = useState({ fecha: new Date().toISOString().split('T')[0], fechaObjetivo: '', titulo: '', texto: '' });
             useEffect(() => {
-                try { localStorage.setItem('payrollNotes', JSON.stringify(payrollNotes)); } catch(e) {}
+                
                 if (payrollNotes.length > 0) dbSetArray('payroll_notes', payrollNotes);
             }, [payrollNotes]);
             const openNewPayrollNote = () => { setEditingPayrollNote(null); setPayrollNoteForm({ fecha: new Date().toISOString().split('T')[0], fechaObjetivo: '', titulo: '', texto: '' }); setShowPayrollNoteModal(true); };
@@ -12256,11 +12256,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Estados
             const [employees, setEmployees] = useState([]);
             const [empLoaded, setEmpLoaded] = useState(false);
-            useEffect(() => { dbGetAll('employees').then(d => { const emps = d||[]; setEmployees(emps); setEmpLoaded(true); try { localStorage.setItem('employees', JSON.stringify(emps)); } catch(e) {} }); }, []);
+            useEffect(() => { dbGetAll('employees').then(d => { const emps = d||[]; setEmployees(emps); window.__employeesPrecargados=emps; setEmpLoaded(true); }); }, []);
             useEffect(() => {
                 if (employees.length === 0) return;
                 dbSetArray('employees', employees);
-                try { localStorage.setItem('employees', JSON.stringify(employees)); } catch(e) {}
+                
             }, [employees]);
             const [showEmployeeModal, setShowEmployeeModal] = useState(false);
             const [editingEmployee, setEditingEmployee] = useState(null);
@@ -12285,7 +12285,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Guardar empleados en localStorage
             useEffect(() => {
-                try { localStorage.setItem('employees', JSON.stringify(employees)); } catch(e) {}
+                
             }, [employees]);
             
             // Abrir modal para nuevo empleado
@@ -12829,7 +12829,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // ════════════════════════════════════════════════════
             const [payrollData, setPayrollData] = useState(() => {
                 if (window.__payrollPrecargado && Object.keys(window.__payrollPrecargado).length > 0) return window.__payrollPrecargado;
-                try { const ls = localStorage.getItem('payrollMonthlyData'); return ls ? JSON.parse(ls) : {}; } catch(e) { return {}; }
+                return window.__payrollDataPrecargada || {};
             });
             const [payrollDataLoaded, setPayrollDataLoaded] = useState(false);
             useEffect(() => {
@@ -12846,7 +12846,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             useEffect(() => {
                 if (!payrollDataLoaded || Object.keys(payrollData).length === 0) return;
                 window.__payrollPrecargado = payrollData;
-                try { localStorage.setItem('payrollMonthlyData', JSON.stringify(payrollData)); } catch(e) {}
+                window.__payrollDataPrecargada = payrollData;
                 dbUpsertOne('payroll_monthly', 'main', payrollData);
             }, [payrollData]);
 
@@ -12856,7 +12856,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [horasYear, setHorasYear] = useState(now.getFullYear());
             // Ajustes manuales de horas: { 'empId_year_month': horas | null }
             const [horasAjustes, setHorasAjustes] = useState(() => {
-                try { return JSON.parse(localStorage.getItem('horasAjustesData') || '{}') || {}; } catch(e) { return {}; }
+                return window.__horasAjustesPrecargados || {};
             });
             useEffect(() => {
                 dbGetKey('payroll_hours', 'main').then(d => {
@@ -12865,7 +12865,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             }, []);
             useEffect(() => {
                 if (!horasAjustes || Object.keys(horasAjustes).length === 0) return;
-                try { localStorage.setItem('horasAjustesData', JSON.stringify(horasAjustes)); } catch(e) {}
+                window.__horasAjustesPrecargados = horasAjustes;
                 dbUpsertOne('payroll_hours','main',horasAjustes);
             }, [horasAjustes]);
             const [editingHorasCell, setEditingHorasCell] = useState(null);
@@ -12937,7 +12937,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // ── SUELDOS PENDIENTES ────────────────────────────────────────
             const [pendientesData, setPendientesData] = useState(() => {
-                try { const s = localStorage.getItem('sueldosPendientesData'); return s ? JSON.parse(s) : []; } catch(e) { return []; }
+                return window.__sueldosPendientesPrecargados || [];
             });
             useEffect(() => {
                 dbGetKey('payroll_monthly', 'pendientes').then(d => {
@@ -12946,7 +12946,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             }, []);
             useEffect(() => {
                 if (!pendientesData || pendientesData.length === 0) return;
-                try { localStorage.setItem('sueldosPendientesData', JSON.stringify(pendientesData)); } catch(e) {}
+                window.__sueldosPendientesPrecargados = pendientesData;
                 dbUpsertOne('payroll_monthly', 'pendientes', pendientesData);
             }, [pendientesData]);
             const [showPendienteModal, setShowPendienteModal] = useState(false);
@@ -13001,7 +13001,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // ── SEGUROS MÉDICOS ─────────────────────────────────────────
             const [seguroData, setSeguroData] = useState(() => {
-                try { const ls = localStorage.getItem('seguroMedicoData'); return ls ? JSON.parse(ls) : {}; } catch(e) { return {}; }
+                return window.__seguroDataPrecargada || {};
             });
             useEffect(() => {
                 // Solo actualizar si Supabase tiene datos más frescos que el localStorage
@@ -13013,7 +13013,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             }, []);
             useEffect(() => {
                 if (!seguroData || Object.keys(seguroData).length === 0) return;
-                try { localStorage.setItem('seguroMedicoData', JSON.stringify(seguroData)); } catch(e) {}
+                window.__seguroDataPrecargada = seguroData;
                 if (Object.keys(seguroData).length > 0) dbUpsertOne('payroll_insurance', 'main', seguroData);
             }, [seguroData]);
 
@@ -14257,8 +14257,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         {language==='en'?'Export PDF':language==='cs'?'Exportovat PDF':'Exportar PDF'}
                                     </button>
                                     <button onClick={() => {
-                                        const pd = JSON.parse(localStorage.getItem('payrollMonthlyData') || '{}');
-                                        const emps = JSON.parse(localStorage.getItem('employees') || '[]');
+                                        const pd = window.__payrollDataPrecargada || {};
+                                        const emps = (window.__employeesPrecargados || []);
                                         const yr = horasYear;
                                         let report = `DIAGNÓSTICO PAGOS BANCO ${yr}\n${'─'.repeat(60)}\n`;
                                         let hayDuplicados = false;
@@ -21614,10 +21614,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* ── SUELDOS PENDIENTES ── */}
                                 {(() => {
                                     try {
-                                        const todosLosPendientes = JSON.parse(localStorage.getItem('sueldosPendientesData') || '[]');
+                                        const todosLosPendientes = window.__sueldosPendientesPrecargados || [];
                                         // Solo los no pagados (no tienen fechaPago)
                                         const pendientes = todosLosPendientes.filter(p => !p.pagado && !p.fechaPago);
-                                        const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+                                        const employees = (window.__employeesPrecargados || []);
                                         if (!pendientes.length) return null;
                                         const totalPorMoneda = {};
                                         pendientes.forEach(p => {
