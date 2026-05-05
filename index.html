@@ -66,18 +66,29 @@
         // ── Notificaciones cross-device (localStorage + Supabase) ────────────
         async function notifGet(key) {
             try {
-                const local = JSON.parse(localStorage.getItem(key) || '[]');
+                const local = notifRead(key);
                 const remote = await dbGetKey('app_config', 'notif_' + key);
                 if (!remote || !Array.isArray(remote)) return local;
                 const merged = [...remote];
                 local.forEach(ln => { if (!merged.find(rn => String(rn.id) === String(ln.id))) merged.push(ln); });
-                localStorage.setItem(key, JSON.stringify(merged));
+                notifWrite(key, merged);
                 return merged;
-            } catch(e) { return JSON.parse(localStorage.getItem(key) || '[]'); }
+            } catch(e) { return notifRead(key); }
         }
         async function notifSet(key, value) {
-            localStorage.setItem(key, JSON.stringify(value));
+            notifWrite(key, value);
             try { await dbUpsertOne('app_config', 'notif_' + key, value); } catch(e) {}
+        }
+        function notifRead(key) {
+            // Read from window cache first, then localStorage
+            if (window.__notifCache && window.__notifCache[key] !== undefined) return window.__notifCache[key];
+            try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; }
+        }
+        function notifWrite(key, value) {
+            // Write to window cache and localStorage
+            window.__notifCache = window.__notifCache || {};
+            window.__notifCache[key] = value;
+            try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) {}
         }
         async function notifPush(key, item) {
             // Leer de Supabase para no perder notifs de otros dispositivos
@@ -1472,10 +1483,10 @@ ${invoice.items.map(item => `
                         try {
                             const r = await dbGetKey('app_config', 'notif_' + userPrestamoKey);
                             if (r && Array.isArray(r)) {
-                                const local = JSON.parse(localStorage.getItem(userPrestamoKey)||'[]');
+                                const local = notifRead(userPrestamoKey);
                                 const merged = r.map(rn => { const ln = local.find(l=>String(l.id)===String(rn.id)); return ln?.visto?{...rn,visto:true}:rn; });
                                 local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
-                                localStorage.setItem(userPrestamoKey, JSON.stringify(merged));
+                                notifWrite(userPrestamoKey, merged);
                             }
                         } catch(e) {}
                         let changed = false;
@@ -1491,7 +1502,7 @@ ${invoice.items.map(item => `
                                 });
                                 // Agregar items locales que no están en Supabase
                                 local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
-                                localStorage.setItem(fullKey, JSON.stringify(merged));
+                                notifWrite(fullKey, merged);
                                 // También actualizar Supabase si hay diferencias (ej: visto:true)
                                 const hayDiff = merged.some((mn,i) => r[i] && mn.visto !== r[i].visto);
                                 if (hayDiff) { try { await dbUpsertOne('app_config', 'notif_' + fullKey, merged); } catch(e){} }
@@ -2972,26 +2983,26 @@ ${invoice.items.map(item => `
                             });
                             if (!yoEmpN) return null;
                             const notifKey = `solicNotif_${yoEmpN.id}`;
-                            const notifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                            const notifs = notifRead(notifKey);
                             const noVistas = notifs.filter(n => !n.visto);
                             const respKey = `solicRespNotif_${yoEmpN.id}`;
-                            const resps = JSON.parse(localStorage.getItem(respKey) || '[]');
+                            const resps = notifRead(respKey);
                             const respsNoVistas = resps.filter(n => !n.visto);
                             if (!noVistas.length && !respsNoVistas.length) return null;
 
                             const responderDesde = (solicId, estado) => {
                                 // Marcar notif como vista
-                                const allNotifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
-                                localStorage.setItem(notifKey, JSON.stringify(allNotifs.map(n => n.solicId===solicId ? {...n, visto:true} : n)));
+                                const allNotifs = notifRead(notifKey);
+                                notifWrite(notifKey, allNotifs.map(n => n.solicId===solicId ? {...n, visto:true} : n));
                                 // Buscar la solicitud en calendar_solicitudes del localStorage
                                 const solics = (window.__calendarioSolicitudesPrecargadas || []);
                                 const solic = solics.find(s => String(s.id)===String(solicId));
                                 if (solic) {
                                     // Notificar al solicitante
                                     const rk = `solicRespNotif_${solic.solicitanteId}`;
-                                    const existing = JSON.parse(localStorage.getItem(rk) || '[]');
+                                    const existing = notifRead(rk);
                                     existing.push({ id: solicId, tipo: solic.tipo, estado, visto: false });
-                                    localStorage.setItem(rk, JSON.stringify(existing));
+                                    notifWrite(rk, existing);
                                 }
                                 window.dispatchEvent(new CustomEvent('solicResponder', {detail: {id: solicId, estado}}));
                                 window.dispatchEvent(new Event('solicNotifUpdate'));
@@ -3016,8 +3027,8 @@ ${invoice.items.map(item => `
                                                 <button onClick={()=>responderDesde(n.solicId,'rechazada')}
                                                     className="flex-1 text-xs py-1.5 rounded-lg font-bold bg-red-500 hover:bg-red-400">✕ Rechazar</button>
                                                 <button onClick={()=>{
-                                                    const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
-                                                    localStorage.setItem(notifKey, JSON.stringify(all.map(x => x.solicId===n.solicId?{...x,visto:true}:x)));
+                                                    const all = notifRead(notifKey);
+                                                    notifWrite(notifKey, all.map(x => x.solicId===n.solicId?{...x,visto:true}:x));
                                                     window.dispatchEvent(new Event('solicNotifUpdate'));
                                                 }} className="text-xs px-2 py-1.5 rounded-lg font-medium"
                                                     style={{background:'rgba(255,255,255,0.2)'}}>Después</button>
@@ -3028,8 +3039,8 @@ ${invoice.items.map(item => `
                                         const esAprobada = resp.estado === 'aprobada';
                                         const bgColor = esAprobada ? 'linear-gradient(90deg,#065f46,#047857)' : 'linear-gradient(90deg,#7f1d1d,#991b1b)';
                                         const marcarVista = () => {
-                                            const all = JSON.parse(localStorage.getItem(respKey) || '[]');
-                                            localStorage.setItem(respKey, JSON.stringify(all.map(n => n.id===resp.id?{...n,visto:true}:n)));
+                                            const all = notifRead(respKey);
+                                            notifWrite(respKey, all.map(n => n.id===resp.id?{...n,visto:true}:n));
                                             window.dispatchEvent(new Event('solicNotifUpdate'));
                                         };
                                         return (
@@ -3088,7 +3099,7 @@ ${invoice.items.map(item => `
                             });
                             if (!yoEmpN) return null;
                             const notifKey = `sueldoNotif_${yoEmpN.id}`;
-                            const notifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                            const notifs = notifRead(notifKey);
                             const noVistas = notifs.filter(n => !n.visto);
                             if (!noVistas.length) return null;
                             const ultima = noVistas[noVistas.length - 1];
@@ -3107,7 +3118,7 @@ ${invoice.items.map(item => `
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={() => {
-                                        const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                                        const all = notifRead(notifKey);
                                         notifSet(notifKey, all.map(n => ({...n, visto: true})));
                                         window.dispatchEvent(new Event('sueldoNotifUpdate'));
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
@@ -3134,7 +3145,7 @@ ${invoice.items.map(item => `
                             });
                             if (!yoEmpN) return null;
                             const notifKey = `seguroNotif_${yoEmpN.id}`;
-                            const notifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                            const notifs = notifRead(notifKey);
                             const noVistas = notifs.filter(n => !n.visto);
                             if (!noVistas.length) return null;
                             const ultima = noVistas[noVistas.length - 1];
@@ -3153,7 +3164,7 @@ ${invoice.items.map(item => `
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={() => {
-                                        const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                                        const all = notifRead(notifKey);
                                         notifSet(notifKey, all.map(n => ({...n, visto: true})));
                                         window.dispatchEvent(new Event('sueldoNotifUpdate'));
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
@@ -3180,8 +3191,8 @@ ${invoice.items.map(item => `
                             const k1 = yoEmpP ? `prestamoNotif_${yoEmpP.id}` : null;
                             const k2 = `prestamoNotif_user_${currentUser?.id}`;
                             const notifKey = k1 || k2;
-                            const n1 = k1 ? JSON.parse(localStorage.getItem(k1)||'[]') : [];
-                            const n2 = JSON.parse(localStorage.getItem(k2)||'[]');
+                            const n1 = k1 ? notifRead(k1) : [];
+                            const n2 = notifRead(k2);
                             // Merge deduplicando por id Y por contenido (evita duplicados de saves anteriores)
                             const allRaw = [...n1, ...n2.filter(x => !n1.find(y=>String(y.id)===String(x.id)))];
                             const seen = new Set();
@@ -3206,8 +3217,8 @@ ${invoice.items.map(item => `
                                                 {`Pago de "${nv.prestamoNombre}": ${nv.moneda} ${Number(nv.monto).toLocaleString('es-CZ')}`}
                                             </p>
                                             <button onClick={() => {
-                                                const all1 = k1 ? JSON.parse(localStorage.getItem(k1)||'[]') : [];
-                                                const all2 = JSON.parse(localStorage.getItem(k2)||'[]');
+                                                const all1 = k1 ? notifRead(k1) : [];
+                                                const all2 = notifRead(k2);
                                                 const mark = arr => arr.map(n => String(n.id)===String(nv.id) ? {...n,visto:true} : n);
                                                 if (k1) notifSet(k1, mark(all1));
                                                 notifSet(k2, mark(all2));
@@ -3238,7 +3249,7 @@ ${invoice.items.map(item => `
                             });
                             if (!yoEmpN) return null;
                             const notifKey = `calendarioNotif_${yoEmpN.id}`;
-                            const notifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                            const notifs = notifRead(notifKey);
                             const noVistas = notifs.filter(n => !n.visto);
                             if (!noVistas.length) return null;
                             const ultima = noVistas[noVistas.length - 1];
@@ -3262,7 +3273,7 @@ ${invoice.items.map(item => `
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={() => {
-                                        const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                                        const all = notifRead(notifKey);
                                         notifSet(notifKey, all.map(n => ({...n, visto: true})));
                                         window.dispatchEvent(new Event('calendarioNotifUpdate'));
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
@@ -4258,9 +4269,9 @@ ${invoice.items.map(item => `
                         if (solic) {
                             try {
                                 const rk = `solicRespNotif_${solic.solicitanteId}`;
-                                const existing = JSON.parse(localStorage.getItem(rk) || '[]');
+                                const existing = notifRead(rk);
                                 existing.push({ id, tipo: solic.tipo, estado, fechaInicio: solic.fechaInicio||'', fechaFin: solic.fechaFin||'', visto: false });
-                                localStorage.setItem(rk, JSON.stringify(existing));
+                                notifWrite(rk, existing);
                             } catch(e2) {}
                         }
                         return updated;
