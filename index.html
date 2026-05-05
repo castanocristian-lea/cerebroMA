@@ -2241,62 +2241,31 @@ ${invoice.items.map(item => `
             
 
             // Exportar backup completo del sistema
-            const exportFullBackup = () => {
-                // ── Exportar TODO el localStorage dinámicamente ───────────
-                // Así cualquier módulo futuro queda incluido automáticamente
-                const data = { _meta: {
-                    exportDate: new Date().toISOString(),
-                    version: '4.0',
-                    app: 'CerebroMA / MaláGestor',
-                    keys: localStorage.length
-                }};
-
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    const raw = localStorage.getItem(key);
-                    // Intentar parsear JSON; si falla, guardar como string
-                    try { data[key] = JSON.parse(raw); }
-                    catch { data[key] = raw; }
+            const exportFullBackup = async () => {
+                try {
+                    const data = await generarBackupJSON();
+                    const stats = [
+                        `👤 ${(data.systemUsers || []).length} usuarios`,
+                        `📄 ${(data.salesInvoices || []).length} facturas de venta`,
+                        `📦 ${(data.salesProducts || []).length} productos`,
+                        `🧾 ${(data.invoices || []).length} facturas de proveedores`,
+                        `🏢 ${(data.categories || []).length} categorías`,
+                        `👥 ${(data.employees || []).length} empleados`,
+                        `💰 ${Object.keys(data.cashTransactionsMultiYear || {}).length} años en caja`,
+                        `💸 ${Object.keys(data.payrollMonthlyData || {}).length} registros de sueldos`,
+                    ].join('\n');
+                    const dataStr = JSON.stringify(data, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                    alert(`✅ Backup completo exportado\n\n${stats}`);
+                } catch(e) {
+                    alert('❌ Error al exportar: ' + e.message);
                 }
-
-                // Incluir datos grandes que viven en Supabase/window (no en localStorage)
-                if (window.__invoicesPrecargadas?.length > 0) data.invoices = window.__invoicesPrecargadas;
-                if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) data.cashTransactionsMultiYear = window.__cajaPrecargada;
-                if (window.__suppliersInfoPrecargada && Object.keys(window.__suppliersInfoPrecargada).length > 0) data.suppliersInfo = window.__suppliersInfoPrecargada;
-                if (window.__payrollPrecargado && Object.keys(window.__payrollPrecargado).length > 0) data.payrollMonthlyData = window.__payrollPrecargado;
-                if (window.__gastosPlaneadosPrecargados?.length > 0) data.cajaGastosPlaneados = window.__gastosPlaneadosPrecargados;
-                if (window.__facturasPlanPrecargadas?.length > 0) data.cajaFacturasPlaneadas = window.__facturasPlanPrecargadas;
-                if (window.__sueldosPlanPrecargados?.length > 0) data.cajaSueldosPlaneados = window.__sueldosPlanPrecargados;
-                if (window.__gastosAcredPrecargados?.length > 0) data.cajaGastosAcred = window.__gastosAcredPrecargados;
-                if (window.__facturasAcredPrecargadas?.length > 0) data.cajaFacturasAcred = window.__facturasAcredPrecargadas;
-                if (window.__sueldosAcredPrecargados?.length > 0) data.cajaSueldosAcred = window.__sueldosAcredPrecargados;
-
-                // Estadísticas legibles
-                const stats = [
-                    `👤 ${(data.systemUsers || []).length} usuarios`,
-                    `📄 ${(data.salesInvoices || []).length} facturas de venta`,
-                    `📦 ${(data.salesProducts || []).length} productos`,
-                    `🧾 ${(data.invoices || []).length} facturas de proveedores`,
-                    `🏢 ${(data.categories || []).length} proveedores`,
-                    `👥 ${(data.employees || []).length} empleados`,
-                    `💰 ${Object.keys(data.cashTransactionsMultiYear || {}).length} años en caja`,
-                    `💸 ${Object.keys(data.payrollMonthlyData || {}).length} registros de sueldos`,
-                    `🏥 ${Object.keys(data.seguroMedicoData || {}).length} registros de seguros`,
-                    `⚠️ ${(data.sueldosPendientesData || []).length} sueldos pendientes`,
-                    `📝 ${Object.keys(data.notasMes || {}).length} notas mensuales`,
-                    `🔑 ${localStorage.length} claves en total`,
-                ].join('\n');
-
-                const dataStr = JSON.stringify(data, null, 2);
-                const blob = new Blob([dataStr], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
-                link.click();
-                URL.revokeObjectURL(url);
-
-                alert(`✅ Backup completo exportado\n\n${stats}`);
             };
 
             // Importar backup completo del sistema
