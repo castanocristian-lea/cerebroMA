@@ -108,6 +108,8 @@
             if (!isDup) {
                 existing.push(item);
                 await notifSet(key, existing);
+                // Disparar evento para que el banner se actualice
+                window.dispatchEvent(new Event('notifUpdate'));
             }
         }
         // ── Migrar localStorage → Supabase (solo desde botón Importar) ─────
@@ -297,20 +299,21 @@
                     _sb.from('cash_planning').select('data').eq('id','facturasAcred').maybeSingle(),
                     _sb.from('cash_planning').select('data').eq('id','sueldosAcred').maybeSingle(),
                 ]);
-                if (invR2.data?.data?.length > 0) window.__invoicesPrecargadas = invR2.data.data;
-                // También intentar chunks
-                if (!window.__invoicesPrecargadas?.length) {
-                    try {
-                        const metaR = await _sb.from('invoices_data').select('data').eq('id','meta').maybeSingle();
-                        if (metaR.data?.data?.chunks > 0) {
-                            const chunkPs = Array.from({length: metaR.data.data.chunks}, (_,i) =>
-                                _sb.from('invoices_data').select('data').eq('id',`chunk_${i}`).maybeSingle()
-                            );
-                            const chunkRs = await Promise.all(chunkPs);
-                            const all = chunkRs.flatMap(r => r.data?.data || []);
-                            if (all.length > 0) window.__invoicesPrecargadas = all;
-                        }
-                    } catch(e) {}
+                // Siempre priorizar chunks (más nuevos) sobre main (viejo)
+                try {
+                    const metaR = await _sb.from('invoices_data').select('data').eq('id','meta').maybeSingle();
+                    if (metaR.data?.data?.chunks > 0) {
+                        const chunkPs = Array.from({length: metaR.data.data.chunks}, (_,i) =>
+                            _sb.from('invoices_data').select('data').eq('id',`chunk_${i}`).maybeSingle()
+                        );
+                        const chunkRs = await Promise.all(chunkPs);
+                        const all = chunkRs.flatMap(r => r.data?.data || []);
+                        if (all.length > 0) window.__invoicesPrecargadas = all;
+                    }
+                } catch(e) {}
+                // Fallback a main solo si no hay chunks
+                if (!window.__invoicesPrecargadas?.length && invR2.data?.data?.length > 0) {
+                    window.__invoicesPrecargadas = invR2.data.data;
                 }
                 if (catR2.data?.data?.length > 0) window.__categoriesPrecargadas = catR2.data.data;
                 if (supR2.data?.data) window.__suppliersInfoPrecargada = supR2.data.data;
@@ -1461,126 +1464,81 @@ ${invoice.items.map(item => `
             const [notifKey, setNotifKey] = React.useState(0);
             const refreshNotifs = React.useCallback(() => setNotifKey(k => k+1), []);
 
-            // Ticker cada 5s para re-renderizar banners con datos frescos de localStorage
+            // Ticker cada 5s para re-renderizar banners (chatVistos, tareasVistas)
             useEffect(() => {
                 const t = setInterval(() => setNotifKey(k => k+1), 5000);
                 return () => clearInterval(t);
             }, []);
 
-            // Sync banners desde Supabase cuando el usuario está logueado
+            // ── SISTEMA DE NOTIFICACIONES ─────────────────────────────────────
+            const [notificaciones, setNotificaciones] = React.useState({});
+
+            const cargarNotificaciones = React.useCallback(async () => {
+                if (!currentUser) return;
+                try {
+                    let emps = window.__employeesPrecargados || [];
+                    if (!emps.length) {
+                        const r = await window._sb?.from('employees').select('data');
+                        emps = r?.data?.map(x=>x.data) || [];
+                        if (emps.length) window.__employeesPrecargados = emps;
+                    }
+                    const nameLC = (currentUser.name||'').toLowerCase();
+                    const userLC = (currentUser.username||'').toLowerCase();
+                    const yo = emps.find(e => {
+                        const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                        return en.includes(nameLC)||(nameLC&&nameLC.includes((e.nombre||'').toLowerCase()))||
+                               (e.nombre||'').toLowerCase().includes(userLC)||
+                               String(e.id)===String(currentUser.id);
+                    });
+                    if (!yo) return;
+                    const empId = yo.id;
+                    const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif'];
+                    const results = await Promise.all(
+                        tipos.map(t => dbGetKey('app_config', `notif_${t}_${empId}`).catch(()=>null))
+                    );
+                    setNotificaciones(prev => {
+                        const nuevo = {};
+                        tipos.forEach((t, i) => {
+                            const remoto = Array.isArray(results[i]) ? results[i] : [];
+                            const local = (prev[t] || []);
+                            const merged = remoto.map(rn => {
+                                const ln = local.find(l => String(l.id)===String(rn.id));
+                                return ln?.visto ? {...rn, visto:true} : rn;
+                            });
+                            local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
+                            nuevo[t] = merged;
+                        });
+                        return nuevo;
+                    });
+                    // chatVistos y tareasVistas
+                    const uid_s = String(currentUser.id||'');
+                    window._sb?.from('app_config').select('data').eq('id','miCerebroChatVistos_'+uid_s).maybeSingle()
+                        .then(r => { if (r?.data?.data) window.__mcChatVistos = r.data.data; });
+                    window._sb?.from('app_config').select('data').eq('id','miCerebroTareasVistas_'+uid_s).maybeSingle()
+                        .then(r => { if (r?.data?.data) window.__mcTareasVistas = r.data.data; });
+                } catch(e) {}
+            }, [currentUser?.id]);
+
+            const marcarNotifVista = React.useCallback((tipo, filtro) => {
+                setNotificaciones(prev => {
+                    const updated = {...prev, [tipo]: (prev[tipo]||[]).map(n => filtro(n) ? {...n,visto:true} : n)};
+                    const emps = window.__employeesPrecargados || [];
+                    const nameLC = (currentUser?.name||'').toLowerCase();
+                    const yo = emps.find(e => `${e.nombre} ${e.apellido}`.toLowerCase().includes(nameLC) || String(e.id)===String(currentUser?.id));
+                    if (yo) dbUpsertOne('app_config', `notif_${tipo}_${yo.id}`, updated[tipo]).catch(()=>{});
+                    return updated;
+                });
+            }, [currentUser?.id]);
+
             useEffect(() => {
                 if (!isUnlocked || !currentUser) return;
-                const syncBanners = async () => {
-                    try {
-                        // Buscar employee match - si no hay en cache, buscar en Supabase
-                        let emps = (window.__employeesPrecargados || []);
-                        if (!emps.length) {
-                            try {
-                                const r = await window._sb?.from('employees').select('data');
-                                emps = r?.data?.map(x=>x.data) || [];
-                                if (emps.length) window.__employeesPrecargados = emps;
-                            } catch(e) {}
-                        }
-                        const nameLC = (currentUser.name||'').toLowerCase();
-                        const userLC = (currentUser.username||'').toLowerCase();
-                        const yo = emps.find(e => {
-                            const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                            return en.includes(nameLC)||(nameLC&&nameLC.includes((e.nombre||'').toLowerCase()))||
-                                   (e.nombre||'').toLowerCase().includes(userLC)||
-                                   String(e.id)===String(currentUser.id);
-                        });
-                        if (!yo) return;
-                        const empKeys = ['sueldoNotif','seguroNotif','solicNotif','solicRespNotif','calendarioNotif','prestamoNotif'];
-                        // Also sync user-based prestamo key
-                        const keys = [...empKeys];
-                        const userPrestamoKey = `prestamoNotif_user_${currentUser.id}`;
-                        // Fetch user-based key directly
-                        try {
-                            const r = await dbGetKey('app_config', 'notif_' + userPrestamoKey);
-                            if (r && Array.isArray(r)) {
-                                const local = notifRead(userPrestamoKey);
-                                const merged = r.map(rn => { const ln = local.find(l=>String(l.id)===String(rn.id)); return ln?.visto?{...rn,visto:true}:rn; });
-                                local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
-                                notifWrite(userPrestamoKey, merged);
-                            }
-                        } catch(e) {}
-                        let changed = false;
-                        await Promise.all(keys.map(async k => {
-                            const fullKey = `${k}_${yo.id}`;
-                            const r = await dbGetKey('app_config', 'notif_' + fullKey);
-                            if (r && Array.isArray(r)) {
-                                const local = notifRead(fullKey);
-                                // Merge: si el item local está marcado como visto, respetar eso siempre
-                                const merged = r.map(rn => {
-                                    const ln = local.find(l => String(l.id) === String(rn.id));
-                                    return ln?.visto ? {...rn, visto: true} : rn;
-                                });
-                                // Agregar items locales que no están en Supabase
-                                local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
-                                notifWrite(fullKey, merged);
-                                // También actualizar Supabase si hay diferencias (ej: visto:true)
-                                const hayDiff = merged.some((mn,i) => r[i] && mn.visto !== r[i].visto);
-                                if (hayDiff) { try { await dbUpsertOne('app_config', 'notif_' + fullKey, merged); } catch(e){} }
-                                changed = true;
-                            }
-                        }));
-                        if (changed) setNotifKey(k => k+1);
-                    } catch(e) {}
-                };
-                syncBanners();
-                const t = setInterval(syncBanners, 15000);
-                // También correr cuando Supabase termina de cargar
-                const onReady = () => setTimeout(syncBanners, 200);
-                window.addEventListener('supabase-loaded', onReady);
-                return () => { clearInterval(t); window.removeEventListener('supabase-loaded', onReady); };
+                cargarNotificaciones();
+                const t = setInterval(cargarNotificaciones, 15000);
+                const onReady = () => setTimeout(cargarNotificaciones, 300);
+                const evts = ['supabase-loaded','sueldoNotifUpdate','solicNotifUpdate','calendarioNotifUpdate','prestamoNotifUpdate','notifUpdate'];
+                evts.forEach(e => window.addEventListener(e, onReady));
+                return () => { clearInterval(t); evts.forEach(e => window.removeEventListener(e, onReady)); };
             }, [isUnlocked, currentUser?.id]);
-
-            // Precargar notificaciones cross-device desde Supabase al localStorage
-            useEffect(() => {
-                if (!currentUser) return;
-                const precargarNotifs = async () => {
-                    try {
-                        // Intentar desde localStorage primero, si no hay employees ir a Supabase
-                        let empsLS = (window.__employeesPrecargados || []);
-                        if (!empsLS.length) {
-                            const r = await window._sb?.from('employees').select('data');
-                            empsLS = r?.data?.map(x=>x.data) || [];
-                            if (empsLS.length) window.__employeesPrecargados = empsLS;
-                        }
-                        if (!empsLS.length) return;
-                        const nameLC = (currentUser.name||'').toLowerCase();
-                        const userLC = (currentUser.username||'').toLowerCase();
-                        const yoEmp = empsLS.find(e => {
-                            const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                            return en.includes(nameLC)||(nameLC&&nameLC.includes((e.nombre||'').toLowerCase()))||
-                                   (e.nombre||'').toLowerCase().includes(userLC)||
-                                   String(e.id)===String(currentUser.id);
-                        });
-                        if (!yoEmp) return;
-                        const empId = yoEmp.id;
-                        const keys = [
-                            `sueldoNotif_${empId}`, `seguroNotif_${empId}`,
-                            `solicNotif_${empId}`, `solicRespNotif_${empId}`,
-                            `calendarioNotif_${empId}`,
-                        ];
-                        await Promise.all(keys.map(k => notifGet(k)));
-                        refreshNotifs();
-                    } catch(e) {}
-                };
-                // Intentar ahora, y también cuando Supabase termine de cargar employees
-                precargarNotifs();
-                const t = setInterval(precargarNotifs, 30000);
-                // Cargar chatVistos y tareasVistas desde Supabase
-                const uid_cv = String(currentUser.id||'');
-                window._sb?.from('app_config').select('data').eq('id','miCerebroChatVistos_'+uid_cv).maybeSingle()
-                    .then(r => { if (r?.data?.data) { window.__mcChatVistos = r.data.data; setNotifKey(k=>k+1); } });
-                window._sb?.from('app_config').select('data').eq('id','miCerebroTareasVistas_'+uid_cv).maybeSingle()
-                    .then(r => { if (r?.data?.data) window.__mcTareasVistas = r.data.data; });
-                // Reintentar cuando employees lleguen de Supabase
-                const onLoaded = () => { setTimeout(precargarNotifs, 500); };
-                window.addEventListener('supabase-loaded', onLoaded);
-                return () => { clearInterval(t); window.removeEventListener('supabase-loaded', onLoaded); };
-            }, [currentUser?.id]);
 
             // ── SUPABASE REALTIME ─────────────────────────────────────────────
             useEffect(() => {
@@ -2989,38 +2947,19 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         try {
-                            const empsLS = (window.__employeesPrecargados || []);
-                            if (!empsLS.length) return null;
-                            const nameLC = (currentUser.name||'').toLowerCase();
-                            const userLC = (currentUser.username||'').toLowerCase();
-                            const yoEmpN = empsLS.find(e => {
-                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                                return en.includes(nameLC)||(nameLC&&nameLC.includes((e.nombre||'').toLowerCase()))||
-                                       (e.nombre||'').toLowerCase().includes(userLC)||(userLC&&en.includes(userLC))||
-                                       String(e.id)===String(currentUser.id);
-                            });
-                            if (!yoEmpN) return null;
-                            const notifKey = `solicNotif_${yoEmpN.id}`;
-                            const notifs = notifRead(notifKey);
-                            const noVistas = notifs.filter(n => !n.visto);
-                            const respKey = `solicRespNotif_${yoEmpN.id}`;
-                            const resps = notifRead(respKey);
-                            const respsNoVistas = resps.filter(n => !n.visto);
+                            const noVistas = (notificaciones.solicNotif||[]).filter(n => !n.visto);
+                            const respsNoVistas = (notificaciones.solicRespNotif||[]).filter(n => !n.visto);
                             if (!noVistas.length && !respsNoVistas.length) return null;
 
                             const responderDesde = (solicId, estado) => {
                                 // Marcar notif como vista
-                                const allNotifs = notifRead(notifKey);
-                                notifWrite(notifKey, allNotifs.map(n => n.solicId===solicId ? {...n, visto:true} : n));
+                                marcarNotifVista('solicNotif', n => n.solicId===solicId);
                                 // Buscar la solicitud en calendar_solicitudes del localStorage
                                 const solics = (window.__calendarioSolicitudesPrecargadas || []);
                                 const solic = solics.find(s => String(s.id)===String(solicId));
                                 if (solic) {
-                                    // Notificar al solicitante
                                     const rk = `solicRespNotif_${solic.solicitanteId}`;
-                                    const existing = notifRead(rk);
-                                    existing.push({ id: solicId, tipo: solic.tipo, estado, visto: false });
-                                    notifWrite(rk, existing);
+                                    notifPush(rk, { id: solicId, tipo: solic.tipo, estado, visto: false });
                                 }
                                 window.dispatchEvent(new CustomEvent('solicResponder', {detail: {id: solicId, estado}}));
                                 window.dispatchEvent(new Event('solicNotifUpdate'));
@@ -3045,8 +2984,7 @@ ${invoice.items.map(item => `
                                                 <button onClick={()=>responderDesde(n.solicId,'rechazada')}
                                                     className="flex-1 text-xs py-1.5 rounded-lg font-bold bg-red-500 hover:bg-red-400">✕ Rechazar</button>
                                                 <button onClick={()=>{
-                                                    const all = notifRead(notifKey);
-                                                    notifWrite(notifKey, all.map(x => x.solicId===n.solicId?{...x,visto:true}:x));
+                                                    marcarNotifVista('solicNotif', x => x.solicId===n.solicId);
                                                     window.dispatchEvent(new Event('solicNotifUpdate'));
                                                 }} className="text-xs px-2 py-1.5 rounded-lg font-medium"
                                                     style={{background:'rgba(255,255,255,0.2)'}}>Después</button>
@@ -3057,8 +2995,8 @@ ${invoice.items.map(item => `
                                         const esAprobada = resp.estado === 'aprobada';
                                         const bgColor = esAprobada ? 'linear-gradient(90deg,#065f46,#047857)' : 'linear-gradient(90deg,#7f1d1d,#991b1b)';
                                         const marcarVista = () => {
-                                            const all = notifRead(respKey);
-                                            notifWrite(respKey, all.map(n => n.id===resp.id?{...n,visto:true}:n));
+                                            const all = (notificaciones.solicRespNotif||[]);
+                                            marcarNotifVista('solicRespNotif', ()=>true);
                                             window.dispatchEvent(new Event('solicNotifUpdate'));
                                         };
                                         return (
@@ -3104,20 +3042,7 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         try {
-                            const empsLS = (window.__employeesPrecargados || []);
-                            if (!empsLS.length) return null;
-                            const nameLC = (currentUser.name||'').toLowerCase();
-                            const userLC = (currentUser.username||'').toLowerCase();
-                            const yoEmpN = empsLS.find(e => {
-                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                                const enombre = (e.nombre||'').toLowerCase();
-                                return en.includes(nameLC)||(nameLC&&nameLC.includes(enombre))||
-                                       enombre.includes(userLC)||(userLC&&en.includes(userLC))||
-                                       String(e.id)===String(currentUser.id);
-                            });
-                            if (!yoEmpN) return null;
-                            const notifKey = `sueldoNotif_${yoEmpN.id}`;
-                            const notifs = notifRead(notifKey);
+                            const notifs = notificaciones.sueldoNotif || [];
                             const noVistas = notifs.filter(n => !n.visto);
                             if (!noVistas.length) return null;
                             const ultima = noVistas[noVistas.length - 1];
@@ -3136,9 +3061,7 @@ ${invoice.items.map(item => `
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={() => {
-                                        const all = notifRead(notifKey);
-                                        notifSet(notifKey, all.map(n => ({...n, visto: true})));
-                                        window.dispatchEvent(new Event('sueldoNotifUpdate'));
+                                        marcarNotifVista('sueldoNotif', ()=>true);
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
@@ -3150,20 +3073,7 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         try {
-                            const empsLS = (window.__employeesPrecargados || []);
-                            if (!empsLS.length) return null;
-                            const nameLC = (currentUser.name||'').toLowerCase();
-                            const userLC = (currentUser.username||'').toLowerCase();
-                            const yoEmpN = empsLS.find(e => {
-                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                                const enombre = (e.nombre||'').toLowerCase();
-                                return en.includes(nameLC)||(nameLC&&nameLC.includes(enombre))||
-                                       enombre.includes(userLC)||(userLC&&en.includes(userLC))||
-                                       String(e.id)===String(currentUser.id);
-                            });
-                            if (!yoEmpN) return null;
-                            const notifKey = `seguroNotif_${yoEmpN.id}`;
-                            const notifs = notifRead(notifKey);
+                            const notifs = notificaciones.seguroNotif || [];
                             const noVistas = notifs.filter(n => !n.visto);
                             if (!noVistas.length) return null;
                             const ultima = noVistas[noVistas.length - 1];
@@ -3182,9 +3092,7 @@ ${invoice.items.map(item => `
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={() => {
-                                        const all = notifRead(notifKey);
-                                        notifSet(notifKey, all.map(n => ({...n, visto: true})));
-                                        window.dispatchEvent(new Event('sueldoNotifUpdate'));
+                                        marcarNotifVista('seguroNotif', ()=>true);
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
@@ -3195,40 +3103,8 @@ ${invoice.items.map(item => `
                     {/* Banner préstamo pagado */}
                     {(()=>{
                         try {
-                            // Buscar empId del usuario actual
-                            const empsLSP = (window.__employeesPrecargados || []);
-                            const nameLCP = (currentUser?.name||'').toLowerCase();
-                            const userLCP = (currentUser?.username||'').toLowerCase();
-                            const yoEmpP = empsLSP.find(e => {
-                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                                return en.includes(nameLCP)||(nameLCP&&nameLCP.includes((e.nombre||'').toLowerCase()))||
-                                       (e.nombre||'').toLowerCase().includes(userLCP)||
-                                       String(e.id)===String(currentUser?.id);
-                            });
-                            // Leer de ambas keys posibles
-                            const k1 = yoEmpP ? `prestamoNotif_${yoEmpP.id}` : null;
-                            const k2 = `prestamoNotif_user_${currentUser?.id}`;
-                            const notifKey = k1 || k2;
-                            const n1 = k1 ? notifRead(k1) : [];
-                            const n2 = notifRead(k2);
-                            // Si ambas vacías, intentar cargar de Supabase directamente
-                            if (!n1.length && !n2.length && k1) {
-                                dbGetKey('app_config', 'notif_' + k1).then(r => {
-                                    if (r && Array.isArray(r) && r.length) { notifWrite(k1, r); setNotifKey(k=>k+1); }
-                                }).catch(()=>{});
-                            }
-                            // Merge deduplicando por id Y por contenido (evita duplicados de saves anteriores)
-                            const allRaw = [...n1, ...n2.filter(x => !n1.find(y=>String(y.id)===String(x.id)))];
-                            const seen = new Set();
-                            const allN = allRaw.filter(x => {
-                                const key = `${x.prestamoNombre}_${x.monto}_${x.fecha}`;
-                                if (seen.has(key)) return false;
-                                seen.add(key);
-                                return true;
-                            });
-                            const noVistas = allN.filter(n => !n.visto);
+                            const noVistas = (notificaciones.prestamoNotif||[]).filter(n => !n.visto);
                             if (!noVistas.length) return null;
-                            const notifKeyFinal = k1 || k2;
                             const ultima = noVistas[noVistas.length - 1];
                             // Un banner por cada pago no visto
                             return (
@@ -3241,12 +3117,7 @@ ${invoice.items.map(item => `
                                                 {`Pago de "${nv.prestamoNombre}": ${nv.moneda} ${Number(nv.monto).toLocaleString('es-CZ')}`}
                                             </p>
                                             <button onClick={() => {
-                                                const all1 = k1 ? notifRead(k1) : [];
-                                                const all2 = notifRead(k2);
-                                                const mark = arr => arr.map(n => String(n.id)===String(nv.id) ? {...n,visto:true} : n);
-                                                if (k1) notifSet(k1, mark(all1));
-                                                notifSet(k2, mark(all2));
-                                                window.dispatchEvent(new Event('prestamoNotifUpdate'));
+                                                marcarNotifVista('prestamoNotif', n => String(n.id)===String(nv.id));
                                             }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                                 style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                         </div>
@@ -3260,20 +3131,7 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         try {
-                            const empsLS = (window.__employeesPrecargados || []);
-                            if (!empsLS.length) return null;
-                            const nameLC = (currentUser.name||'').toLowerCase();
-                            const userLC = (currentUser.username||'').toLowerCase();
-                            const yoEmpN = empsLS.find(e => {
-                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
-                                const enombre = (e.nombre||'').toLowerCase();
-                                return en.includes(nameLC)||(nameLC&&nameLC.includes(enombre))||
-                                       enombre.includes(userLC)||(userLC&&en.includes(userLC))||
-                                       String(e.id)===String(currentUser.id);
-                            });
-                            if (!yoEmpN) return null;
-                            const notifKey = `calendarioNotif_${yoEmpN.id}`;
-                            const notifs = notifRead(notifKey);
+                            const notifs = notificaciones.calendarioNotif || [];
                             const noVistas = notifs.filter(n => !n.visto);
                             if (!noVistas.length) return null;
                             const ultima = noVistas[noVistas.length - 1];
@@ -3297,9 +3155,7 @@ ${invoice.items.map(item => `
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={() => {
-                                        const all = notifRead(notifKey);
-                                        notifSet(notifKey, all.map(n => ({...n, visto: true})));
-                                        window.dispatchEvent(new Event('calendarioNotifUpdate'));
+                                        marcarNotifVista('calendarioNotif', ()=>true);
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
@@ -4293,9 +4149,7 @@ ${invoice.items.map(item => `
                         if (solic) {
                             try {
                                 const rk = `solicRespNotif_${solic.solicitanteId}`;
-                                const existing = notifRead(rk);
-                                existing.push({ id, tipo: solic.tipo, estado, fechaInicio: solic.fechaInicio||'', fechaFin: solic.fechaFin||'', visto: false });
-                                notifWrite(rk, existing);
+                                notifPush(rk, { id, tipo: solic.tipo, estado, fechaInicio: solic.fechaInicio||'', fechaFin: solic.fechaFin||'', visto: false });
                             } catch(e2) {}
                         }
                         return updated;
@@ -19162,13 +19016,18 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             Array.from({length: meta.chunks}, (_, i) => dbGetKey('invoices_data', `chunk_${i}`))
                         );
                         const all = allChunks.flat().filter(Boolean);
-                        if (all.length > 0) { setInvoices(all); window.__invoicesPrecargadas = all; }
-                    } else {
-                        // Fallback: intentar 'main' (formato viejo)
-                        dbGetKey('invoices_data', 'main').then(d => {
-                            if (d && d.length > 0) { setInvoices(d); window.__invoicesPrecargadas = d; }
-                        });
+                        if (all.length > 0) {
+                            setInvoices(all);
+                            window.__invoicesPrecargadas = all;
+                            // Borrar 'main' viejo para que no interfiera
+                            window._sb?.from('invoices_data').delete().eq('id','main').then(()=>{}).catch(()=>{});
+                            return;
+                        }
                     }
+                    // Fallback a main solo si no hay chunks
+                    dbGetKey('invoices_data', 'main').then(d => {
+                        if (d && d.length > 0) { setInvoices(d); window.__invoicesPrecargadas = d; }
+                    });
                 });
             }, []);
 
