@@ -214,7 +214,7 @@
                 set('employees',          emp.data?.map(r=>r.data) || []);
                 set('payrollNotes',       payN.data?.map(r=>r.data) || []);
                 set('cashNotes',          cashN.data?.map(r=>r.data) || []);
-                set('calendarioEventos',  calEv.data?.map(r=>r.data) || []);
+                const _calEvs = calEv.data?.map(r=>r.data) || []; set('calendarioEventos', _calEvs); window.__calendarioEventosPrecargados = _calEvs;
                 set('calendarioHoras',    calH.data?.map(r=>r.data) || []);
                 set('credencialesData',   creds.data?.map(r=>r.data) || []);
                 set('systemUsers',        sysU.data?.map(r=>r.data) || []);
@@ -227,7 +227,7 @@
                 const calUbic = calCfg.data?.find(r => r.id === 'ubicaciones');
                 const calTipo = calCfg.data?.find(r => r.id === 'tipos');
                 if (calUbic?.data) set('calendarioUbicaciones', calUbic.data);
-                if (calTipo?.data) set('calendarioTipos', calTipo.data);
+                if (calTipo?.data) { set('calendarioTipos', calTipo.data); window.__calendarioTiposPrecargados = calTipo.data; }
 
                 // cash_planning principales
                 const planMap = { ahorros: 'cajaAhorros', acreditaciones: 'cajaAcreditaciones', fondos: 'cajaFondos', lugares: 'cajaLugares' };
@@ -240,19 +240,19 @@
                 const _pend = payP.data?.data || []; set('sueldosPendientesData', _pend); window.__sueldosPendientesPrecargados = _pend;
                 const _horas = payH.data?.data || {}; window.__horasAjustesPrecargados = _horas; set('horasAjustesData', _horas);
                 const _seg = payIns.data?.data || {}; window.__seguroDataPrecargada = _seg; set('seguroMedicoData', _seg);
-                set('notasMes',               payNotasMes.data?.data || {});
-                set('salarioOverride',        paySalOv.data?.data || {});
+                const _notasMes = payNotasMes.data?.data || {}; set('notasMes', _notasMes); window.__notasMesPrecargadas = _notasMes;
+                const _salOv = paySalOv.data?.data || {}; set('salarioOverride', _salOv); window.__salarioOverridePrecargado = _salOv;
 
                 // Proveedores
                 set('suppliersInfo',  suppMain.data?.data || {});
                 set('categories',     suppCats.data?.data || []);
                 set('invoices',       suppInv.data?.data || []);
                 set('invNotes',       suppInvN.data?.data || {});
-                set('taxRates',       suppTax.data?.data || {});
-                set('salesInvoices',  suppSI.data?.data || []);
-                set('salesProducts',  suppSP.data?.data || []);
-                set('salesHolders',   suppSH.data?.data || []);
-                set('salesClients',   suppSC.data?.data || []);
+                const _tax = suppTax.data?.data || {}; set('taxRates', _tax); window.__taxRatesPrecargados = _tax;
+                const _si = suppSI.data?.data || []; set('salesInvoices', _si); window.__salesInvoicesPrecargadas = _si;
+                const _sp = suppSP.data?.data || []; set('salesProducts', _sp); window.__salesProductsPrecargados = _sp;
+                const _sh = suppSH.data?.data || []; set('salesHolders', _sh); window.__salesHoldersPrecargados = _sh;
+                const _sc = suppSC.data?.data || []; set('salesClients', _sc); window.__salesClientsPrecargados = _sc;
 
                 // Cash planning extra
                 set('cajaRubrosCosto',         cashRub.data?.data || []);
@@ -267,7 +267,7 @@
                 // No pre-cargar aquí ya que la clave incluye el userId que no está disponible aún
 
                 // Préstamos
-                set('prestamosData',  prestamos.data?.data || []);
+                const _prest = prestamos.data?.data || []; set('prestamosData', _prest); window.__prestamosDataPrecargada = _prest;
 
                 // Caja Diaria — pre-cargar para que esté disponible inmediatamente
                 const cajaR = await _sb.from('cash_transactions').select('data').eq('id','multiyear').maybeSingle();
@@ -318,7 +318,7 @@
 
                 // markedCategories
                 const mc = await _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle();
-                if (mc.data?.data) { try { localStorage.setItem('markedCategories', JSON.stringify(mc.data.data)); } catch(e) { console.warn('⚠️ localStorage lleno, omitiendo markedCategories'); } }
+                if (mc.data?.data) { window.__markedCategoriesPrecargadas = new Set(mc.data.data); }
             } catch(e) {
                 console.error('❌ Error cargando desde Supabase:', e);
             }
@@ -349,8 +349,8 @@
                     _sb.from('credentials').select('data'),
                     _sb.from('system_users').select('data'),
                 ]);
-                if (creds.data) localStorage.setItem('systemCredentials', JSON.stringify(creds.data.map(r=>r.data)));
-                if (sysU.data) localStorage.setItem('systemUsers', JSON.stringify(sysU.data.map(r=>r.data)));
+                if (creds.data) window.__systemCredsPrecargadas = creds.data.map(r=>r.data);
+                if (sysU.data) window.__systemUsersPrecargados = sysU.data.map(r=>r.data);
             } catch(e) { console.warn('Error cargando credenciales:', e); }
             // Señal para que React sepa que puede intentar login
             window.__supabaseReady = true;
@@ -407,7 +407,7 @@
             if (localStorage.getItem(MARKER)) return; // ya se ejecutó
 
             const employees = (window.__employeesPrecargados || []);
-            const payrollData = JSON.parse(localStorage.getItem(PAYROLL_KEY) || '{}');
+            const payrollData = window.__payrollDataPrecargada || {};
 
             // Horas por nombre (parcial, case-insensitive) — si no matchea, no hace nada
             const horasEne = {
@@ -526,7 +526,7 @@
             if (localStorage.getItem(CLEAN_MARKER)) return;
 
             const PAYROLL_KEY = 'payrollMonthlyData';
-            const payrollData = JSON.parse(localStorage.getItem(PAYROLL_KEY) || '{}');
+            const payrollData = window.__payrollDataPrecargada || {};
             const employees = (window.__employeesPrecargados || []);
             let changed = false;
 
@@ -1706,7 +1706,7 @@ ${invoice.items.map(item => `
                 // Precargar credenciales bio de todos los usuarios desde Supabase
                 (async () => {
                     try {
-                        const users = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                        const users = (window.__systemUsersPrecargados || []);
                         if (!users.length) return;
                         const results = await Promise.all(
                             users.map(u => window._sb?.from('app_config').select('data').eq('id','bioCred_'+u.id).maybeSingle())
@@ -1803,7 +1803,7 @@ ${invoice.items.map(item => `
                         }
                     });
                     // Autenticación exitosa — buscar usuario en systemUsers
-                    const users = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                    const users = (window.__systemUsersPrecargados || []);
                     const user = users.find(u => String(u.id) === String(storedCred.userId));
                     if (user) {
                         setCurrentUser(user);
@@ -1848,9 +1848,9 @@ ${invoice.items.map(item => `
             useEffect(() => {
                 if (!currentUser) return;
                 // Persistir preferencia por usuario
-                const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                const systemUsers = (window.__systemUsersPrecargados || []);
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, autoLogoutMinutes } : u);
-                try { localStorage.setItem('systemUsers', JSON.stringify(updated)); } catch(e) {}
+                
                 // Guardar en key persistente por usuario (sobrevive al logout)
                 try { localStorage.setItem(`userPref_autoLogout_${currentUser.id}`, String(autoLogoutMinutes)); } catch(e) {}
                 dbSetArray('system_users', updated);
@@ -2134,16 +2134,16 @@ ${invoice.items.map(item => `
             
             const t = translations[currentLanguage] || translations['es'];
             const systemUsers = React.useMemo(() => {
-                try { return JSON.parse(localStorage.getItem('systemUsers') || '[]'); } catch(e) { return []; }
+                try { return (window.__systemUsersPrecargados || []); } catch(e) { return []; }
             }, [currentUser]);
             
             const changeLanguage = (lang) => {
                 setCurrentLanguage(lang);
                 try { localStorage.setItem('malagestion_language', lang); } catch(e) {}
                 if (!currentUser) return;
-                const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                const systemUsers = (window.__systemUsersPrecargados || []);
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, language: lang } : u);
-                try { localStorage.setItem('systemUsers', JSON.stringify(updated)); } catch(e) {}
+                
                 dbSetArray('system_users', updated);
             };
             
@@ -2321,7 +2321,7 @@ ${invoice.items.map(item => `
                 e.preventDefault();
                 
                 // Obtener usuarios del localStorage
-                const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                const systemUsers = (window.__systemUsersPrecargados || []);
                 
                 // Si no hay usuarios, crear usuario admin por defecto
                 if (systemUsers.length === 0) {
@@ -2333,7 +2333,7 @@ ${invoice.items.map(item => `
                         createdAt: new Date().toISOString()
                     };
                     systemUsers.push(defaultAdmin);
-                    try { localStorage.setItem('systemUsers', JSON.stringify(systemUsers)); } catch(e) {}
+                    
                 dbSetArray('system_users', systemUsers);
                 }
                 
@@ -2412,9 +2412,9 @@ ${invoice.items.map(item => `
                         } else {
                             // Sin pregunta configurada → bloquear directamente al 3er intento
                             if (nuevosIntentos >= 3) {
-                                const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
+                                const todos = (window.__systemUsersPrecargados || [])
                                     .map(u => String(u.id) === userId ? {...u, bloqueado: true} : u);
-                                try { localStorage.setItem('systemUsers', JSON.stringify(todos)); } catch(e) {}
+                                
                                 dbSetArray('system_users', todos);
                                 setBloqueadoError(true);
                                 setTimeout(() => setBloqueadoError(false), 5000);
@@ -2450,9 +2450,9 @@ ${invoice.items.map(item => `
                         setIntentosFallidos(prev => ({...prev, [String(usuarioPregunta.id)]: 0}));
                         return;
                     }
-                    const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
+                    const todos = (window.__systemUsersPrecargados || [])
                         .map(u => String(u.id) === String(usuarioPregunta.id) ? {...u, bloqueado: true} : u);
-                    try { localStorage.setItem('systemUsers', JSON.stringify(todos)); } catch(e) {}
+                    
                     dbSetArray('system_users', todos);
                     setMostrarPregunta(false);
                     setUsuarioPregunta(null);
@@ -2478,9 +2478,9 @@ ${invoice.items.map(item => `
                 if (!/^\d{4}$/.test(new1)) { setChangePinError('El nuevo PIN debe ser de 4 dígitos numéricos.'); return; }
                 if (new1 !== new2) { setChangePinError('Los nuevos PINs no coinciden.'); return; }
                 if (new1 === current) { setChangePinError('El nuevo PIN no puede ser igual al actual.'); return; }
-                const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                const systemUsers = (window.__systemUsersPrecargados || []);
                 const updatedUsers = systemUsers.map(u => u.id === currentUser.id ? { ...u, pin: new1 } : u);
-                try { localStorage.setItem('systemUsers', JSON.stringify(updatedUsers)); } catch(e) {}
+                
                 dbSetArray('system_users', updatedUsers);
                 setCurrentUser({ ...currentUser, pin: new1 });
                 setChangePinSuccess(true);
@@ -2969,7 +2969,7 @@ ${invoice.items.map(item => `
                                 const allNotifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
                                 localStorage.setItem(notifKey, JSON.stringify(allNotifs.map(n => n.solicId===solicId ? {...n, visto:true} : n)));
                                 // Buscar la solicitud en calendar_solicitudes del localStorage
-                                const solics = JSON.parse(localStorage.getItem('calendar_solicitudes_cache') || '[]');
+                                const solics = (window.__calendarioSolicitudesPrecargadas || []);
                                 const solic = solics.find(s => String(s.id)===String(solicId));
                                 if (solic) {
                                     // Notificar al solicitante
@@ -3028,7 +3028,7 @@ ${invoice.items.map(item => `
                                                         marcarVista();
                                                         setActiveModule('calendario');
                                                         // Buscar las fechas en el cache de solicitudes si no están en la notif
-                                                        const solicCache = JSON.parse(localStorage.getItem('calendar_solicitudes_cache') || '[]');
+                                                        const solicCache = (window.__calendarioSolicitudesPrecargadas || []);
                                                         const solicOrig = solicCache.find(s => String(s.id)===String(resp.id));
                                                         const fechaI = resp.fechaInicio || solicOrig?.fechaInicio || '';
                                                         const fechaF = resp.fechaFin || solicOrig?.fechaFin || '';
@@ -3865,9 +3865,9 @@ ${invoice.items.map(item => `
                                                 if (securityForm.pin !== currentUser?.pin) { setSecurityError('PIN incorrecto.'); return; }
                                                 if (!securityForm.pregunta.trim()) { setSecurityError('Escribí una pregunta.'); return; }
                                                 if (!securityForm.respuesta.trim()) { setSecurityError('Escribí la respuesta.'); return; }
-                                                const todos = JSON.parse(localStorage.getItem('systemUsers') || '[]')
+                                                const todos = (window.__systemUsersPrecargados || [])
                                                     .map(u => u.id === currentUser.id ? {...u, preguntaSeguridad: securityForm.pregunta.trim(), respuestaSeguridad: securityForm.respuesta.trim().toLowerCase()} : u);
-                                                try { localStorage.setItem('systemUsers', JSON.stringify(todos)); } catch(e) {}
+                                                
                                                 dbSetArray('system_users', todos);
                                                 setCurrentUser(u => ({...u, preguntaSeguridad: securityForm.pregunta.trim(), respuestaSeguridad: securityForm.respuesta.trim().toLowerCase()}));
                                                 setSecuritySuccess(true);
@@ -4270,13 +4270,13 @@ ${invoice.items.map(item => `
                     }
                     const ts = (cfg || []).find(c => c.key === 'tiposSolicitud');
                     if (ts?.value?.length) setTiposSolic(ts.value);
-                    else { const ls = localStorage.getItem('calendarioTiposSolicitud'); if (ls) try { setTiposSolic(JSON.parse(ls)); } catch(e){} }
+                    else { if (window.__calendarioTiposSolicPrecargados) setTiposSolic(window.__calendarioTiposSolicPrecargados); }
                     const ee = (cfg || []).find(c => c.key === 'eventosEspeciales');
                     if (ee?.value?.length) setEventosEspeciales(ee.value);
-                    else { const ls2 = localStorage.getItem('calendarioEvEspeciales'); if (ls2) try { setEventosEspeciales(JSON.parse(ls2)); } catch(e){} }
+                    else { if (window.__calendarioEvEspPrecargados) setEventosEspeciales(window.__calendarioEvEspPrecargados); }
                     const solicList = solic || [];
                     setSolicitudes(solicList);
-                    localStorage.setItem('calendar_solicitudes_cache', JSON.stringify(solicList));
+                    window.__calendarioSolicitudesPrecargadas = solicList;
                     setLoaded(true);
                 });
             }, []);
@@ -4292,8 +4292,8 @@ ${invoice.items.map(item => `
             };
             const saveHoras = (h) => saveHorasBatch([h]);
 
-            const saveEvs  = (evs) => { setEventos(evs); localStorage.setItem('calendarioEventos', JSON.stringify(evs)); dbSetArray('calendar_events', evs); };
-            const saveSolicitudes = (list) => { setSolicitudes(list); localStorage.setItem('calendar_solicitudes_cache', JSON.stringify(list)); dbSetArray('calendar_solicitudes', list); };
+            const saveEvs  = (evs) => { setEventos(evs); window.__calendarioEventosPrecargados = evs; dbSetArray('calendar_events', evs); };
+            const saveSolicitudes = (list) => { setSolicitudes(list); window.__calendarioSolicitudesPrecargadas = list; dbSetArray('calendar_solicitudes', list); };
 
             const enviarSolicitud = async () => {
                 if (!solicForm.tipo) return alert('Seleccioná un tipo de solicitud');
@@ -4335,9 +4335,9 @@ ${invoice.items.map(item => `
                     } catch(e) {}
                 }
             };
-            const saveTips = (ts)  => { setTipos(ts); localStorage.setItem('calendarioTipos', JSON.stringify(ts)); dbUpsertOne('calendar_config', 'tipos', {key:'tipos', value:ts}); };
-            const saveTiposSolic = (ts) => { setTiposSolic(ts); localStorage.setItem('calendarioTiposSolicitud', JSON.stringify(ts)); dbUpsertOne('calendar_config', 'tiposSolicitud', {key:'tiposSolicitud', value:ts}); };
-            const saveEvEsp = (ev) => { setEventosEspeciales(ev); localStorage.setItem('calendarioEvEspeciales', JSON.stringify(ev)); dbUpsertOne('calendar_config', 'eventosEspeciales', {key:'eventosEspeciales', value:ev}); };
+            const saveTips = (ts)  => { setTipos(ts); window.__calendarioTiposPrecargados = ts; dbUpsertOne('calendar_config', 'tipos', {key:'tipos', value:ts}); };
+            const saveTiposSolic = (ts) => { setTiposSolic(ts); window.__calendarioTiposSolicPrecargados = ts; dbUpsertOne('calendar_config', 'tiposSolicitud', {key:'tiposSolicitud', value:ts}); };
+            const saveEvEsp = (ev) => { setEventosEspeciales(ev); window.__calendarioEvEspPrecargados = ev; dbUpsertOne('calendar_config', 'eventosEspeciales', {key:'eventosEspeciales', value:ev}); };
 
             const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             const hoy = toISO(new Date());
@@ -5812,7 +5812,7 @@ ${invoice.items.map(item => `
                 cargar('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
                 cargar('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js');
                 dbGetAll('codigos_productos').then(d => { setCodigos(d||[]); setLoaded(true); }).catch(() => {
-                    const ls = localStorage.getItem('codigosProductos');
+                    const ls = window.__codigosProductosPrecargados ? JSON.stringify(window.__codigosProductosPrecargados) : null;
                     setCodigos(ls ? JSON.parse(ls) : []); setLoaded(true);
                 });
             }, []);
@@ -5838,21 +5838,21 @@ ${invoice.items.map(item => `
                 }));
                 const todos = [...codigos, ...nuevos];
                 setCodigos(todos);
-                try { localStorage.setItem('codigosProductos', JSON.stringify(todos)); } catch(e) {}
+                
                 try { await dbSetArray('codigos_productos', todos); } catch(e) {}
                 setForm(f=>({...f, nombre:'', link:'', cantidad:1, codigoManual:'', usarManual:false}));
             };
 
             const eliminar = (id) => {
                 const todos = codigos.filter(c=>c.id!==id);
-                setCodigos(todos); try { localStorage.setItem('codigosProductos', JSON.stringify(todos)); } catch(e) {}
+                setCodigos(todos); 
                 try { dbSetArray('codigos_productos', todos); } catch(e) {}
             };
 
             const archivar = (id) => {
                 setCodigos(prev => {
                     const todos = prev.map(c=>c.id===id?{...c,archivado:!c.archivado}:c);
-                    try { localStorage.setItem('codigosProductos', JSON.stringify(todos)); } catch(e) {}
+                    
                     try { dbSetArray('codigos_productos', todos); } catch(e) {}
                     return [...todos];
                 });
@@ -5944,7 +5944,7 @@ ${invoice.items.map(item => `
                                     </label>
                                     {seleccionados.length>0 && (
                                         <div className="flex gap-3 ml-auto">
-                                            <button onClick={()=>{if(confirm(`¿Eliminar ${seleccionados.length} código${seleccionados.length!==1?'s':''}?`)){const t=codigos.filter(c=>!seleccionados.includes(c.id));setCodigos(t);try{localStorage.setItem('codigosProductos',JSON.stringify(t));}catch(e){}try{dbSetArray('codigos_productos',t);}catch(e){}setSel([])}}} className="text-xs text-red-500 hover:text-red-700 font-medium">🗑️ Eliminar</button>
+                                            <button onClick={()=>{if(confirm(`¿Eliminar ${seleccionados.length} código${seleccionados.length!==1?'s':''}?`)){const t=codigos.filter(c=>!seleccionados.includes(c.id));setCodigos(t);window.__codigosProductosPrecargados = t;try{dbSetArray('codigos_productos',t);}catch(e){}setSel([])}}} className="text-xs text-red-500 hover:text-red-700 font-medium">🗑️ Eliminar</button>
                                             <button onClick={()=>{seleccionados.forEach(id=>archivar(id));setSel([]);}} className="text-xs text-amber-500 hover:text-amber-700 font-medium">📁 Archivar</button>
                                         </div>
                                     )}
@@ -6235,7 +6235,7 @@ ${invoice.items.map(item => `
             const PAGOS_PREVIEW = 5;
 
             React.useEffect(() => {
-                localStorage.setItem(STORE_KEY, JSON.stringify(prestamos));
+                window.__prestamosDataPrecargada = prestamos;
                 if (prestamos.length > 0) dbUpsertOne('app_config', 'prestamos', prestamos);
             }, [prestamos]);
 
@@ -7298,7 +7298,7 @@ ${invoice.items.map(item => `
             const [activeTab, setActiveTab] = useState('users');
             const [searchQuery, setSearchQuery] = useState('');
             const [users, setUsers] = useState(() => {
-                const saved = localStorage.getItem('systemUsers');
+                const saved = null; // from window cache
                 return saved ? JSON.parse(saved) : [];
             });
             const [showUserModal, setShowUserModal] = useState(false);
@@ -7335,7 +7335,7 @@ ${invoice.items.map(item => `
             // Guardar usuarios en localStorage
             useEffect(() => {
                 if (!users || users.length === 0) return;
-                try { localStorage.setItem('systemUsers', JSON.stringify(users)); } catch(e) {}
+                
                 dbSetArray('system_users', users);
             }, [users]);
             
@@ -7651,7 +7651,7 @@ ${invoice.items.map(item => `
                                                                         onClick={() => {
                                                                             const updated = users.map(u => u.id === user.id ? {...u, bloqueado: !u.bloqueado} : u);
                                                                             setUsers(updated);
-                                                                            try { localStorage.setItem('systemUsers', JSON.stringify(updated)); } catch(e) {}
+                                                                            
                                                                             dbSetArray('system_users', updated);
                                                                         }}
                                                                         className={`mr-4 text-xs px-2 py-1 rounded-full font-medium border transition-all ${user.bloqueado ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-red-50 hover:text-red-600'}`}
@@ -12900,10 +12900,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Override salario por mes (no toca el legajo)
             const [salarioOverride, setSalarioOverride] = useState(() => {
-                const s = localStorage.getItem('salarioOverride');
+                const s = window.__salarioOverridePrecargado ? JSON.stringify(window.__salarioOverridePrecargado) : null;
                 return s ? JSON.parse(s) : {};
             });
-            useEffect(() => { if (!salarioOverride || Object.keys(salarioOverride).length === 0) return; localStorage.setItem('salarioOverride', JSON.stringify(salarioOverride));
+            useEffect(() => { if (!salarioOverride || Object.keys(salarioOverride).length === 0) return; window.__salarioOverridePrecargado = salarioOverride;
                 dbUpsertOne('payroll_monthly', 'salarioOverride', salarioOverride); }, [salarioOverride]);
             const overrideKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
             const getSalarioMes = (emp) => {
@@ -12913,10 +12913,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Notas por empleado/mes
             const [notasMes, setNotasMes] = useState(() => {
-                const s = localStorage.getItem('notasMes');
+                const s = window.__notasMesPrecargadas ? JSON.stringify(window.__notasMesPrecargadas) : null;
                 return s ? JSON.parse(s) : {};
             });
-            useEffect(() => { if (!notasMes || Object.keys(notasMes).length === 0) return; try { localStorage.setItem('notasMes', JSON.stringify(notasMes)); } catch(e) {}
+            useEffect(() => { if (!notasMes || Object.keys(notasMes).length === 0) return; window.__notasMesPrecargadas = notasMes;
                 dbUpsertOne('payroll_monthly', 'notasMes', notasMes); }, [notasMes]);
             const notaKey = (empId) => `${empId}_${selectedYear}_${selectedMonth}`;
             const getNota = (empId) => notasMes[notaKey(empId)] || '';
@@ -15951,7 +15951,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Productos
             const [products, setProducts] = useState(() => {
-                const saved = localStorage.getItem('salesProducts');
+                const saved = null; // loaded from Supabase
                 return saved ? JSON.parse(saved) : [];
             });
             const [showProductModal, setShowProductModal] = useState(false);
@@ -15965,7 +15965,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Titulares (datos de la empresa emisora)
             const [holders, setHolders] = useState(() => {
-                const saved = localStorage.getItem('salesHolders');
+                const saved = null; // loaded from Supabase
                 return saved ? JSON.parse(saved) : [];
             });
             const [showHolderModal, setShowHolderModal] = useState(false);
@@ -15984,7 +15984,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Clientes
             const [clients, setClients] = useState(() => {
-                const saved = localStorage.getItem('salesClients');
+                const saved = null; // loaded from Supabase
                 return saved ? JSON.parse(saved) : [];
             });
             const [showClientModal, setShowClientModal] = useState(false);
@@ -16005,7 +16005,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Facturas de venta
             const [salesInvoices, setSalesInvoices] = useState(() => {
-                const saved = localStorage.getItem('salesInvoices');
+                const saved = null; // loaded from Supabase
                 if (!saved) return [];
                 const parsed = JSON.parse(saved);
                 // Migración: calcular ivaByRate para facturas que no lo tienen
@@ -16023,7 +16023,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     return { ...inv, ivaByRate };
                 });
                 // Guardar migración
-                try { localStorage.setItem('salesInvoices', JSON.stringify(migrated)); } catch(e) {}
+                window.__salesInvoicesPrecargadas = migrated;
                 return migrated;
             });
             const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -16063,25 +16063,25 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Guardar en localStorage
             useEffect(() => {
                 if (!products || products.length === 0) return;
-                try { localStorage.setItem('salesProducts', JSON.stringify(products)); } catch(e) {}
+                window.__salesProductsPrecargados = products;
                 dbUpsertOne('suppliers', 'salesProducts', products);
             }, [products]);
             
             useEffect(() => {
                 if (!holders || holders.length === 0) return;
-                try { localStorage.setItem('salesHolders', JSON.stringify(holders)); } catch(e) {}
+                window.__salesHoldersPrecargados = holders;
                 dbUpsertOne('suppliers', 'salesHolders', holders);
             }, [holders]);
             
             useEffect(() => {
                 if (!clients || clients.length === 0) return;
-                try { localStorage.setItem('salesClients', JSON.stringify(clients)); } catch(e) {}
+                window.__salesClientsPrecargados = clients;
                 dbUpsertOne('suppliers', 'salesClients', clients);
             }, [clients]);
             
             useEffect(() => {
                 if (!salesInvoices || salesInvoices.length === 0) return;
-                try { localStorage.setItem('salesInvoices', JSON.stringify(salesInvoices)); } catch(e) {}
+                window.__salesInvoicesPrecargadas = salesInvoices;
                 dbUpsertOne('suppliers', 'salesInvoices', salesInvoices);
             }, [salesInvoices]);
             
@@ -18958,7 +18958,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [supplierInvoiceSearch, setSupplierInvoiceSearch] = useState({}); // {supplierName: 'texto'}
             const [selectedInvoices, setSelectedInvoices] = useState({}); // {invoiceId: true}
             const [markedCategories, setMarkedCategories] = useState(() => {
-                const saved = localStorage.getItem('markedCategories');
+                const saved = null; // from Supabase
                 return saved ? new Set(JSON.parse(saved)) : new Set();
             });
             
@@ -18979,7 +18979,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             useEffect(() => {
                 if (!markedCategories || markedCategories.size === 0) return;
                 const arr = [...markedCategories];
-                localStorage.setItem('markedCategories', JSON.stringify(arr));
+
                 dbUpsertOne('app_config', 'markedCategories', arr);
             }, [markedCategories]);
             const [searchTerm, setSearchTerm] = useState('');
@@ -19177,7 +19177,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Estados para Tax Rates personalizados
             const [taxRates, setTaxRates] = useState(() => {
-                const saved = localStorage.getItem('taxRates');
+                const saved = null; // loaded from Supabase
                 return saved ? JSON.parse(saved) : []; // Array de números: [21, 10, 0]
             });
             const [showTaxRateManager, setShowTaxRateManager] = useState(false);
@@ -19190,14 +19190,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [invMainTab, setInvMainTab] = useState('facturas'); // 'notas' | 'facturas' | 'estadisticas'
 
             const [invNotes, setInvNotes] = useState(() => {
-                const saved = localStorage.getItem('invNotes');
+                const saved = null; // loaded from Supabase
                 return saved ? JSON.parse(saved) : [];
             });
             const [invNotesSubTab, setInvNotesSubTab] = useState('active');
             const [showInvNoteModal, setShowInvNoteModal] = useState(false);
             const [editingInvNote, setEditingInvNote] = useState(null);
             const [invNoteForm, setInvNoteForm] = useState({ fecha: new Date().toISOString().split('T')[0], titulo: '', texto: '' });
-            useEffect(() => { if (!invNotes || invNotes.length === 0) return; try { localStorage.setItem('invNotes', JSON.stringify(invNotes)); } catch(e) {}
+            useEffect(() => { if (!invNotes || invNotes.length === 0) return;
                 dbUpsertOne('suppliers', 'invNotes', invNotes); }, [invNotes]);
             
             // Estados para Settings
@@ -19397,7 +19397,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Guardar tax rates cuando cambien
             useEffect(() => {
                 if (!taxRates || taxRates.length === 0) return;
-                localStorage.setItem('taxRates', JSON.stringify(taxRates));
+                window.__taxRatesPrecargados = taxRates;
                 dbUpsertOne('suppliers', 'taxRates', taxRates);
             }, [taxRates]);
 
@@ -21556,7 +21556,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* ── CUOTAS VENCIDAS DE PRÉSTAMOS ── */}
                                 {(() => {
                                     try {
-                                        const prestamos = JSON.parse(localStorage.getItem('prestamosData') || '[]');
+                                        const prestamos = window.__prestamosDataPrecargada || [];
                                         const hoy = new Date(); hoy.setHours(0,0,0,0);
                                         const cuotasVencidas = [];
                                         prestamos.forEach(p => {
