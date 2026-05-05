@@ -1553,6 +1553,49 @@ ${invoice.items.map(item => `
                 };
                 cargar();
                 const t = setInterval(cargar, 15000);
+                // Backup automático semanal
+                if (currentUser?.role === 'superadmin' || currentUser?.role === 'admin') {
+                    dbGetKey('app_config', 'backupSettings').then(async settings => {
+                        const last = settings?.lastBackup ? new Date(settings.lastBackup) : null;
+                        const daysSince = last ? (Date.now() - last.getTime()) / (1000*60*60*24) : 999;
+                        if (daysSince >= 7) {
+                            console.log('🔄 Backup automático semanal iniciando...');
+                            try {
+                                const data = await generarBackupJSON();
+                                const jsonStr = JSON.stringify(data, null, 2);
+                                const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
+                                const email = settings?.email || 'cristian@malaargenta.cz';
+                                // Subir a Drive
+                                const driveResp = await fetch('https://api.anthropic.com/v1/messages', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        model: 'claude-sonnet-4-20250514', max_tokens: 1000,
+                                        messages: [{ role: 'user', content: `Subí este archivo a Google Drive en carpeta "CerebroMA Backups", nombre "${fileName}", tamaño ${Math.round(jsonStr.length/1024)}KB. Respondé solo con el link.` }],
+                                        mcp_servers: [{ type: 'url', url: 'https://drivemcp.googleapis.com/mcp/v1', name: 'google-drive' }]
+                                    })
+                                });
+                                const driveData = await driveResp.json();
+                                const driveLink = driveData.content?.[0]?.text || '';
+                                // Mandar email
+                                await fetch('https://api.anthropic.com/v1/messages', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        model: 'claude-sonnet-4-20250514', max_tokens: 500,
+                                        messages: [{ role: 'user', content: `Mandá email a ${email} asunto "CerebroMA - Backup automático ${new Date().toLocaleDateString('es-AR')}" con cuerpo "Backup semanal completado.\nFecha: ${new Date().toLocaleString('es-AR')}\nArchivo: ${fileName} (${Math.round(jsonStr.length/1024)}KB)\nLink: ${driveLink}"` }],
+                                        mcp_servers: [{ type: 'url', url: 'https://gmailmcp.googleapis.com/mcp/v1', name: 'gmail' }]
+                                    })
+                                });
+                                await registrarBackup(true);
+                                console.log('✅ Backup automático completado');
+                            } catch(e) {
+                                await registrarBackup(false, e.message);
+                                console.warn('❌ Backup automático falló:', e.message);
+                            }
+                        }
+                    }).catch(()=>{});
+                }
                 // Precargar tareas miCerebro para que el banner funcione sin abrir el módulo
                 const uid_mc = String(currentUser.id||'');
                 const tarKey = `miCerebroTareas_${uid_mc}`;
@@ -6149,7 +6192,99 @@ ${invoice.items.map(item => `
 
 
 
-        // ── MÓDULO SEGURIDAD DEL SISTEMA ──────────────────────────────────────
+        // ── FUNCIÓN GLOBAL DE BACKUP ──────────────────────────────────────────
+        async function generarBackupJSON() {
+            const sb = window._sb;
+            if (!sb) throw new Error('Supabase no disponible');
+
+            // Leer todas las tablas en paralelo
+            const [empR, usersR, credsR, calEvR, calSolR, cashR, cashPlanR,
+                   payMR, payIR, appR, suppR, invDataR, codR] = await Promise.all([
+                sb.from('employees').select('data'),
+                sb.from('system_users').select('data'),
+                sb.from('credentials').select('data'),
+                sb.from('calendar_events').select('data'),
+                sb.from('calendar_solicitudes').select('data'),
+                sb.from('cash_transactions').select('id,data'),
+                sb.from('cash_planning').select('id,data'),
+                sb.from('payroll_monthly').select('id,data'),
+                sb.from('payroll_insurance').select('id,data'),
+                sb.from('app_config').select('id,data'),
+                sb.from('suppliers').select('id,data'),
+                sb.from('invoices_data').select('id,data'),
+                sb.from('codigos_productos').select('data'),
+            ]);
+
+            const appConfig = {};
+            (appR.data||[]).forEach(r => { appConfig[r.id] = r.data; });
+
+            const suppliers = {};
+            (suppR.data||[]).forEach(r => { suppliers[r.id] = r.data; });
+
+            // Reconstruir invoices desde chunks
+            const meta = appConfig['meta'] || (invDataR.data||[]).find(r=>r.id==='meta')?.data;
+            let invoices = [];
+            if (meta?.chunks > 0) {
+                for (let i = 0; i < meta.chunks; i++) {
+                    const chunk = (invDataR.data||[]).find(r=>r.id===`chunk_${i}`)?.data || [];
+                    invoices = [...invoices, ...chunk];
+                }
+            }
+
+            const cashMultiyear = (cashR.data||[]).find(r=>r.id==='multiyear')?.data || {};
+
+            const data = {
+                _meta: {
+                    exportDate: new Date().toISOString(),
+                    version: '5.0',
+                    app: 'CerebroMA',
+                    source: 'Supabase automatic backup'
+                },
+                employees:              (empR.data||[]).map(r=>r.data),
+                systemUsers:            (usersR.data||[]).map(r=>r.data),
+                systemCredentials:      (credsR.data||[]).map(r=>r.data),
+                calendarioEventos:      (calEvR.data||[]).map(r=>r.data),
+                calendar_solicitudes:   (calSolR.data||[]).map(r=>r.data),
+                cashTransactionsMultiYear: cashMultiyear,
+                invoices,
+                suppliersInfo:          suppliers['main'] || {},
+                categories:             suppliers['categories'] || [],
+                salesInvoices:          suppliers['salesInvoices'] || [],
+                salesProducts:          suppliers['salesProducts'] || [],
+                salesClients:           suppliers['salesClients'] || [],
+                salesHolders:           suppliers['salesHolders'] || [],
+                taxRates:               suppliers['taxRates'] || [],
+                invNotes:               suppliers['invNotes'] || [],
+                payrollMonthlyData:     (payMR.data||[]).find(r=>r.id==='main')?.data || appConfig['payrollMonthlyData'] || {},
+                seguroMedicoData:       (payIR.data||[]).find(r=>r.id==='main')?.data || appConfig['seguroMedicoData'] || {},
+                sueldosPendientesData:  appConfig['sueldosPendientesData'] || [],
+                horasAjustesData:       appConfig['horasAjustesData'] || {},
+                prestamosData:          appConfig['prestamos'] || [],
+                codigosProductos:       (codR.data||[]).map(r=>r.data),
+                notasMes:               appConfig['notasMes'] || {},
+                salarioOverride:        appConfig['salarioOverride'] || {},
+                markedCategories:       appConfig['markedCategories'] || [],
+            };
+            // Agregar cash_planning
+            (cashPlanR.data||[]).forEach(r => { data['caja_'+r.id] = r.data; });
+
+            return data;
+        }
+
+        async function registrarBackup(ok, error = null) {
+            const settings = await dbGetKey('app_config', 'backupSettings').catch(()=>({})) || {};
+            const history = settings.history || [];
+            history.push({ fecha: new Date().toISOString(), ok, error: error?.message || error || null });
+            // Mantener solo los últimos 50
+            if (history.length > 50) history.splice(0, history.length - 50);
+            await dbUpsertOne('app_config', 'backupSettings', {
+                ...settings,
+                lastBackup: ok ? new Date().toISOString() : settings.lastBackup,
+                history
+            });
+        }
+
+        // ── MÓDULO SEGURIDAD DEL SISTEMA ──────────────────────────────────────────
         const SeguridadModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
             const txt = darkMode ? 'text-white' : 'text-slate-900';
             const sub = darkMode ? 'text-slate-400' : 'text-slate-500';
@@ -6163,14 +6298,65 @@ ${invoice.items.map(item => `
             const [saving, setSaving] = React.useState(false);
             const [lastBackup, setLastBackup] = React.useState(null);
             const [backupHistory, setBackupHistory] = React.useState([]);
+            const [runningBackup, setRunningBackup] = React.useState(false);
+            const [backupStatus, setBackupStatus] = React.useState(null);
 
             React.useEffect(() => {
                 dbGetKey('app_config', 'backupSettings').then(d => {
                     if (d?.email) { setBackupEmail(d.email); window.__backupEmailPrecargado = d.email; }
                     if (d?.lastBackup) setLastBackup(d.lastBackup);
-                    if (d?.history) setBackupHistory(d.history);
+                    if (d?.history) setBackupHistory(d.history || []);
                 });
             }, []);
+
+            const hacerBackup = async () => {
+                setRunningBackup(true);
+                setBackupStatus(null);
+                try {
+                    setBackupStatus('📦 Generando JSON...');
+                    const data = await generarBackupJSON();
+                    const jsonStr = JSON.stringify(data, null, 2);
+                    const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+                    setBackupStatus('📤 Subiendo a Google Drive...');
+                    const driveResp = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'claude-sonnet-4-20250514',
+                            max_tokens: 1000,
+                            messages: [{ role: 'user', content: `Subí este archivo JSON a Google Drive en una carpeta llamada "CerebroMA Backups". El nombre del archivo es "${fileName}". Contenido: ${jsonStr.substring(0, 100)}... (archivo completo de ${Math.round(jsonStr.length/1024)}KB). Respondé solo con el link al archivo.` }],
+                            mcp_servers: [{ type: 'url', url: 'https://drivemcp.googleapis.com/mcp/v1', name: 'google-drive' }]
+                        })
+                    });
+                    const driveData = await driveResp.json();
+                    const driveLink = driveData.content?.[0]?.text || 'Sin link';
+
+                    setBackupStatus('📧 Enviando email...');
+                    await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'claude-sonnet-4-20250514',
+                            max_tokens: 500,
+                            messages: [{ role: 'user', content: `Mandá un email a ${backupEmail} con asunto "CerebroMA - Backup ${new Date().toLocaleDateString('es-AR')}" y cuerpo: "Backup automático completado exitosamente.\n\nFecha: ${new Date().toLocaleString('es-AR')}\nArchivo: ${fileName}\nTamaño: ${Math.round(jsonStr.length/1024)}KB\nLink Drive: ${driveLink}\n\nEste es un mensaje automático de CerebroMA."` }],
+                            mcp_servers: [{ type: 'url', url: 'https://gmailmcp.googleapis.com/mcp/v1', name: 'gmail' }]
+                        })
+                    });
+
+                    await registrarBackup(true);
+                    const settings = await dbGetKey('app_config', 'backupSettings').catch(()=>({})) || {};
+                    setLastBackup(settings.lastBackup);
+                    setBackupHistory(settings.history || []);
+                    setBackupStatus('✅ Backup completado');
+                } catch(e) {
+                    await registrarBackup(false, e.message);
+                    const settings = await dbGetKey('app_config', 'backupSettings').catch(()=>({})) || {};
+                    setBackupHistory(settings.history || []);
+                    setBackupStatus('❌ Error: ' + e.message);
+                }
+                setRunningBackup(false);
+            };
 
             const saveEmail = async () => {
                 setSaving(true);
@@ -6242,6 +6428,15 @@ ${invoice.items.map(item => `
                             </div>
                             <Row label="Frecuencia" value="Semanal — lunes 8:00 AM" />
                             <Row label="Último backup" value={lastBackup ? new Date(lastBackup).toLocaleDateString('es-AR', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'}) : 'Sin registros aún'} />
+                            <div className="pt-3 mt-2 border-t" style={{borderColor: darkMode ? '#334155' : '#e2e8f0'}}>
+                                <button onClick={hacerBackup} disabled={runningBackup}
+                                    className={`w-full py-2.5 rounded-lg text-sm font-bold transition-colors ${runningBackup ? 'bg-slate-400 text-white cursor-wait' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}>
+                                    {runningBackup ? backupStatus || '⏳ Ejecutando...' : '🔄 Hacer backup ahora'}
+                                </button>
+                                {backupStatus && !runningBackup && (
+                                    <p className={`text-xs text-center mt-2 ${backupStatus.startsWith('✅') ? 'text-green-500' : 'text-red-500'}`}>{backupStatus}</p>
+                                )}
+                            </div>
                             <div className="flex items-center justify-between py-2 mt-2">
                                 <span className={`text-sm ${sub}`}>Email de notificación</span>
                                 {editingEmail ? (
@@ -6290,12 +6485,98 @@ ${invoice.items.map(item => `
 
                         {/* Arquitectura técnica */}
                         <Section title="Arquitectura técnica" icon="⚙️">
-                            <Row label="Frontend" value="React 18 + Babel (in-browser)" />
-                            <Row label="Estilos" value="Tailwind CSS (CDN)" />
-                            <Row label="Autenticación" value="PIN + Biometría (WebAuthn)" />
+                            <Row label="Frontend" value="React 18 + Babel standalone (in-browser, sin build)" />
+                            <Row label="Estilos" value="Tailwind CSS CDN" />
+                            <Row label="Autenticación" value="PIN + Biometría WebAuthn" />
                             <Row label="Tiempo real" value="Supabase Realtime (WebSocket)" />
-                            <Row label="Almacenamiento local" value="Sin localStorage — todo en Supabase" />
-                            <Row label="Notificaciones" value="Sistema de banners vía Supabase app_config" />
+                            <Row label="Almacenamiento" value="Todo en Supabase — sin localStorage" />
+                            <Row label="Notificaciones" value="Banners vía Supabase app_config" />
+                            <Row label="Archivo principal" value="index.html (~1.9MB, ~24.000 líneas)" mono />
+                            <div className="mt-3 pt-3 border-t text-xs space-y-1" style={{borderColor: darkMode ? '#334155' : '#e2e8f0'}}>
+                                <p className={`font-semibold ${sub}`}>Dependencias CDN:</p>
+                                {[
+                                    'React 18: https://unpkg.com/react@18/umd/react.production.min.js',
+                                    'ReactDOM 18: https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+                                    'Babel: https://unpkg.com/@babel/standalone/babel.min.js',
+                                    'Tailwind CSS: https://cdn.tailwindcss.com',
+                                    'Supabase JS: https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+                                    'jsPDF: https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+                                    'XLSX: https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js',
+                                    'QRCode: https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+                                ].map((d,i) => <p key={i} className={`font-mono break-all ${darkMode?'text-slate-400':'text-slate-500'}`}>{d}</p>)}
+                            </div>
+                        </Section>
+
+                        {/* Credenciales de acceso */}
+                        <Section title="Credenciales de acceso" icon="🔑">
+                            <div className={`rounded-lg p-3 mb-3 text-xs font-medium ${darkMode?'bg-amber-900/30 text-amber-300':'bg-amber-50 text-amber-700'}`}>
+                                ⚠️ Esta información es confidencial. Solo visible para administradores.
+                            </div>
+                            <Row label="Supabase URL" value="https://cxuftcufdnofykmlkcru.supabase.co" mono />
+                            <Row label="Supabase Anon Key" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4dWZ0Y3VmZG5vZnlrbWxrY3J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMzQ0MDMsImV4cCI6MjA5MjcxMDQwM30.CM6ssNRpkbBaDdv8vqxyJxehfu-S2D0WnhxSZn4jT40" mono />
+                            <Row label="Supabase Dashboard" value="https://supabase.com/dashboard/project/cxuftcufdnofykmlkcru" mono />
+                            <Row label="GitHub repo" value="github.com — rama: main" />
+                            <Row label="GoDaddy dominio" value="https://dcc.godaddy.com" />
+                            <Row label="Contacto técnico" value="cristian@malaargenta.cz" />
+                        </Section>
+
+                        {/* Estructura de base de datos */}
+                        <Section title="Estructura de base de datos" icon="📊">
+                            <p className={`text-xs mb-3 ${sub}`}>Todas las tablas tienen columnas: <span className="font-mono">id (text PK), data (jsonb), created_at</span></p>
+                            {[
+                                ['employees', 'Empleados — nombre, apellido, cargo, salario, etc.'],
+                                ['system_users', 'Usuarios del sistema — PIN, rol, permisos, biometría'],
+                                ['credentials', 'Credenciales/contraseñas guardadas'],
+                                ['calendar_events', 'Eventos de calendario — turnos, vacaciones, feriados'],
+                                ['calendar_solicitudes', 'Solicitudes de vacaciones/ausencias'],
+                                ['cash_transactions', 'Transacciones de Caja Diaria (multiyear JSON)'],
+                                ['cash_planning', 'Planificación de caja — fondos, gastos, acreditaciones'],
+                                ['payroll_monthly', 'Sueldos mensuales por empleado'],
+                                ['payroll_insurance', 'Seguros médicos por empleado'],
+                                ['invoices_data', 'Facturas de proveedores en chunks (chunk_0, chunk_1...)'],
+                                ['suppliers', 'Info de proveedores, categorías, facturas de venta'],
+                                ['codigos_productos', 'Códigos de barras y QR de productos'],
+                                ['app_config', 'Configuración general — notificaciones, backups, módulos, préstamos, calendario config'],
+                            ].map(([table, desc]) => (
+                                <div key={table} className="flex items-start gap-3 py-2 border-b last:border-0" style={{borderColor: darkMode ? '#334155' : '#e2e8f0'}}>
+                                    <span className={`font-mono text-xs font-bold shrink-0 ${darkMode?'text-blue-400':'text-blue-600'}`}>{table}</span>
+                                    <span className={`text-xs ${sub}`}>{desc}</span>
+                                </div>
+                            ))}
+                        </Section>
+
+                        {/* Deploy y mantenimiento */}
+                        <Section title="Deploy y mantenimiento" icon="🚀">
+                            <div className={`text-xs space-y-3 ${sub}`}>
+                                <div>
+                                    <p className={`font-semibold mb-1 ${txt}`}>Para hacer cambios al código:</p>
+                                    <ol className="list-decimal list-inside space-y-1">
+                                        <li>Editá el archivo <span className="font-mono">index.html</span></li>
+                                        <li>Subilo al repositorio de GitHub (rama <span className="font-mono">main</span>)</li>
+                                        <li>GitHub Actions despliega automáticamente a GitHub Pages</li>
+                                        <li>El dominio <span className="font-mono">cerebroma.cz</span> apunta vía CNAME a GitHub Pages</li>
+                                        <li>El deploy tarda ~2 minutos — esperá el ✅ verde en Actions</li>
+                                    </ol>
+                                </div>
+                                <div>
+                                    <p className={`font-semibold mb-1 ${txt}`}>Para restaurar un backup:</p>
+                                    <ol className="list-decimal list-inside space-y-1">
+                                        <li>Loguearse como superadmin</li>
+                                        <li>Hacer click en "Importar" (botón verde en el header)</li>
+                                        <li>Seleccionar el archivo <span className="font-mono">.json</span> del backup</li>
+                                        <li>Confirmar — el sistema sube todo a Supabase y recarga</li>
+                                    </ol>
+                                </div>
+                                <div>
+                                    <p className={`font-semibold mb-1 ${txt}`}>Para acceder a Supabase directamente:</p>
+                                    <ol className="list-decimal list-inside space-y-1">
+                                        <li>Ir a <span className="font-mono">supabase.com</span> e iniciar sesión</li>
+                                        <li>Proyecto: <span className="font-mono">cxuftcufdnofykmlkcru</span></li>
+                                        <li>Table Editor para ver/editar datos directamente</li>
+                                        <li>SQL Editor para queries avanzadas</li>
+                                    </ol>
+                                </div>
+                            </div>
                         </Section>
 
                     </div>
@@ -7392,10 +7673,17 @@ ${invoice.items.map(item => `
             const [activeTab, setActiveTab] = useState('users');
             const [searchQuery, setSearchQuery] = useState('');
             const [users, setUsers] = useState(() => {
-                const saved = null; // from window cache
-                return saved ? JSON.parse(saved) : [];
+                return window.__systemUsersPrecargados || [];
             });
             const [showUserModal, setShowUserModal] = useState(false);
+            // Cargar usuarios desde Supabase al abrir el módulo
+            useEffect(() => {
+                if (users.length === 0) {
+                    dbGetAll('system_users').then(d => {
+                        if (d?.length) { setUsers(d); window.__systemUsersPrecargados = d; }
+                    });
+                }
+            }, []);
             const [editingUser, setEditingUser] = useState(null);
             const [userForm, setUserForm] = useState({
                 name: '',
