@@ -1493,9 +1493,11 @@ ${invoice.items.map(item => `
                     if (!yo) return;
                     const empId = yo.id;
                     const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif'];
+                    console.log('🔔 cargarNotificaciones empId:', empId, 'tipos:', tipos.map(t=>`notif_${t}_${empId}`));
                     const results = await Promise.all(
                         tipos.map(t => dbGetKey('app_config', `notif_${t}_${empId}`).catch(()=>null))
                     );
+                    console.log('🔔 results:', results.map((r,i)=>tipos[i]+':'+(Array.isArray(r)?r.length:'null')));
                     setNotificaciones(prev => {
                         const nuevo = {};
                         tipos.forEach((t, i) => {
