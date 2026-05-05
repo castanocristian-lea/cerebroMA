@@ -1565,26 +1565,16 @@ ${invoice.items.map(item => `
                                 const jsonStr = JSON.stringify(data, null, 2);
                                 const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
                                 const email = settings?.email || 'cristian@malaargenta.cz';
-                                // Subir a Drive
-                                const driveResp = await fetch('https://api.anthropic.com/v1/messages', {
+                                // Enviar a Make webhook (Drive + Email)
+                                await fetch('https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
-                                        model: 'claude-sonnet-4-20250514', max_tokens: 1000,
-                                        messages: [{ role: 'user', content: `Subí este archivo a Google Drive en carpeta "CerebroMA Backups", nombre "${fileName}", tamaño ${Math.round(jsonStr.length/1024)}KB. Respondé solo con el link.` }],
-                                        mcp_servers: [{ type: 'url', url: 'https://drivemcp.googleapis.com/mcp/v1', name: 'google-drive' }]
-                                    })
-                                });
-                                const driveData = await driveResp.json();
-                                const driveLink = driveData.content?.[0]?.text || '';
-                                // Mandar email
-                                await fetch('https://api.anthropic.com/v1/messages', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        model: 'claude-sonnet-4-20250514', max_tokens: 500,
-                                        messages: [{ role: 'user', content: `Mandá email a ${email} asunto "CerebroMA - Backup automático ${new Date().toLocaleDateString('es-AR')}" con cuerpo "Backup semanal completado.\nFecha: ${new Date().toLocaleString('es-AR')}\nArchivo: ${fileName} (${Math.round(jsonStr.length/1024)}KB)\nLink: ${driveLink}"` }],
-                                        mcp_servers: [{ type: 'url', url: 'https://gmailmcp.googleapis.com/mcp/v1', name: 'gmail' }]
+                                        filename: fileName,
+                                        content: jsonStr,
+                                        date: new Date().toLocaleString('es-AR'),
+                                        email,
+                                        size: Math.round(jsonStr.length/1024) + 'KB'
                                     })
                                 });
                                 await registrarBackup(true);
@@ -6318,29 +6308,16 @@ ${invoice.items.map(item => `
                     const jsonStr = JSON.stringify(data, null, 2);
                     const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
 
-                    setBackupStatus('📤 Subiendo a Google Drive...');
-                    const driveResp = await fetch('https://api.anthropic.com/v1/messages', {
+                    setBackupStatus('📤 Enviando a Make (Drive + Email)...');
+                    await fetch('https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            model: 'claude-sonnet-4-20250514',
-                            max_tokens: 1000,
-                            messages: [{ role: 'user', content: `Subí este archivo JSON a Google Drive en una carpeta llamada "CerebroMA Backups". El nombre del archivo es "${fileName}". Contenido: ${jsonStr.substring(0, 100)}... (archivo completo de ${Math.round(jsonStr.length/1024)}KB). Respondé solo con el link al archivo.` }],
-                            mcp_servers: [{ type: 'url', url: 'https://drivemcp.googleapis.com/mcp/v1', name: 'google-drive' }]
-                        })
-                    });
-                    const driveData = await driveResp.json();
-                    const driveLink = driveData.content?.[0]?.text || 'Sin link';
-
-                    setBackupStatus('📧 Enviando email...');
-                    await fetch('https://api.anthropic.com/v1/messages', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            model: 'claude-sonnet-4-20250514',
-                            max_tokens: 500,
-                            messages: [{ role: 'user', content: `Mandá un email a ${backupEmail} con asunto "CerebroMA - Backup ${new Date().toLocaleDateString('es-AR')}" y cuerpo: "Backup automático completado exitosamente.\n\nFecha: ${new Date().toLocaleString('es-AR')}\nArchivo: ${fileName}\nTamaño: ${Math.round(jsonStr.length/1024)}KB\nLink Drive: ${driveLink}\n\nEste es un mensaje automático de CerebroMA."` }],
-                            mcp_servers: [{ type: 'url', url: 'https://gmailmcp.googleapis.com/mcp/v1', name: 'gmail' }]
+                            filename: fileName,
+                            content: jsonStr,
+                            date: new Date().toLocaleString('es-AR'),
+                            email: backupEmail,
+                            size: Math.round(jsonStr.length/1024) + 'KB'
                         })
                     });
 
@@ -6426,7 +6403,11 @@ ${invoice.items.map(item => `
                                     El archivo JSON puede importarse desde el botón "Importar" del menú principal para restaurar todos los datos.
                                 </p>
                             </div>
-                            <Row label="Frecuencia" value="Semanal — lunes 8:00 AM" />
+                            <Row label="Frecuencia" value="Semanal — al loguear si pasaron 7+ días" />
+                            <Row label="Sistema de automatización" value="Make.com (ex-Integromat)" />
+                            <Row label="Webhook URL" value="https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in" mono />
+                            <Row label="Escenario Make" value="Integration Webhooks, Google Drive, Gmail" />
+                            <Row label="Flujo" value="CerebroMA → Webhook → Google Drive (carpeta CerebroMA Backups) → Gmail" />
                             <Row label="Último backup" value={lastBackup ? new Date(lastBackup).toLocaleDateString('es-AR', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'}) : 'Sin registros aún'} />
                             <div className="pt-3 mt-2 border-t" style={{borderColor: darkMode ? '#334155' : '#e2e8f0'}}>
                                 <button onClick={hacerBackup} disabled={runningBackup}
