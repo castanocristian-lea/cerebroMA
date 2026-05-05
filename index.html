@@ -112,16 +112,11 @@
             } catch(e) {
                 existing = notifRead(key);
             }
-            // Deduplicar por contenido antes de agregar
-            const isDup = existing.some(e => 
-                e.prestamoNombre === item.prestamoNombre && e.monto === item.monto && e.fecha === item.fecha ||
-                e.solicId === item.solicId ||
-                (e.concepto === item.concepto && e.monto === item.monto && e.fecha === item.fecha)
-            );
+            // Solo deduplicar por id o solicId
+            const isDup = item.solicId && existing.some(e => e.solicId === item.solicId);
             if (!isDup) {
                 existing.push(item);
                 await notifSet(key, existing);
-                // Disparar evento para que el banner se actualice
                 window.dispatchEvent(new Event('notifUpdate'));
             }
         }
