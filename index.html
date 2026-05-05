@@ -1472,8 +1472,15 @@ ${invoice.items.map(item => `
                 if (!isUnlocked || !currentUser) return;
                 const syncBanners = async () => {
                     try {
-                        // Buscar employee match
-                        const emps = (window.__employeesPrecargados || []);
+                        // Buscar employee match - si no hay en cache, buscar en Supabase
+                        let emps = (window.__employeesPrecargados || []);
+                        if (!emps.length) {
+                            try {
+                                const r = await window._sb?.from('employees').select('data');
+                                emps = r?.data?.map(x=>x.data) || [];
+                                if (emps.length) window.__employeesPrecargados = emps;
+                            } catch(e) {}
+                        }
                         const nameLC = (currentUser.name||'').toLowerCase();
                         const userLC = (currentUser.username||'').toLowerCase();
                         const yo = emps.find(e => {
@@ -1522,7 +1529,10 @@ ${invoice.items.map(item => `
                 };
                 syncBanners();
                 const t = setInterval(syncBanners, 15000);
-                return () => clearInterval(t);
+                // También correr cuando Supabase termina de cargar
+                const onReady = () => setTimeout(syncBanners, 200);
+                window.addEventListener('supabase-loaded', onReady);
+                return () => { clearInterval(t); window.removeEventListener('supabase-loaded', onReady); };
             }, [isUnlocked, currentUser?.id]);
 
             // Precargar notificaciones cross-device desde Supabase al localStorage
