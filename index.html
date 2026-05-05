@@ -1747,16 +1747,15 @@ ${invoice.items.map(item => `
 
 
             const [bioAvailable, setBioAvailable] = useState(!!window.PublicKeyCredential);
-            const [bioRegistered, setBioRegistered] = useState(!!localStorage.getItem('cerebroma_bio_cred'));
+            const [bioRegistered, setBioRegistered] = useState(!!localStorage.getItem('cerebroma_bio_cred')); // updated async below
             const [bioLoading, setBioLoading] = useState(false);
             const [bioError, setBioError] = useState('');
 
             // Verificar disponibilidad de biometría al montar
             useEffect(() => {
                 if (window.PublicKeyCredential) {
-                    setBioAvailable(true);
-                    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
-                        .then(available => setBioAvailable(available));
+                    setBioAvailable(true); // mostrar siempre si el API existe
+                    // No llamamos isUserVerifyingPlatformAuthenticatorAvailable porque en iOS Safari puede dar false incorrectamente
                 }
                 // Verificar si ya hay credencial en localStorage
                 const cred = localStorage.getItem('cerebroma_bio_cred');
