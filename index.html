@@ -1909,7 +1909,7 @@ ${invoice.items.map(item => `
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro'];
+            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro', 'seguridad'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
@@ -2178,8 +2178,6 @@ ${invoice.items.map(item => `
             // Función para verificar permisos del usuario actual
             const hasPermission = (module, requiredLevel = 'read') => {
                 if (!currentUser) return false;
-                // Seguridad: solo admin y superadmin
-                if (module === 'seguridad') return currentUser.role === 'admin' || currentUser.role === 'superadmin';
                 // Admin y superadmin tienen acceso total siempre
                 if (currentUser.role === 'admin' || currentUser.role === 'superadmin') return true;
                 // Usuarios sin permisos definidos (antiguos) = acceso total
@@ -7989,6 +7987,7 @@ ${invoice.items.map(item => `
                                                 { key: 'micerebro',   label: '🧠 Mi Cerebro' },
                                                 { key: 'apps',        label: '🔗 Aplicaciones Externas' },
                                                 { key: 'config',      label: '⚙️ Gestión de Usuarios' },
+                                                { key: 'seguridad',   label: '🛡️ Seguridad del Sistema' },
                                             ];
                                             return (
                                             <div className={`p-4 rounded-lg border-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}>
