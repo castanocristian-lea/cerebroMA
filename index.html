@@ -3331,6 +3331,15 @@ ${invoice.items.map(item => `
                                     desc: t.prestamosDesc,
                                     detail: t.prestamosDetail,
                                 },
+                                seguridad: {
+                                    permission: 'admin',
+                                    navigate: 'seguridad',
+                                    color: 'slate',
+                                    icon: <svg className={`w-8 h-8 ${darkMode ? 'text-slate-400' : 'text-slate-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
+                                    title: 'Seguridad del Sistema',
+                                    desc: 'Infraestructura, base de datos y backups',
+                                    detail: 'Información técnica del sistema y gestión de backups automáticos',
+                                },
                                 credenciales: {
                                     permission: 'credenciales',
                                     navigate: 'credenciales',
@@ -3702,6 +3711,11 @@ ${invoice.items.map(item => `
                     {activeModule === 'prestamos' && (
                         <div className="flex-1 overflow-y-auto">
                             <PrestamosModule darkMode={darkMode} currentUser={currentUser} systemUsers={systemUsers} onBack={() => setActiveModule('home')} />
+                        </div>
+                    )}
+                    {activeModule === 'seguridad' && (
+                        <div className="flex-1 overflow-y-auto">
+                            <SeguridadModule darkMode={darkMode} currentUser={currentUser} onBack={() => setActiveModule('home')} />
                         </div>
                     )}
 
@@ -6134,6 +6148,144 @@ ${invoice.items.map(item => `
         };
 
 
+
+        // ── MÓDULO SEGURIDAD DEL SISTEMA ──────────────────────────────────────
+        const SeguridadModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
+            const txt = darkMode ? 'text-white' : 'text-slate-900';
+            const sub = darkMode ? 'text-slate-400' : 'text-slate-500';
+            const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+
+            const [backupEmail, setBackupEmail] = React.useState(() => {
+                return window.__backupEmailPrecargado || 'cristian@malaargenta.cz';
+            });
+            const [editingEmail, setEditingEmail] = React.useState(false);
+            const [emailInput, setEmailInput] = React.useState('');
+            const [saving, setSaving] = React.useState(false);
+            const [lastBackup, setLastBackup] = React.useState(null);
+
+            React.useEffect(() => {
+                dbGetKey('app_config', 'backupSettings').then(d => {
+                    if (d?.email) { setBackupEmail(d.email); window.__backupEmailPrecargado = d.email; }
+                    if (d?.lastBackup) setLastBackup(d.lastBackup);
+                });
+            }, []);
+
+            const saveEmail = async () => {
+                setSaving(true);
+                await dbUpsertOne('app_config', 'backupSettings', { email: emailInput, lastBackup });
+                setBackupEmail(emailInput);
+                window.__backupEmailPrecargado = emailInput;
+                setEditingEmail(false);
+                setSaving(false);
+            };
+
+            const Section = ({ title, icon, children }) => (
+                <div className={`rounded-xl border p-5 mb-4 ${card}`}>
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="text-lg">{icon}</span>
+                        <h3 className={`font-bold text-base ${txt}`}>{title}</h3>
+                    </div>
+                    {children}
+                </div>
+            );
+
+            const Row = ({ label, value, mono }) => (
+                <div className="flex items-start justify-between py-2 border-b last:border-0" style={{borderColor: darkMode ? '#334155' : '#e2e8f0'}}>
+                    <span className={`text-sm ${sub}`}>{label}</span>
+                    <span className={`text-sm font-medium text-right max-w-xs break-all ${mono ? 'font-mono' : ''} ${txt}`}>{value}</span>
+                </div>
+            );
+
+            return (
+                <div className={`min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                    {/* Header */}
+                    <div className={`border-b px-6 py-4 flex items-center gap-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <button onClick={onBack} className={`text-sm font-medium ${darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>← Menú</button>
+                        <span className="text-xl">🛡️</span>
+                        <h1 className={`text-lg font-bold ${txt}`}>Seguridad del Sistema</h1>
+                    </div>
+
+                    <div className="max-w-2xl mx-auto px-4 py-6">
+
+                        {/* Infraestructura */}
+                        <Section title="Infraestructura" icon="🏗️">
+                            <Row label="Plataforma" value="GitHub Pages" />
+                            <Row label="Repositorio" value="github.com (rama main)" />
+                            <Row label="Dominio" value="cerebroma.cz" />
+                            <Row label="Registrador de dominio" value="GoDaddy" />
+                            <Row label="URL de producción" value="https://cerebroma.cz" mono />
+                        </Section>
+
+                        {/* Base de datos */}
+                        <Section title="Base de Datos" icon="🗄️">
+                            <Row label="Proveedor" value="Supabase (PostgreSQL)" />
+                            <Row label="Proyecto" value="cxuftcufdnofykmlkcru" mono />
+                            <Row label="URL" value="https://cxuftcufdnofykmlkcru.supabase.co" mono />
+                            <Row label="Plan" value="Free tier" />
+                            <Row label="Región" value="EU West" />
+                            <div className="mt-3 pt-3 border-t" style={{borderColor: darkMode ? '#334155' : '#e2e8f0'}}>
+                                <p className={`text-xs ${sub}`}>Las tablas principales son: <span className="font-mono">app_config, employees, system_users, credentials, calendar_events, calendar_solicitudes, cash_transactions, cash_planning, payroll_monthly, payroll_insurance, invoices_data, suppliers, codigos_productos</span></p>
+                            </div>
+                        </Section>
+
+                        {/* Backup */}
+                        <Section title="Backup automático" icon="💾">
+                            <div className={`rounded-lg p-3 mb-4 text-sm ${darkMode ? 'bg-slate-700/50' : 'bg-blue-50'}`}>
+                                <p className={`font-medium mb-1 ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}>¿Cómo funciona?</p>
+                                <p className={`${darkMode ? 'text-slate-300' : 'text-blue-700'}`}>
+                                    El sistema genera automáticamente un JSON con todos los datos de Supabase y lo envía por email. 
+                                    El backup se ejecuta semanalmente (lunes a las 8am) y también podés dispararlo manualmente desde acá. 
+                                    El archivo JSON puede importarse desde el botón "Importar" del menú principal para restaurar todos los datos.
+                                </p>
+                            </div>
+                            <Row label="Frecuencia" value="Semanal — lunes 8:00 AM" />
+                            <Row label="Último backup" value={lastBackup ? new Date(lastBackup).toLocaleDateString('es-AR', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'}) : 'Sin registros aún'} />
+                            <div className="flex items-center justify-between py-2 mt-2">
+                                <span className={`text-sm ${sub}`}>Email de notificación</span>
+                                {editingEmail ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="email"
+                                            value={emailInput}
+                                            onChange={e => setEmailInput(e.target.value)}
+                                            className={`px-3 py-1.5 rounded-lg border text-sm w-56 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`}
+                                            placeholder="email@dominio.com"
+                                        />
+                                        <button onClick={saveEmail} disabled={saving} className="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-medium">
+                                            {saving ? '...' : 'Guardar'}
+                                        </button>
+                                        <button onClick={() => setEditingEmail(false)} className={`px-3 py-1.5 rounded-lg text-xs ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-sm font-medium font-mono ${txt}`}>{backupEmail}</span>
+                                        {(currentUser?.role === 'superadmin' || currentUser?.role === 'admin') && (
+                                            <button onClick={() => { setEmailInput(backupEmail); setEditingEmail(true); }}
+                                                className={`text-xs px-2 py-1 rounded-lg ${darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                                                ✏️ Editar
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </Section>
+
+                        {/* Arquitectura técnica */}
+                        <Section title="Arquitectura técnica" icon="⚙️">
+                            <Row label="Frontend" value="React 18 + Babel (in-browser)" />
+                            <Row label="Estilos" value="Tailwind CSS (CDN)" />
+                            <Row label="Autenticación" value="PIN + Biometría (WebAuthn)" />
+                            <Row label="Tiempo real" value="Supabase Realtime (WebSocket)" />
+                            <Row label="Almacenamiento local" value="Sin localStorage — todo en Supabase" />
+                            <Row label="Notificaciones" value="Sistema de banners vía Supabase app_config" />
+                        </Section>
+
+                    </div>
+                </div>
+            );
+        };
 
         const PrestamosModule = ({ darkMode = false, currentUser = null, onBack = null, systemUsers = [] }) => {
             const { canEdit } = usePermissions(currentUser, 'prestamos');
@@ -19579,7 +19731,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 try {
                     window.__invoicesPrecargadas = invoices;
                     // Guardar en chunks para evitar el límite de 5MB de Supabase
-                    const chunkSize = 100;
+                    const chunkSize = 20;
                     const chunks = [];
                     for (let i = 0; i < invoices.length; i += chunkSize) {
                         chunks.push(invoices.slice(i, i + chunkSize));
