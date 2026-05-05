@@ -1846,8 +1846,22 @@ ${invoice.items.map(item => `
                 setBioLoading(true);
                 setBioError('');
                 try {
-                    const storedCred = JSON.parse(localStorage.getItem('cerebroma_bio_cred') || 'null');
-                    if (!storedCred) { setBioError('No hay biometría registrada.'); setBioLoading(false); return; }
+                    let storedCred = JSON.parse(localStorage.getItem('cerebroma_bio_cred') || 'null');
+                    // Si no hay en localStorage, intentar cargar de Supabase
+                    if (!storedCred) {
+                        try {
+                            const users = window.__systemUsersPrecargados || [];
+                            for (const u of users) {
+                                const r = await window._sb?.from('app_config').select('data').eq('id','bioCred_'+u.id).maybeSingle();
+                                if (r?.data?.data) {
+                                    localStorage.setItem('cerebroma_bio_cred', JSON.stringify(r.data.data));
+                                    storedCred = r.data.data;
+                                    break;
+                                }
+                            }
+                        } catch(e) {}
+                    }
+                    if (!storedCred) { setBioError('No hay biometría registrada en este dispositivo.'); setBioLoading(false); return; }
                     const challenge = new Uint8Array(32);
                     crypto.getRandomValues(challenge);
                     const credId = new Uint8Array(storedCred.credId);
