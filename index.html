@@ -1458,7 +1458,7 @@ ${invoice.items.map(item => `
                                    String(e.id)===String(currentUser.id);
                         });
                         if (!yo) return;
-                        const keys = ['sueldoNotif','seguroNotif','solicNotif','solicRespNotif','calendarioNotif'];
+                        const keys = ['sueldoNotif','seguroNotif','solicNotif','solicRespNotif','calendarioNotif','prestamoNotif'];
                         let changed = false;
                         await Promise.all(keys.map(async k => {
                             const fullKey = `${k}_${yo.id}`;
@@ -1606,12 +1606,14 @@ ${invoice.items.map(item => `
                 window.addEventListener('sueldoNotifUpdate', handler);
                 window.addEventListener('solicNotifUpdate', handler);
                 window.addEventListener('calendarioNotifUpdate', handler);
+                window.addEventListener('prestamoNotifUpdate', handler);
                 return () => {
                     window.removeEventListener('tareasVistasUpdate', handler);
                     window.removeEventListener('tareasUpdate', handler);
                     window.removeEventListener('chatUpdate', handler);
                     window.removeEventListener('sueldoNotifUpdate', handler);
                     window.removeEventListener('solicNotifUpdate', handler);
+                    window.removeEventListener('prestamoNotifUpdate', handler);
                 };
             }, []);
 
@@ -1840,6 +1842,8 @@ ${invoice.items.map(item => `
                 const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, autoLogoutMinutes } : u);
                 try { localStorage.setItem('systemUsers', JSON.stringify(updated)); } catch(e) {}
+                // Guardar en key persistente por usuario (sobrevive al logout)
+                try { localStorage.setItem(`userPref_autoLogout_${currentUser.id}`, String(autoLogoutMinutes)); } catch(e) {}
                 dbSetArray('system_users', updated);
             }, [autoLogoutMinutes]);
             // Timer de auto-logout
@@ -2364,7 +2368,10 @@ ${invoice.items.map(item => `
                     setPinInput('');
                     // Cargar preferencias del usuario
                     if (user.language) setCurrentLanguage(user.language);
-                    setAutoLogoutMinutes(user.autoLogoutMinutes !== undefined ? user.autoLogoutMinutes : 5);
+                    // Leer preferencia desde key persistente (más confiable que systemUsers)
+                    const savedLogout = localStorage.getItem(`userPref_autoLogout_${user.id}`);
+                    const logoutVal = savedLogout !== null ? parseInt(savedLogout) : (user.autoLogoutMinutes !== undefined ? user.autoLogoutMinutes : 5);
+                    setAutoLogoutMinutes(logoutVal);
                 } else {
                     // PIN incorrecto
                     if (user.role === 'superadmin') {
@@ -3126,6 +3133,36 @@ ${invoice.items.map(item => `
                                         const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
                                         notifSet(notifKey, all.map(n => ({...n, visto: true})));
                                         window.dispatchEvent(new Event('sueldoNotifUpdate'));
+                                    }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
+                                </div>
+                            );
+                        } catch(e) { return null; }
+                    })()}
+
+                    {/* Banner préstamo pagado */}
+                    {(()=>{
+                        try {
+                            if (!yoEmpN) return null;
+                            const notifKey = `prestamoNotif_${yoEmpN.id}`;
+                            const notifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                            const noVistas = notifs.filter(n => !n.visto);
+                            if (!noVistas.length) return null;
+                            const ultima = noVistas[noVistas.length - 1];
+                            return (
+                                <div className="flex items-center gap-3 px-4 py-2.5"
+                                    style={{background:'linear-gradient(90deg,#0f4c75,#1b6ca8)',color:'white'}}>
+                                    <span className="text-xl shrink-0">🏦</span>
+                                    <p className="text-sm font-medium flex-1">
+                                        {noVistas.length > 1
+                                            ? `${noVistas.length} pagos de préstamos registrados`
+                                            : `Pago de "${ultima.prestamoNombre}": ${ultima.moneda} ${Number(ultima.monto).toLocaleString('es-CZ')}`
+                                        }
+                                    </p>
+                                    <button onClick={() => {
+                                        const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                                        notifSet(notifKey, all.map(n => ({...n, visto: true})));
+                                        window.dispatchEvent(new Event('prestamoNotifUpdate'));
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
@@ -6196,14 +6233,14 @@ ${invoice.items.map(item => `
             };
 
             // CRUD Préstamos
-            const openNewPrestamo = () => { setEditingPrestamo(null); setForm({ nombre: '', moneda: 'CZK', monto: '', fecha: new Date().toISOString().split('T')[0], notas: '', contrato: '' }); setShowFormModal(true); };
-            const openEditPrestamo = (p) => { setEditingPrestamo(p); setForm({ nombre: p.nombre, moneda: p.moneda, monto: String(p.monto), fecha: p.fecha, notas: p.notas || '', contrato: p.contrato || '' }); setShowFormModal(true); };
+            const openNewPrestamo = () => { setEditingPrestamo(null); setForm({ nombre: '', moneda: 'CZK', monto: '', fecha: new Date().toISOString().split('T')[0], notas: '', contrato: '', notificarUsuarios: [] }); setShowFormModal(true); };
+            const openEditPrestamo = (p) => { setEditingPrestamo(p); setForm({ nombre: p.nombre, moneda: p.moneda, monto: String(p.monto), fecha: p.fecha, notas: p.notas || '', contrato: p.contrato || '', notificarUsuarios: p.notificarUsuarios || [] }); setShowFormModal(true); };
             const savePrestamo = () => {
                 if (!form.nombre.trim() || !form.monto) return alert('Completá nombre y monto');
                 if (editingPrestamo) {
-                    setPrestamos(prev => prev.map(p => p.id === editingPrestamo.id ? { ...p, nombre: form.nombre.trim(), moneda: form.moneda, monto: parseFloat(form.monto), fecha: form.fecha, notas: form.notas, contrato: form.contrato } : p));
+                    setPrestamos(prev => prev.map(p => p.id === editingPrestamo.id ? { ...p, nombre: form.nombre.trim(), moneda: form.moneda, monto: parseFloat(form.monto), fecha: form.fecha, notas: form.notas, contrato: form.contrato, notificarUsuarios: form.notificarUsuarios||[] } : p));
                 } else {
-                    setPrestamos(prev => [...prev, { id: Date.now(), nombre: form.nombre.trim(), moneda: form.moneda, monto: parseFloat(form.monto), fecha: form.fecha, notas: form.notas, contrato: form.contrato, pagos: [], cuotas: [] }]);
+                    setPrestamos(prev => [...prev, { id: Date.now(), nombre: form.nombre.trim(), moneda: form.moneda, monto: parseFloat(form.monto), fecha: form.fecha, notas: form.notas, contrato: form.contrato, notificarUsuarios: form.notificarUsuarios||[], pagos: [], cuotas: [] }]);
                 }
                 setShowFormModal(false);
             };
@@ -6271,6 +6308,23 @@ ${invoice.items.map(item => `
                 newPagos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
                 const newCuotas = p.cuotas.filter((_, i) => i !== idx);
                 setPrestamos(prev => prev.map(x => x.id === p.id ? { ...x, pagos: newPagos, cuotas: newCuotas } : x));
+                // Notificar a usuarios configurados
+                if ((p.notificarUsuarios||[]).length > 0) {
+                    const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+                    p.notificarUsuarios.forEach(async uid => {
+                        const u = systemUsers.find(x => String(x.id) === String(uid));
+                        if (!u) return;
+                        const emp = employees.find(e => {
+                            const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                            const nameLC = (u.name||'').toLowerCase();
+                            return en.includes(nameLC) || nameLC.includes((e.nombre||'').toLowerCase()) || String(e.id)===String(u.id);
+                        });
+                        if (!emp) return;
+                        const notifKey = `prestamoNotif_${emp.id}`;
+                        await notifPush(notifKey, { id: Date.now(), prestamoNombre: p.nombre, monto: c.monto, moneda: p.moneda, fecha: c.fecha, visto: false });
+                        window.dispatchEvent(new Event('prestamoNotifUpdate'));
+                    });
+                }
 
                 if (cargarEnCaja && cajaId) {
                     // Registrar en caja con el monto en CZK ingresado
@@ -6667,6 +6721,7 @@ ${invoice.items.map(item => `
                                     <div className="flex items-center justify-between mb-3">
                                         <h3 className={`font-bold ${txt}`}>Información del préstamo</h3>
                                         {canEdit && <button onClick={() => openEditPrestamo(selected)} className={`text-xs px-3 py-1.5 rounded-lg border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>Editar</button>}
+                                        {canEdit && <button onClick={() => openEditPrestamo(selected)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-teal-700 text-teal-400 hover:bg-teal-900/30' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}>🔔 Notificaciones{(selected.notificarUsuarios||[]).length > 0 ? ` (${selected.notificarUsuarios.length})` : ''}</button>}
                                     </div>
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         <div><p className={`text-xs ${sub}`}>Fecha del préstamo</p><p className={`font-medium ${txt}`}>{selected.fecha}</p></div>
@@ -6694,6 +6749,22 @@ ${invoice.items.map(item => `
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha del préstamo</label><input className={inp} type="date" value={form.fecha} onChange={e => setForm({...form, fecha: e.target.value})} /></div>
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Notas</label><input className={inp} value={form.notas} onChange={e => setForm({...form, notas: e.target.value})} placeholder="Condiciones, interés, etc." /></div>
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Contrato / Términos</label><textarea className={inp} rows={4} value={form.contrato} onChange={e => setForm({...form, contrato: e.target.value})} placeholder="Pegá el texto del contrato..." /></div>
+                                        <div>
+                                            <label className={`block text-xs font-medium mb-2 ${sub}`}>🔔 Notificar pagos a usuarios</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {systemUsers.filter(u => u.role !== 'superadmin' || true).map(u => {
+                                                    const sel = (form.notificarUsuarios||[]).includes(String(u.id));
+                                                    return (
+                                                        <button key={u.id} type="button"
+                                                            onClick={() => setForm(f => ({...f, notificarUsuarios: sel ? (f.notificarUsuarios||[]).filter(id=>id!==String(u.id)) : [...(f.notificarUsuarios||[]), String(u.id)]}))}
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${sel ? 'bg-teal-600 text-white border-teal-600' : darkMode ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-white text-slate-600 border-slate-300'}`}>
+                                                            {u.name || u.username}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <p className={`text-xs mt-1 ${sub}`}>Recibirán un banner cuando se registre un pago</p>
+                                        </div>
                                     </div>
                                     <div className="flex gap-2 mt-5">
                                         <button onClick={() => setShowFormModal(false)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cancelar</button>
