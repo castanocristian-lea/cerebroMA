@@ -108,7 +108,7 @@
                 { ls: 'cajaAcreditaciones',    table: 'cash_planning',     type: 'val',   key: 'acreditaciones' },
                 { ls: 'cajaFondos',            table: 'cash_planning',     type: 'val',   key: 'fondos' },
                 { ls: 'cajaLugares',           table: 'cash_planning',     type: 'val',   key: 'lugares' },
-                { ls: 'cashTransactionsMultiYear', table: 'cash_transactions', type: 'val', key: 'multiyear' },
+                // cashTransactionsMultiYear migrated to Supabase only
                 { ls: 'seguroMedicoData',      table: 'payroll_insurance', type: 'val',   key: 'main' },
                 { ls: 'horasAjustesData',      table: 'payroll_hours',     type: 'val',   key: 'main' },
                 { ls: 'payrollMonthlyData',    table: 'payroll_monthly',   type: 'val',   key: 'main' },
@@ -201,7 +201,7 @@
                 };
 
                 // Arrays
-                set('employees',          emp.data?.map(r=>r.data) || []);
+                const _emps = emp.data?.map(r=>r.data) || []; window.__employeesPrecargados = _emps; // cached in window
                 set('payrollNotes',       payN.data?.map(r=>r.data) || []);
                 set('cashNotes',          cashN.data?.map(r=>r.data) || []);
                 const _calEvs = calEv.data?.map(r=>r.data) || []; set('calendarioEventos', _calEvs); window.__calendarioEventosPrecargados = _calEvs;
@@ -211,7 +211,7 @@
 
                 // cash_transactions multiyear
                 const txRow = cashTx.data?.find(r => r.id === 'multiyear');
-                set('cashTransactionsMultiYear', txRow?.data || {});
+                const _cashTx = txRow?.data || {}; window.__cashTxPrecargadas = _cashTx; // no localStorage
 
                 // calendar_config
                 const calUbic = calCfg.data?.find(r => r.id === 'ubicaciones');
@@ -370,7 +370,7 @@
         // Precargar ingresos 2025 si no existen
         (function() {
             const KEY = 'cashTransactionsMultiYear';
-            const data = JSON.parse(localStorage.getItem(KEY) || '{}');
+            const data = window.__cashTxPrecargadas ? JSON.parse(JSON.stringify(window.__cashTxPrecargadas)) : {};
             const ingresos2025 = [251673,335590,489833,467143,612827,538574,642241,654371,689657,791911,719243,729001];
             const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
             const existing2025 = data['2025'] || [];
@@ -396,7 +396,7 @@
                     year: 2025
                 }));
                 data['2025'] = [...existing2025, ...nuevos];
-                localStorage.setItem(KEY, JSON.stringify(data));
+                window.__cashTxPrecargadas = data;
             }
         })();
     </script>
@@ -6208,7 +6208,7 @@ ${invoice.items.map(item => `
         const PrestamosModule = ({ darkMode = false, currentUser = null, onBack = null, systemUsers = [] }) => {
             const { canEdit } = usePermissions(currentUser, 'prestamos');
             const STORE_KEY = 'prestamosData';
-            const CAJA_KEY = 'cashTransactionsMultiYear';
+            const CAJA_KEY = 'cashTransactionsMultiYear'; // legacy key name
 
             const [prestamos, setPrestamos] = React.useState(() => {
                 try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e) { return []; }
@@ -9426,7 +9426,7 @@ ${invoice.items.map(item => `
             // Escuchar cambios desde Administrador de Proveedores (sync inverso)
             useEffect(() => {
                 const handleStorageSync = (e) => {
-                    if (e.key === 'cashTransactionsMultiYear' && e.newValue) {
+                    if (false && e.key === 'cashTransactionsMultiYear' && e.newValue) { // disabled - uses Supabase now
                         try { setAllTransactions(JSON.parse(e.newValue)); } catch(err) {}
                     }
                 };
