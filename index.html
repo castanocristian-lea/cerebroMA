@@ -3143,11 +3143,18 @@ ${invoice.items.map(item => `
                     {/* Banner préstamo pagado */}
                     {(()=>{
                         try {
-                            if (!yoEmpN) return null;
-                            const notifKey = `prestamoNotif_${yoEmpN.id}`;
-                            const notifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
-                            const noVistas = notifs.filter(n => !n.visto);
-                            if (!noVistas.length) return null;
+                            // Check both employee-based and user-based key
+                            const prestamoKey = yoEmpN ? `prestamoNotif_${yoEmpN.id}` : `prestamoNotif_user_${currentUser?.id}`;
+                            const altKey = `prestamoNotif_user_${currentUser?.id}`;
+                            const notifKey = yoEmpN ? prestamoKey : altKey;
+                            // Merge both keys
+                            const n1 = JSON.parse(localStorage.getItem(prestamoKey)||'[]');
+                            const n2 = prestamoKey !== altKey ? JSON.parse(localStorage.getItem(altKey)||'[]') : [];
+                            const allN = [...n1, ...n2.filter(x => !n1.find(y=>String(y.id)===String(x.id)))];
+                            if (!allN.filter(n=>!n.visto).length) return null;
+                            // Reuse notifKey for enterado action
+                            const notifKeyFinal = notifKey;
+                            const noVistas = allN.filter(n => !n.visto);
                             const ultima = noVistas[noVistas.length - 1];
                             return (
                                 <div className="flex items-center gap-3 px-4 py-2.5"
@@ -6188,9 +6195,10 @@ ${invoice.items.map(item => `
             const [showCuotaModal, setShowCuotaModal] = React.useState(false);
             const [editingPrestamo, setEditingPrestamo] = React.useState(null);
             const [editingPagoIdx, setEditingPagoIdx] = React.useState(null);
+            const [cuotaIdxParaPagar, setCuotaIdxParaPagar] = React.useState(null); // si viene de una cuota
             const [editingCuotaIdx, setEditingCuotaIdx] = React.useState(null);
             const [form, setForm] = React.useState({ nombre: '', moneda: 'CZK', monto: '', fecha: new Date().toISOString().split('T')[0], notas: '', contrato: '' });
-            const [pagoForm, setPagoForm] = React.useState({ fecha: new Date().toISOString().split('T')[0], monto: '', notas: '', metodo: 'BANK' });
+            const [pagoForm, setPagoForm] = React.useState({ fecha: new Date().toISOString().split('T')[0], monto: '', notas: '', metodo: 'BANK', montoCZK: '', cargarEnCaja: false });
             const [cuotaForm, setCuotaForm] = React.useState({ fechaInicio: '', monto: '', notas: '', repetir: 1, frecuencia: 'mensual' });
             const [showAllCuotas, setShowAllCuotas] = React.useState(false);
             const [showAllPagos, setShowAllPagos] = React.useState(false);
@@ -6254,17 +6262,65 @@ ${invoice.items.map(item => `
 
             // CRUD Pagos
             const openNewPago = () => { setEditingPagoIdx(null); setPagoForm({ fecha: new Date().toISOString().split('T')[0], monto: '', notas: '', metodo: 'BANK' }); setShowPagoModal(true); };
-            const openEditPago = (idx) => { const pg = selected.pagos[idx]; setEditingPagoIdx(idx); setPagoForm({ fecha: pg.fecha, monto: String(pg.monto), notas: pg.notas || '', metodo: pg.metodo || 'BANK' }); setShowPagoModal(true); };
-            const savePago = () => {
+            const openEditPago = (idx) => { const pg = selected.pagos[idx]; setEditingPagoIdx(idx); setCuotaIdxParaPagar(null); setPagoForm({ fecha: pg.fecha, monto: String(pg.monto), notas: pg.notas || '', metodo: pg.metodo || 'BANK', montoCZK: '', cargarEnCaja: false }); setShowPagoModal(true); };
+            const openPagoDesdeCuota = (idx) => {
+                const c = selected.cuotas[idx];
+                const mesCorresponde = c.fecha ? new Date(c.fecha+'T12:00:00').toLocaleString('es-ES',{month:'long',year:'numeric'}) : '';
+                const notaBase = c.notas ? `${c.notas} (corresponde a ${mesCorresponde})` : `Cuota ${mesCorresponde} (programada ${c.fecha})`;
+                setEditingPagoIdx(null);
+                setCuotaIdxParaPagar(idx);
+                setPagoForm({ fecha: new Date().toISOString().split('T')[0], monto: String(c.monto), notas: notaBase, metodo: 'BANK', montoCZK: selected.moneda==='CZK'?String(c.monto):'', cargarEnCaja: false });
+                setShowPagoModal(true);
+            };
+            const savePago = async () => {
                 if (!pagoForm.monto || isNaN(parseFloat(pagoForm.monto))) return alert('Ingresá un monto válido');
                 const p = selected;
-                const oldPago = editingPagoIdx !== null ? p.pagos[editingPagoIdx] : null;
-                const cajaId = oldPago?.cajaId || `prest_${p.id}_${Date.now()}`;
-                const newPago = { fecha: pagoForm.fecha, monto: parseFloat(pagoForm.monto), notas: pagoForm.notas, metodo: pagoForm.metodo, cajaId };
-                const newPagos = editingPagoIdx !== null ? p.pagos.map((pg, i) => i === editingPagoIdx ? newPago : pg) : [...(p.pagos || []), newPago];
-                newPagos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-                setPrestamos(prev => prev.map(x => x.id === p.id ? { ...x, pagos: newPagos } : x));
-                syncPagoToCaja(p, newPago, cajaId, false);
+
+                if (cuotaIdxParaPagar !== null) {
+                    // Flujo completo de cuota: elimina cuota, genera pago, sincroniza caja, notifica
+                    const c = p.cuotas[cuotaIdxParaPagar];
+                    const cajaId = pagoForm.cargarEnCaja ? `prest_${p.id}_cuota_${cuotaIdxParaPagar}_${Date.now()}` : null;
+                    const newPago = { fecha: pagoForm.fecha, monto: parseFloat(pagoForm.monto), notas: pagoForm.notas, metodo: pagoForm.metodo, cajaId };
+                    const newPagos = [...(p.pagos || []), newPago];
+                    newPagos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+                    const newCuotas = p.cuotas.filter((_, i) => i !== cuotaIdxParaPagar);
+                    setPrestamos(prev => prev.map(x => x.id === p.id ? { ...x, pagos: newPagos, cuotas: newCuotas } : x));
+                    if (pagoForm.cargarEnCaja && cajaId) {
+                        const montoCZK = parseFloat(pagoForm.montoCZK) || parseFloat(pagoForm.monto);
+                        syncPagoToCaja(p, { ...newPago, monto: montoCZK }, cajaId, false);
+                    }
+                    // Notificar
+                    if ((p.notificarUsuarios||[]).length > 0) {
+                        const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+                        for (const uid of p.notificarUsuarios) {
+                            const u = systemUsers.find(x => String(x.id) === String(uid));
+                            if (!u) continue;
+                            const nameLC = (u.name||u.username||'').toLowerCase();
+                            const userLC = (u.username||u.name||'').toLowerCase();
+                            const emp = employees.find(e => {
+                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                                return en.includes(nameLC) || nameLC.includes((e.nombre||'').toLowerCase()) ||
+                                       (e.nombre||'').toLowerCase().includes(userLC) ||
+                                       String(e.id)===String(u.id);
+                            });
+                            // Si no hay empleado asociado, notificar igual usando el id del usuario
+                            const empId = emp ? emp.id : `user_${uid}`;
+                            const notifKey = `prestamoNotif_${empId}`;
+                            await notifPush(notifKey, { id: Date.now(), prestamoNombre: p.nombre, monto: c.monto || parseFloat(pagoForm.monto), moneda: p.moneda, fecha: c.fecha || pagoForm.fecha, visto: false });
+                            window.dispatchEvent(new Event('prestamoNotifUpdate'));
+                        }
+                    }
+                } else {
+                    // Flujo simple: editar/agregar pago manual
+                    const oldPago = editingPagoIdx !== null ? p.pagos[editingPagoIdx] : null;
+                    const cajaId = oldPago?.cajaId || `prest_${p.id}_${Date.now()}`;
+                    const newPago = { fecha: pagoForm.fecha, monto: parseFloat(pagoForm.monto), notas: pagoForm.notas, metodo: pagoForm.metodo, cajaId };
+                    const newPagos = editingPagoIdx !== null ? p.pagos.map((pg, i) => i === editingPagoIdx ? newPago : pg) : [...(p.pagos || []), newPago];
+                    newPagos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+                    setPrestamos(prev => prev.map(x => x.id === p.id ? { ...x, pagos: newPagos } : x));
+                    syncPagoToCaja(p, newPago, cajaId, false);
+                }
+                setCuotaIdxParaPagar(null);
                 setShowPagoModal(false);
             };
             const deletePago = (idx) => {
@@ -6685,7 +6741,7 @@ ${invoice.items.map(item => `
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className={`font-bold text-sm ${vencida ? 'text-red-600' : 'text-amber-600'}`}>{fmt(c.monto, selected.moneda)}</span>
                                                                 {canEdit && <div className="flex gap-1">
-                                                                    <button onClick={() => pagarCuota(idx)} title="Marcar como pagada" className="p-1 rounded bg-green-100 hover:bg-green-200"><svg className="w-3.5 h-3.5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
+                                                                    <button onClick={() => openPagoDesdeCuota(idx)} title="Marcar como pagada" className="p-1 rounded bg-green-100 hover:bg-green-200"><svg className="w-3.5 h-3.5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
                                                                     <button onClick={() => openEditCuota(idx)} className={`p-1 rounded ${darkMode ? 'hover:bg-slate-600' : 'hover:bg-white'}`}><svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
                                                                     <button onClick={() => deleteCuota(idx)} className={`p-1 rounded ${darkMode ? 'hover:bg-slate-600' : 'hover:bg-white'}`}><svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                                                                 </div>}
@@ -6778,16 +6834,31 @@ ${invoice.items.map(item => `
                         {showPagoModal && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
                                 <div className={`rounded-2xl shadow-2xl w-full max-w-sm p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
-                                    <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingPagoIdx !== null ? 'Editar pago' : 'Registrar pago'}</h3>
+                                    <h3 className={`text-lg font-bold mb-4 ${txt}`}>
+                                        {cuotaIdxParaPagar !== null ? '✅ Pagar cuota' : editingPagoIdx !== null ? 'Editar pago' : 'Registrar pago'}
+                                    </h3>
                                     <div className="space-y-3">
-                                        <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha</label><input className={inp} type="date" value={pagoForm.fecha} onChange={e => setPagoForm({...pagoForm, fecha: e.target.value})} /></div>
+                                        <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha del pago</label><input className={inp} type="date" value={pagoForm.fecha} onChange={e => setPagoForm({...pagoForm, fecha: e.target.value})} /></div>
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Monto ({selected?.moneda})</label><input className={inp} type="number" value={pagoForm.monto} onChange={e => setPagoForm({...pagoForm, monto: e.target.value})} placeholder="0" /></div>
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Método</label><select className={inp} value={pagoForm.metodo} onChange={e => setPagoForm({...pagoForm, metodo: e.target.value})}><option value="BANK">🏦 Banco</option><option value="CASH">💵 Efectivo</option></select></div>
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Notas</label><input className={inp} value={pagoForm.notas} onChange={e => setPagoForm({...pagoForm, notas: e.target.value})} placeholder="Cuota 1, pago parcial..." /></div>
+                                        {cuotaIdxParaPagar !== null && (
+                                            <>
+                                                <div className={`flex items-center gap-3 p-3 rounded-lg border ${darkMode?'border-slate-600 bg-slate-700/50':'border-slate-200 bg-slate-50'}`}>
+                                                    <input type="checkbox" id="cargarCaja" checked={pagoForm.cargarEnCaja} onChange={e => setPagoForm({...pagoForm, cargarEnCaja: e.target.checked})} className="w-4 h-4 rounded" />
+                                                    <label htmlFor="cargarCaja" className={`text-sm font-medium cursor-pointer ${txt}`}>Cargar en Caja Diaria</label>
+                                                </div>
+                                                {pagoForm.cargarEnCaja && selected?.moneda !== 'CZK' && (
+                                                    <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Equivalente en CZK (tipo de cambio)</label>
+                                                        <input className={inp} type="number" value={pagoForm.montoCZK} onChange={e => setPagoForm({...pagoForm, montoCZK: e.target.value})} placeholder="Monto en CZK" />
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
                                     <div className="flex gap-2 mt-5">
-                                        <button onClick={() => setShowPagoModal(false)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cancelar</button>
-                                        <button onClick={savePago} className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">Guardar</button>
+                                        <button onClick={() => { setShowPagoModal(false); setCuotaIdxParaPagar(null); }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cancelar</button>
+                                        <button onClick={savePago} className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">{cuotaIdxParaPagar !== null ? '✅ Registrar pago' : 'Guardar'}</button>
                                     </div>
                                 </div>
                             </div>
