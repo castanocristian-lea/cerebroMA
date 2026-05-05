@@ -6342,6 +6342,7 @@ ${invoice.items.map(item => `
                 }
 
                 // Notificar a usuarios configurados — capturar datos antes de limpiar estado
+                console.log('🔔 p.notificarUsuarios:', p.notificarUsuarios, 'p.nombre:', p.nombre, 'p.id:', p.id);
                 const _notifUsuarios = p.notificarUsuarios || [];
                 const _notifNombre = p.nombre;
                 const _notifMonto = parseFloat(pagoForm.monto);
