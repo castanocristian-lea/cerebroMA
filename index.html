@@ -79,6 +79,19 @@
             notifWrite(key, value);
             try { await dbUpsertOne('app_config', 'notif_' + key, value); } catch(e) {}
         }
+        // Convierte empId a userId buscando en systemUsers
+        function empIdToUserId(empId) {
+            const emps = window.__employeesPrecargados || [];
+            const users = window.__systemUsersPrecargados || [];
+            const emp = emps.find(e => String(e.id) === String(empId));
+            if (!emp) return String(empId); // fallback
+            const nameLC = `${emp.nombre} ${emp.apellido}`.toLowerCase();
+            const user = users.find(u => {
+                const uname = (u.name||u.username||'').toLowerCase();
+                return nameLC.includes(uname) || uname.includes((emp.nombre||'').toLowerCase());
+            });
+            return user ? String(user.id) : String(empId);
+        }
         function notifRead(key) {
             // Read from window cache first, then localStorage
             if (window.__notifCache && window.__notifCache[key] !== undefined) return window.__notifCache[key];
@@ -1481,9 +1494,7 @@ ${invoice.items.map(item => `
                     const yo = emps.find(e => `${e.nombre} ${e.apellido}`.toLowerCase().includes(nameLC) || String(e.id)===String(currentUser?.id));
                     const userId = String(currentUser?.id||'');
                     // solicNotif y solicRespNotif usan userId
-                    const usesUserId = tipo === 'solicNotif' || tipo === 'solicRespNotif';
-                    const key = usesUserId ? `notif_${tipo}_${userId}` : (yo ? `notif_${tipo}_${yo.id}` : null);
-                    if (key) dbUpsertOne('app_config', key, updated[tipo]).catch(()=>{});
+                    dbUpsertOne('app_config', `notif_${tipo}_${userId}`, updated[tipo]).catch(()=>{});
                     return updated;
                 });
             };
@@ -1511,16 +1522,9 @@ ${invoice.items.map(item => `
                         const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif'];
                         const userId = String(currentUser.id);
                         // solicNotif y solicRespNotif usan userId, el resto usa empId
-                        const keyPorTipo = {
-                            solicNotif: `solicNotif_${userId}`,
-                            solicRespNotif: `solicRespNotif_${userId}`,
-                            sueldoNotif: `sueldoNotif_${empId}`,
-                            seguroNotif: `seguroNotif_${empId}`,
-                            calendarioNotif: `calendarioNotif_${empId}`,
-                            prestamoNotif: `prestamoNotif_${empId}`,
-                        };
+                        // Todos los tipos usan userId
                         const results = await Promise.all(
-                            tipos.map(t => dbGetKey('app_config', `notif_${keyPorTipo[t]}`).catch(()=>null))
+                            tipos.map(t => dbGetKey('app_config', `notif_${t}_${userId}`).catch(()=>null))
                         );
                         setNotificaciones(prev => {
                             const nuevo = {};
@@ -4376,7 +4380,7 @@ ${invoice.items.map(item => `
                     // Notificar a cada empleado asignado
                     try {
                         await Promise.all((form.empleadoIds||[]).map(eid =>
-                            notifPush(`calendarioNotif_${eid}`, { id: newId, tipo: baseEv.tipo, fecha: baseEv.fecha, fechaFin: baseEv.fechaFin||'', diasSueltos: baseEv.diasSueltos||[], visto: false })
+                            notifPush(`calendarioNotif_${empIdToUserId(eid)}`, { id: newId, tipo: baseEv.tipo, fecha: baseEv.fecha, fechaFin: baseEv.fechaFin||'', diasSueltos: baseEv.diasSueltos||[], visto: false })
                         ));
                         window.dispatchEvent(new Event('calendarioNotifUpdate'));
                     } catch(e) {}
@@ -6272,11 +6276,7 @@ ${invoice.items.map(item => `
                         const notifItem = { id: Date.now(), prestamoNombre: _notifNombre, monto: _notifMonto, moneda: _notifMoneda, fecha: _notifFecha, visto: false };
                         // Guardar por empId (preferido) o por userId
                         const empId = emp ? emp.id : null;
-                        if (empId) {
-                            await notifPush(`prestamoNotif_${empId}`, notifItem);
-                        } else {
-                            await notifPush(`prestamoNotif_user_${uid}`, notifItem);
-                        }
+                        await notifPush(`prestamoNotif_${uid}`, notifItem);
                         window.dispatchEvent(new Event('prestamoNotifUpdate'));
                     }
                 } else {
@@ -6337,8 +6337,7 @@ ${invoice.items.map(item => `
                             const nameLC = (u.name||'').toLowerCase();
                             return en.includes(nameLC) || nameLC.includes((e.nombre||'').toLowerCase()) || String(e.id)===String(u.id);
                         });
-                        if (!emp) return;
-                        const notifKey = `prestamoNotif_${emp.id}`;
+                        const notifKey = `prestamoNotif_${uid}`;
                         await notifPush(notifKey, { id: Date.now(), prestamoNombre: p.nombre, monto: c.monto, moneda: p.moneda, fecha: c.fecha, visto: false });
                         window.dispatchEvent(new Event('prestamoNotifUpdate'));
                     });
@@ -13014,7 +13013,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 // Notificar al empleado que cobró el seguro
                 if (editingSeguroIdx === null) {
                     try {
-                        const notifKey = `seguroNotif_${seguroModalEmp.id}`;
+                        const notifKey = `seguroNotif_${empIdToUserId(seguroModalEmp.id)}`;
                         await notifPush(notifKey, { id: Date.now(), concepto: entry.concepto, monto: entry.monto, fecha: entry.fecha, visto: false });
                         window.dispatchEvent(new Event('sueldoNotifUpdate'));
                     } catch(e) {}
@@ -13145,7 +13144,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 // Notificar al empleado que cobró
                 if (editingPayIdx === null) {
                     try {
-                        const notifKey = `sueldoNotif_${payModalEmp.id}`;
+                        const notifKey = `sueldoNotif_${empIdToUserId(payModalEmp.id)}`;
                         await notifPush(notifKey, { id: Date.now(), concepto: entry.concepto, monto: entry.monto, fecha: entry.fecha, visto: false });
                         window.dispatchEvent(new Event('sueldoNotifUpdate'));
                     } catch(e) {}
