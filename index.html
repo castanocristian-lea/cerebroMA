@@ -1479,7 +1479,11 @@ ${invoice.items.map(item => `
                     const emps = window.__employeesPrecargados || [];
                     const nameLC = (currentUser?.name||'').toLowerCase();
                     const yo = emps.find(e => `${e.nombre} ${e.apellido}`.toLowerCase().includes(nameLC) || String(e.id)===String(currentUser?.id));
-                    if (yo) dbUpsertOne('app_config', `notif_${tipo}_${yo.id}`, updated[tipo]).catch(()=>{});
+                    const userId = String(currentUser?.id||'');
+                    // solicNotif y solicRespNotif usan userId
+                    const usesUserId = tipo === 'solicNotif' || tipo === 'solicRespNotif';
+                    const key = usesUserId ? `notif_${tipo}_${userId}` : (yo ? `notif_${tipo}_${yo.id}` : null);
+                    if (key) dbUpsertOne('app_config', key, updated[tipo]).catch(()=>{});
                     return updated;
                 });
             };
@@ -1505,8 +1509,18 @@ ${invoice.items.map(item => `
                         if (!yo) { console.warn('🔔 no se encontró empleado para', currentUser.name); return; }
                         const empId = yo.id;
                         const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif'];
+                        const userId = String(currentUser.id);
+                        // solicNotif y solicRespNotif usan userId, el resto usa empId
+                        const keyPorTipo = {
+                            solicNotif: `solicNotif_${userId}`,
+                            solicRespNotif: `solicRespNotif_${userId}`,
+                            sueldoNotif: `sueldoNotif_${empId}`,
+                            seguroNotif: `seguroNotif_${empId}`,
+                            calendarioNotif: `calendarioNotif_${empId}`,
+                            prestamoNotif: `prestamoNotif_${empId}`,
+                        };
                         const results = await Promise.all(
-                            tipos.map(t => dbGetKey('app_config', `notif_${t}_${empId}`).catch(()=>null))
+                            tipos.map(t => dbGetKey('app_config', `notif_${keyPorTipo[t]}`).catch(()=>null))
                         );
                         setNotificaciones(prev => {
                             const nuevo = {};
