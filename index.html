@@ -2178,6 +2178,8 @@ ${invoice.items.map(item => `
             // Función para verificar permisos del usuario actual
             const hasPermission = (module, requiredLevel = 'read') => {
                 if (!currentUser) return false;
+                // Seguridad: solo admin y superadmin
+                if (module === 'seguridad') return currentUser.role === 'admin' || currentUser.role === 'superadmin';
                 // Admin y superadmin tienen acceso total siempre
                 if (currentUser.role === 'admin' || currentUser.role === 'superadmin') return true;
                 // Usuarios sin permisos definidos (antiguos) = acceso total
@@ -3332,7 +3334,7 @@ ${invoice.items.map(item => `
                                     detail: t.prestamosDetail,
                                 },
                                 seguridad: {
-                                    permission: 'admin',
+                                    permission: 'seguridad',
                                     navigate: 'seguridad',
                                     color: 'slate',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-slate-400' : 'text-slate-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
@@ -6162,17 +6164,19 @@ ${invoice.items.map(item => `
             const [emailInput, setEmailInput] = React.useState('');
             const [saving, setSaving] = React.useState(false);
             const [lastBackup, setLastBackup] = React.useState(null);
+            const [backupHistory, setBackupHistory] = React.useState([]);
 
             React.useEffect(() => {
                 dbGetKey('app_config', 'backupSettings').then(d => {
                     if (d?.email) { setBackupEmail(d.email); window.__backupEmailPrecargado = d.email; }
                     if (d?.lastBackup) setLastBackup(d.lastBackup);
+                    if (d?.history) setBackupHistory(d.history);
                 });
             }, []);
 
             const saveEmail = async () => {
                 setSaving(true);
-                await dbUpsertOne('app_config', 'backupSettings', { email: emailInput, lastBackup });
+                await dbUpsertOne('app_config', 'backupSettings', { email: emailInput, lastBackup, history: backupHistory });
                 setBackupEmail(emailInput);
                 window.__backupEmailPrecargado = emailInput;
                 setEditingEmail(false);
@@ -6271,6 +6275,20 @@ ${invoice.items.map(item => `
                                 )}
                             </div>
                         </Section>
+
+                        {/* Historial de backups */}
+                        {backupHistory.length > 0 && (
+                            <Section title="Historial de backups" icon="📋">
+                                <div className="space-y-1 max-h-48 overflow-y-auto">
+                                    {[...backupHistory].reverse().map((h, i) => (
+                                        <div key={i} className={`flex items-center justify-between py-1.5 px-2 rounded-lg text-xs ${h.ok ? (darkMode?'bg-green-900/30 text-green-300':'bg-green-50 text-green-700') : (darkMode?'bg-red-900/30 text-red-300':'bg-red-50 text-red-700')}`}>
+                                            <span>{h.ok ? '✅' : '❌'} {new Date(h.fecha).toLocaleString('es-AR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                                            <span className="opacity-70">{h.ok ? 'Exitoso' : h.error || 'Error'}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </Section>
+                        )}
 
                         {/* Arquitectura técnica */}
                         <Section title="Arquitectura técnica" icon="⚙️">
