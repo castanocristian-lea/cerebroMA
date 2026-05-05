@@ -323,6 +323,7 @@
             // Limpiar TODAS las keys que ahora viven en Supabase
             [
                 'cashTransactionsMultiYear','cashNotes','payrollNotes','invNotes','notasMes',
+                'miCerebroChatVistos','miCerebroTareas','miCerebroTareasVistas',
                 'suppliersInfo','invoices','salesInvoices','employees','systemUsers',
                 'payrollMonthlyData','sueldosPendientesData','seguroMedicoData',
                 'salesProducts','salesClients','salesHolders','categories',
@@ -1533,6 +1534,12 @@ ${invoice.items.map(item => `
                 // Intentar ahora, y también cuando Supabase termine de cargar employees
                 precargarNotifs();
                 const t = setInterval(precargarNotifs, 30000);
+                // Cargar chatVistos y tareasVistas desde Supabase
+                const uid_cv = String(currentUser.id||'');
+                window._sb?.from('app_config').select('data').eq('id','miCerebroChatVistos_'+uid_cv).maybeSingle()
+                    .then(r => { if (r?.data?.data) { window.__mcChatVistos = r.data.data; setNotifKey(k=>k+1); } });
+                window._sb?.from('app_config').select('data').eq('id','miCerebroTareasVistas_'+uid_cv).maybeSingle()
+                    .then(r => { if (r?.data?.data) window.__mcTareasVistas = r.data.data; });
                 // Reintentar cuando employees lleguen de Supabase
                 const onLoaded = () => { setTimeout(precargarNotifs, 500); };
                 window.addEventListener('supabase-loaded', onLoaded);
@@ -1595,7 +1602,7 @@ ${invoice.items.map(item => `
                                 if (row.id===`miCerebroTareas_${uid2}`) return;
                                 (row.data||[]).forEach(t => { if((t.compartidoCon||[]).includes(uid2)) comp.push(t); });
                             });
-                            localStorage.setItem(`miCerebroCompartidas_${uid2}`, JSON.stringify(comp));
+                            window.__mcCompartidas=window.__mcCompartidas||{}; window.__mcCompartidas[uid2]=comp;
                             window.dispatchEvent(new Event('tareasUpdate'));
                         }
                         refreshNotifs();
@@ -1655,7 +1662,7 @@ ${invoice.items.map(item => `
                         if (!uid2 || uid2 === 'undefined') return;
                         // Tareas propias
                         const r = await window._sb?.from('app_config').select('data').eq('id',`miCerebroTareas_${uid2}`).maybeSingle();
-                        if (r?.data?.data) localStorage.setItem(`miCerebroTareas_${uid2}`, JSON.stringify(r.data.data));
+                        if (r?.data?.data) { window.__mcTareas=window.__mcTareas||{}; window.__mcTareas[`miCerebroTareas_${uid2}`]=r.data.data; }
                         // Tareas compartidas con este usuario (de otros)
                         const allT = await window._sb?.from('app_config').select('id,data').like('id','miCerebroTareas_%');
                         if (allT?.data) {
@@ -1664,7 +1671,7 @@ ${invoice.items.map(item => `
                                 if (row.id === `miCerebroTareas_${uid2}`) return;
                                 (row.data||[]).forEach(t => { if ((t.compartidoCon||[]).includes(uid2)) comp.push(t); });
                             });
-                            localStorage.setItem(`miCerebroCompartidas_${uid2}`, JSON.stringify(comp));
+                            window.__mcCompartidas=window.__mcCompartidas||{}; window.__mcCompartidas[uid2]=comp;
                         }
                         refreshNotifs();
                     } catch(e) {}
@@ -1676,16 +1683,16 @@ ${invoice.items.map(item => `
             const tareasActuales = React.useMemo(() => {
                 try {
                     const uid2 = String(currentUser?.id);
-                    const propias = JSON.parse(localStorage.getItem(`miCerebroTareas_${uid2}`) || '[]');
-                    const compartidas = JSON.parse(localStorage.getItem(`miCerebroCompartidas_${uid2}`) || '[]');
+                    const propias = (window.__mcTareas&&window.__mcTareas[`miCerebroTareas_${uid2}`]) || [];
+                    const compartidas = (window.__mcCompartidas&&window.__mcCompartidas[uid2]) || [];
                     return [...propias, ...compartidas.filter(t => !propias.find(p=>p.id===t.id))];
                 } catch(e) { return []; }
             }, [notifKey, currentUser]);
             const tareasVistasActuales = React.useMemo(() => {
-                try { return JSON.parse(localStorage.getItem('miCerebroTareasVistas') || '[]'); } catch(e) { return []; }
+                return window.__mcTareasVistas || [];
             }, [notifKey]);
             const chatVistosActuales = React.useMemo(() => {
-                try { return JSON.parse(localStorage.getItem('miCerebroChatVistos') || '{}'); } catch(e) { return {}; }
+                return window.__mcChatVistos || {};
             }, [notifKey]);
 
 
@@ -2366,7 +2373,7 @@ ${invoice.items.map(item => `
                     setIntentosFallidos(prev => { const n={...prev}; delete n[String(user.id)]; return n; });
                     localStorage.setItem('malagestion_current_user', JSON.stringify(userConTs));
                     // Migrar tareas viejas a clave por usuario si es necesario
-                    const tareasViejas = localStorage.getItem('miCerebroTareas');
+                    const tareasViejas = null; // legacy key removed
                     const claveNueva = `miCerebroTareas_${user.id}`;
                     if (tareasViejas && !localStorage.getItem(claveNueva)) {
                         try { localStorage.setItem(claveNueva, tareasViejas); } catch(e) {}
@@ -2873,8 +2880,8 @@ ${invoice.items.map(item => `
                     {(() => {
                         try {
                             const _u = String(currentUser?.id||'');
-                            const _comp = JSON.parse(localStorage.getItem(`miCerebroCompartidas_${_u}`)||'[]');
-                            const _vistas = JSON.parse(localStorage.getItem('miCerebroTareasVistas')||'[]').map(String);
+                            const _comp = (window.__mcCompartidas&&window.__mcCompartidas[_u]||[]);
+                            const _vistas = (window.__mcTareasVistas||[]).map(String);
                             const nuevas = _comp.filter(t =>
                                 !t.completada &&
                                 !_vistas.includes(String(t.id))
@@ -2889,15 +2896,15 @@ ${invoice.items.map(item => `
                                     </p>
                                     <button onClick={() => {
                                         const ids = nuevas.map(t => t.id);
-                                        const yaVistas = JSON.parse(localStorage.getItem('miCerebroTareasVistas') || '[]');
-                                        localStorage.setItem('miCerebroTareasVistas', JSON.stringify([...new Set([...yaVistas, ...ids])]));
+                                        const yaVistas = (window.__mcTareasVistas || []);
+                                        window.__mcTareasVistas = [...new Set([...yaVistas, ...ids])]; dbUpsertOne('app_config','miCerebroTareasVistas_'+String(currentUser?.id||''),window.__mcTareasVistas);
                                         setActiveModule('micerebro');
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={() => {
                                         const ids = nuevas.map(t => t.id);
-                                        const yaVistas = JSON.parse(localStorage.getItem('miCerebroTareasVistas') || '[]');
-                                        localStorage.setItem('miCerebroTareasVistas', JSON.stringify([...new Set([...yaVistas, ...ids])]));
+                                        const yaVistas = (window.__mcTareasVistas || []);
+                                        window.__mcTareasVistas = [...new Set([...yaVistas, ...ids])]; dbUpsertOne('app_config','miCerebroTareasVistas_'+String(currentUser?.id||''),window.__mcTareasVistas);
                                         window.dispatchEvent(new Event('tareasVistasUpdate'));
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
@@ -2910,8 +2917,8 @@ ${invoice.items.map(item => `
                     {!ocultarBannerVencidas && (() => {
                         try {
                             const _u2 = String(currentUser?.id||'');
-                            const _propias2 = JSON.parse(localStorage.getItem(`miCerebroTareas_${_u2}`)||'[]');
-                            const _comp2 = JSON.parse(localStorage.getItem(`miCerebroCompartidas_${_u2}`)||'[]');
+                            const _propias2 = (window.__mcTareas&&window.__mcTareas[`miCerebroTareas_${_u2}`])||[];
+                            const _comp2 = (window.__mcCompartidas&&window.__mcCompartidas[_u2]||[]);
                             const tt = [..._propias2, ..._comp2.filter(t=>!_propias2.find(p=>p.id===t.id))];
                             const hoyB = new Date(); hoyB.setHours(0,0,0,0);
                             const venc = tt.filter(t => {
@@ -3262,9 +3269,9 @@ ${invoice.items.map(item => `
                     {(() => {
                         if (!currentUser) return null;
                         const uid = String(currentUser.id);
-                        const tt = [...JSON.parse(localStorage.getItem(`miCerebroTareas_${uid}`)||'[]'),
-                                    ...JSON.parse(localStorage.getItem(`miCerebroCompartidas_${uid}`)||'[]')];
-                        const vistos = JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}');
+                        const tt = [...((window.__mcTareas&&window.__mcTareas[`miCerebroTareas_${uid}`])||[]),
+                                    ...(window.__mcCompartidas&&window.__mcCompartidas[uid]||[])];
+                        const vistos = window.__mcChatVistos || {};
                         let totalNew = 0;
                         const conNotas = [];
                         tt.forEach(t => {
@@ -3294,7 +3301,7 @@ ${invoice.items.map(item => `
                                 <button onClick={() => {
                                     const nuevosVistos = {...vistos};
                                     conNotas.forEach(t => { nuevosVistos[String(t.id)] = Date.now(); });
-                                    localStorage.setItem('miCerebroChatVistos', JSON.stringify(nuevosVistos));
+                                    window.__mcChatVistos = nuevosVistos; dbUpsertOne('app_config','miCerebroChatVistos_'+String(currentUser?.id||''),nuevosVistos);
                                     refreshNotifs();
                                 }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                     style={{background:'rgba(255,255,255,0.2)'}}>Ya lo leí ✓</button>
@@ -3541,7 +3548,7 @@ ${invoice.items.map(item => `
                                             {(() => {
                                                     if (mod.id !== 'micerebro') return null;
                                                     try {
-                                                        const tt = JSON.parse(localStorage.getItem('miCerebroTareas') || '[]');
+                                                        const tt = [];
                                                         const hoyB = new Date(); hoyB.setHours(0,0,0,0);
                                                         const n = tt.filter(t =>
                                                             !t.completada &&
@@ -23450,7 +23457,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [form,            setForm]            = React.useState({ titulo:'', descripcion:'', vencimiento:'', prioridad:'media', compartidoCon:[], compartirVencimiento:false, etiquetas:[] });
             const [chatTarea,       setChatTarea]       = React.useState(null);
             const [chatMsg,         setChatMsg]         = React.useState('');
-            const [chatVistos,      setChatVistos]      = React.useState(() => { try { return JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}'); } catch(e){ return {}; } });
+            const [chatVistos,      setChatVistos]      = React.useState(() => { return window.__mcChatVistos || {}; });
             const [showCompletadas, setShowCompletadas] = React.useState(false);
             const [colVerTodo, setColVerTodo] = React.useState({0:false,1:false,2:false});
             const [busqueda,        setBusqueda]        = React.useState('');
@@ -23467,11 +23474,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // Sync desde Supabase al montar
             React.useEffect(() => {
                 // Migrar tareas viejas (sin uid) a clave por usuario
-                const tareasViejas = localStorage.getItem('miCerebroTareas');
-                if (tareasViejas && _uid && !localStorage.getItem(tareasKey)) {
-                    try { localStorage.setItem(tareasKey, tareasViejas); } catch(e) {}
-                    setTareas(JSON.parse(tareasViejas));
-                }
+                // Migration from old key handled by Supabase sync
                 const sync = async () => {
                     try {
                         const [rt, rp, re, allT] = await Promise.all([
@@ -23480,17 +23483,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             window._sb?.from('app_config').select('data').eq('id', etiquetasKey).maybeSingle(),
                             window._sb?.from('app_config').select('id,data').like('id','miCerebroTareas_%'),
                         ]);
-                        if (rt?.data?.data)  { localStorage.setItem(tareasKey,    JSON.stringify(rt.data.data));  setTareas(rt.data.data);    window.dispatchEvent(new Event('tareasUpdate')); }
-                        if (rp?.data?.data)  { localStorage.setItem(postitsKey,   JSON.stringify(rp.data.data));  setPostits(rp.data.data); }
-                        if (re?.data?.data)  { localStorage.setItem(etiquetasKey, JSON.stringify(re.data.data));  setEtiquetas(re.data.data); }
-                        // Tareas compartidas conmigo por otros usuarios
+                        if (rt?.data?.data)  { window.__mcTareas=window.__mcTareas||{}; window.__mcTareas[tareasKey]=rt.data.data; setTareas(rt.data.data); window.dispatchEvent(new Event('tareasUpdate')); }
+                        if (rp?.data?.data)  { window.__mcPostits=window.__mcPostits||{}; window.__mcPostits[postitsKey]=rp.data.data; setPostits(rp.data.data); }
+                        if (re?.data?.data)  { window.__mcEtiquetas=window.__mcEtiquetas||{}; window.__mcEtiquetas[etiquetasKey]=re.data.data; setEtiquetas(re.data.data); }
                         if (allT?.data) {
                             let comp = [];
                             allT.data.forEach(row => {
                                 if (row.id === tareasKey) return;
                                 (row.data||[]).forEach(t => { if ((t.compartidoCon||[]).includes(_uid)) comp.push(t); });
                             });
-                            localStorage.setItem(`miCerebroCompartidas_${_uid}`, JSON.stringify(comp));
+                            window.__mcCompartidas = window.__mcCompartidas||{}; window.__mcCompartidas[_uid] = comp;
                         }
                     } catch(e) {}
                 };
@@ -23498,13 +23500,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             }, [_uid]);
 
             // Funciones save
-            const saveTareas   = (l) => { setTareas(l);    localStorage.setItem(tareasKey,    JSON.stringify(l)); dbUpsertOne('app_config', tareasKey,    l); window.dispatchEvent(new Event('tareasUpdate')); };
-            const savePostits  = (l) => { setPostits(l);   localStorage.setItem(postitsKey,   JSON.stringify(l)); dbUpsertOne('app_config', postitsKey,   l); };
-            const saveEtiquetas= (l) => { setEtiquetas(l); localStorage.setItem(etiquetasKey, JSON.stringify(l)); dbUpsertOne('app_config', etiquetasKey, l); };
+            const saveTareas   = (l) => { setTareas(l);    window.__mcTareas = window.__mcTareas||{}; window.__mcTareas[tareasKey]=l; dbUpsertOne('app_config', tareasKey, l); window.dispatchEvent(new Event('tareasUpdate')); };
+            const savePostits  = (l) => { setPostits(l);   window.__mcPostits = window.__mcPostits||{}; window.__mcPostits[postitsKey]=l; dbUpsertOne('app_config', postitsKey, l); };
+            const saveEtiquetas= (l) => { setEtiquetas(l); window.__mcEtiquetas = window.__mcEtiquetas||{}; window.__mcEtiquetas[etiquetasKey]=l; dbUpsertOne('app_config', etiquetasKey, l); };
 
             const marcarChatVisto = (id) => {
                 const n = {...chatVistos, [String(id)]: Date.now()};
-                setChatVistos(n); localStorage.setItem('miCerebroChatVistos', JSON.stringify(n));
+                setChatVistos(n); window.__mcChatVistos = n; dbUpsertOne('app_config','miCerebroChatVistos_'+_uid,n);
                 window.dispatchEvent(new Event('chatUpdate'));
             };
             const enviarMensaje = () => {
@@ -23541,12 +23543,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const toggleCompletar = (id) => {
                 const t = tareas.find(x=>x.id===id);
                 saveTareas(tareas.map(x=>x.id===id?{...x,completada:!x.completada,completadaEl:!x.completada?new Date().toISOString():null}:x));
-                if (t&&!t.completada) { const v=JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}'); delete v[String(id)]; localStorage.setItem('miCerebroChatVistos',JSON.stringify(v)); window.dispatchEvent(new Event('chatUpdate')); }
+                if (t&&!t.completada) { const v={...window.__mcChatVistos||{}}; delete v[String(id)]; window.__mcChatVistos=v; setChatVistos(v); dbUpsertOne('app_config','miCerebroChatVistos_'+_uid,v); window.dispatchEvent(new Event('chatUpdate')); }
             };
             const eliminarTarea = (id) => {
                 if (!confirm('¿Eliminar esta tarea?')) return;
                 saveTareas(tareas.filter(t=>t.id!==id));
-                const v=JSON.parse(localStorage.getItem('miCerebroChatVistos')||'{}'); delete v[String(id)]; localStorage.setItem('miCerebroChatVistos',JSON.stringify(v)); window.dispatchEvent(new Event('chatUpdate'));
+                const v={...window.__mcChatVistos||{}}; delete v[String(id)]; window.__mcChatVistos=v; setChatVistos(v); dbUpsertOne('app_config','miCerebroChatVistos_'+_uid,v); window.dispatchEvent(new Event('chatUpdate'));
             };
             const openNew = () => { setEditingTarea(null); setForm({titulo:'',descripcion:'',vencimiento:'',prioridad:'media',compartidoCon:[],compartirVencimiento:false,etiquetas:[]}); setShowModal(true); };
             const openEdit= (t) => { setEditingTarea(t); setForm({titulo:t.titulo,descripcion:t.descripcion||'',vencimiento:t.vencimiento||'',prioridad:t.prioridad||'media',compartidoCon:t.compartidoCon||[],compartirVencimiento:t.compartirVencimiento||false,etiquetas:t.etiquetas||[]}); setShowModal(true); };
@@ -23581,7 +23583,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 return (t.titulo||'').toLowerCase().includes(q)||(t.descripcion||'').toLowerCase().includes(q)||(t.chat||[]).some(m=>m.texto.toLowerCase().includes(q));
             };
 
-            const tareasCompartConmigo = React.useMemo(()=>{ try{return JSON.parse(localStorage.getItem(`miCerebroCompartidas_${uid}`)||'[]');}catch(e){return[];} },[uid]);
+            const tareasCompartConmigo = React.useMemo(()=>{ try{return (window.__mcCompartidas&&window.__mcCompartidas[uid]||[]);}catch(e){return[];} },[uid]);
             const misActivas     = tareas.filter(t=>String(t.autorId)===uid&&!t.completada&&!(t.compartidoCon||[]).length&&matchBusqueda(t));
             const misCompartidas = tareas.filter(t=>String(t.autorId)===uid&&!t.completada&&(t.compartidoCon||[]).length>0&&matchBusqueda(t));
             const compartConmigo = [...tareas.filter(t=>String(t.autorId)!==uid&&(t.compartidoCon||[]).includes(uid)&&!t.completada&&matchBusqueda(t)),
