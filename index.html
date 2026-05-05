@@ -1565,18 +1565,14 @@ ${invoice.items.map(item => `
                                 const jsonStr = JSON.stringify(data, null, 2);
                                 const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
                                 const email = settings?.email || 'cristian@malaargenta.cz';
-                                const backupId = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}`;
-                                const chunkSize = 400000;
-                                const totalChunks = Math.ceil(jsonStr.length / chunkSize);
-                                await window._sb.from('backups').upsert({ id: `${backupId}_meta`, data: { backupId, filename: fileName, date: new Date().toISOString(), totalChunks, size: Math.round(jsonStr.length/1024)+'KB', email } });
-                                for (let i = 0; i < totalChunks; i++) {
-                                    const chunk = jsonStr.slice(i * chunkSize, (i+1) * chunkSize);
-                                    await window._sb.from('backups').upsert({ id: `${backupId}_chunk_${i}`, data: { chunk, index: i } });
-                                }
+                                const blob2 = new Blob([jsonStr], { type: 'application/json' });
+                                const { error: se } = await window._sb.storage.from('backups').upload(fileName, blob2, { upsert: true, contentType: 'application/json' });
+                                if (se) throw new Error('Storage: ' + se.message);
+                                const { data: ud } = window._sb.storage.from('backups').getPublicUrl(fileName);
                                 await fetch('https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ backupId, filename: fileName, date: new Date().toLocaleString('es-AR'), email, size: Math.round(jsonStr.length/1024)+'KB', totalChunks })
+                                    body: JSON.stringify({ filename: fileName, date: new Date().toLocaleString('es-AR'), email, size: Math.round(jsonStr.length/1024)+'KB', fileUrl: ud.publicUrl })
                                 });
                                 await registrarBackup(true);
                                 console.log('✅ Backup automático completado');
@@ -6278,29 +6274,25 @@ ${invoice.items.map(item => `
                     const jsonStr = JSON.stringify(data, null, 2);
                     const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
 
-                    setBackupStatus('💾 Guardando en Supabase...');
-                    const backupId = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}`;
-                    const chunkSize = 400000; // 400KB por chunk
-                    const totalChunks = Math.ceil(jsonStr.length / chunkSize);
-                    // Guardar metadata
-                    await window._sb.from('backups').upsert({ id: `${backupId}_meta`, data: { backupId, filename: fileName, date: new Date().toISOString(), totalChunks, size: Math.round(jsonStr.length/1024) + 'KB', email: backupEmail } });
-                    // Guardar chunks
-                    for (let i = 0; i < totalChunks; i++) {
-                        const chunk = jsonStr.slice(i * chunkSize, (i + 1) * chunkSize);
-                        await window._sb.from('backups').upsert({ id: `${backupId}_chunk_${i}`, data: { chunk, index: i } });
-                        setBackupStatus(`💾 Guardando chunk ${i+1}/${totalChunks}...`);
-                    }
+                    setBackupStatus('📤 Subiendo a Supabase Storage...');
+                    const fileName2 = fileName;
+                    const blob = new Blob([jsonStr], { type: 'application/json' });
+                    const { data: storageData, error: storageError } = await window._sb.storage
+                        .from('backups')
+                        .upload(fileName2, blob, { upsert: true, contentType: 'application/json' });
+                    if (storageError) throw new Error('Storage: ' + storageError.message);
+                    const { data: urlData } = window._sb.storage.from('backups').getPublicUrl(fileName2);
+                    const fileUrl = urlData.publicUrl;
                     setBackupStatus('📧 Notificando a Make...');
                     await fetch('https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            backupId,
-                            filename: fileName,
+                            filename: fileName2,
                             date: new Date().toLocaleString('es-AR'),
                             email: backupEmail,
                             size: Math.round(jsonStr.length/1024) + 'KB',
-                            totalChunks
+                            fileUrl
                         })
                     });
 
