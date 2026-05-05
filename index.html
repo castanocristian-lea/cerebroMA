@@ -95,12 +95,20 @@
             let existing = [];
             try {
                 const remote = await dbGetKey('app_config', 'notif_' + key);
-                existing = Array.isArray(remote) ? remote : JSON.parse(localStorage.getItem(key) || '[]');
+                existing = Array.isArray(remote) ? remote : notifRead(key);
             } catch(e) {
-                existing = JSON.parse(localStorage.getItem(key) || '[]');
+                existing = notifRead(key);
             }
-            existing.push(item);
-            await notifSet(key, existing);
+            // Deduplicar por contenido antes de agregar
+            const isDup = existing.some(e => 
+                e.prestamoNombre === item.prestamoNombre && e.monto === item.monto && e.fecha === item.fecha ||
+                e.solicId === item.solicId ||
+                (e.concepto === item.concepto && e.monto === item.monto && e.fecha === item.fecha)
+            );
+            if (!isDup) {
+                existing.push(item);
+                await notifSet(key, existing);
+            }
         }
         // ── Migrar localStorage → Supabase (solo desde botón Importar) ─────
         async function migrarLocalStorage() {
@@ -1494,7 +1502,7 @@ ${invoice.items.map(item => `
                             const fullKey = `${k}_${yo.id}`;
                             const r = await dbGetKey('app_config', 'notif_' + fullKey);
                             if (r && Array.isArray(r)) {
-                                const local = JSON.parse(localStorage.getItem(fullKey)||'[]');
+                                const local = notifRead(fullKey);
                                 // Merge: si el item local está marcado como visto, respetar eso siempre
                                 const merged = r.map(rn => {
                                     const ln = local.find(l => String(l.id) === String(rn.id));
@@ -3193,6 +3201,12 @@ ${invoice.items.map(item => `
                             const notifKey = k1 || k2;
                             const n1 = k1 ? notifRead(k1) : [];
                             const n2 = notifRead(k2);
+                            // Si ambas vacías, intentar cargar de Supabase directamente
+                            if (!n1.length && !n2.length && k1) {
+                                dbGetKey('app_config', 'notif_' + k1).then(r => {
+                                    if (r && Array.isArray(r) && r.length) { notifWrite(k1, r); setNotifKey(k=>k+1); }
+                                }).catch(()=>{});
+                            }
                             // Merge deduplicando por id Y por contenido (evita duplicados de saves anteriores)
                             const allRaw = [...n1, ...n2.filter(x => !n1.find(y=>String(y.id)===String(x.id)))];
                             const seen = new Set();
