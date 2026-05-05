@@ -1458,7 +1458,20 @@ ${invoice.items.map(item => `
                                    String(e.id)===String(currentUser.id);
                         });
                         if (!yo) return;
-                        const keys = ['sueldoNotif','seguroNotif','solicNotif','solicRespNotif','calendarioNotif','prestamoNotif'];
+                        const empKeys = ['sueldoNotif','seguroNotif','solicNotif','solicRespNotif','calendarioNotif','prestamoNotif'];
+                        // Also sync user-based prestamo key
+                        const keys = [...empKeys];
+                        const userPrestamoKey = `prestamoNotif_user_${currentUser.id}`;
+                        // Fetch user-based key directly
+                        try {
+                            const r = await dbGetKey('app_config', 'notif_' + userPrestamoKey);
+                            if (r && Array.isArray(r)) {
+                                const local = JSON.parse(localStorage.getItem(userPrestamoKey)||'[]');
+                                const merged = r.map(rn => { const ln = local.find(l=>String(l.id)===String(rn.id)); return ln?.visto?{...rn,visto:true}:rn; });
+                                local.forEach(ln => { if(!merged.find(rn=>String(rn.id)===String(ln.id))) merged.push(ln); });
+                                localStorage.setItem(userPrestamoKey, JSON.stringify(merged));
+                            }
+                        } catch(e) {}
                         let changed = false;
                         await Promise.all(keys.map(async k => {
                             const fullKey = `${k}_${yo.id}`;
@@ -3144,9 +3157,9 @@ ${invoice.items.map(item => `
                     {(()=>{
                         try {
                             // Check both employee-based and user-based key
-                            const prestamoKey = yoEmpN ? `prestamoNotif_${yoEmpN.id}` : `prestamoNotif_user_${currentUser?.id}`;
+                            const prestamoKey = yoEmpN ? `prestamoNotif_${yoEmpN.id}` : null;
                             const altKey = `prestamoNotif_user_${currentUser?.id}`;
-                            const notifKey = yoEmpN ? prestamoKey : altKey;
+                            const notifKey = prestamoKey || altKey;
                             // Merge both keys
                             const n1 = JSON.parse(localStorage.getItem(prestamoKey)||'[]');
                             const n2 = prestamoKey !== altKey ? JSON.parse(localStorage.getItem(altKey)||'[]') : [];
@@ -6261,7 +6274,7 @@ ${invoice.items.map(item => `
             };
 
             // CRUD Pagos
-            const openNewPago = () => { setEditingPagoIdx(null); setPagoForm({ fecha: new Date().toISOString().split('T')[0], monto: '', notas: '', metodo: 'BANK' }); setShowPagoModal(true); };
+            const openNewPago = () => { setEditingPagoIdx(null); setCuotaIdxParaPagar(null); setPagoForm({ fecha: new Date().toISOString().split('T')[0], monto: '', notas: '', metodo: 'BANK', montoCZK: '', cargarEnCaja: false }); setShowPagoModal(true); };
             const openEditPago = (idx) => { const pg = selected.pagos[idx]; setEditingPagoIdx(idx); setCuotaIdxParaPagar(null); setPagoForm({ fecha: pg.fecha, monto: String(pg.monto), notas: pg.notas || '', metodo: pg.metodo || 'BANK', montoCZK: '', cargarEnCaja: false }); setShowPagoModal(true); };
             const openPagoDesdeCuota = (idx) => {
                 const c = selected.cuotas[idx];
@@ -6303,22 +6316,28 @@ ${invoice.items.map(item => `
                                        (e.nombre||'').toLowerCase().includes(userLC) ||
                                        String(e.id)===String(u.id);
                             });
-                            // Si no hay empleado asociado, notificar igual usando el id del usuario
-                            const empId = emp ? emp.id : `user_${uid}`;
-                            const notifKey = `prestamoNotif_${empId}`;
-                            await notifPush(notifKey, { id: Date.now(), prestamoNombre: p.nombre, monto: c.monto || parseFloat(pagoForm.monto), moneda: p.moneda, fecha: c.fecha || pagoForm.fecha, visto: false });
+                            // Guardar por empId Y por userId para asegurar que el banner lo encuentre
+                            const empId = emp ? emp.id : null;
+                            const notifItem = { id: Date.now(), prestamoNombre: p.nombre, monto: c.monto || parseFloat(pagoForm.monto), moneda: p.moneda, fecha: c.fecha || pagoForm.fecha, visto: false };
+                            if (empId) await notifPush(`prestamoNotif_${empId}`, notifItem);
+                            await notifPush(`prestamoNotif_user_${uid}`, {...notifItem, id: Date.now()+1});
                             window.dispatchEvent(new Event('prestamoNotifUpdate'));
                         }
                     }
                 } else {
-                    // Flujo simple: editar/agregar pago manual
+                    // Flujo manual: con opción de caja
                     const oldPago = editingPagoIdx !== null ? p.pagos[editingPagoIdx] : null;
-                    const cajaId = oldPago?.cajaId || `prest_${p.id}_${Date.now()}`;
+                    const cajaId = pagoForm.cargarEnCaja ? (oldPago?.cajaId || `prest_${p.id}_${Date.now()}`) : (oldPago?.cajaId || null);
                     const newPago = { fecha: pagoForm.fecha, monto: parseFloat(pagoForm.monto), notas: pagoForm.notas, metodo: pagoForm.metodo, cajaId };
                     const newPagos = editingPagoIdx !== null ? p.pagos.map((pg, i) => i === editingPagoIdx ? newPago : pg) : [...(p.pagos || []), newPago];
                     newPagos.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
                     setPrestamos(prev => prev.map(x => x.id === p.id ? { ...x, pagos: newPagos } : x));
-                    syncPagoToCaja(p, newPago, cajaId, false);
+                    if (pagoForm.cargarEnCaja && cajaId) {
+                        const montoCZK = parseFloat(pagoForm.montoCZK) || parseFloat(pagoForm.monto);
+                        syncPagoToCaja(p, { ...newPago, monto: montoCZK }, cajaId, false);
+                    } else if (oldPago?.cajaId) {
+                        syncPagoToCaja(p, newPago, oldPago.cajaId, false);
+                    }
                 }
                 setCuotaIdxParaPagar(null);
                 setShowPagoModal(false);
@@ -6842,9 +6861,7 @@ ${invoice.items.map(item => `
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Monto ({selected?.moneda})</label><input className={inp} type="number" value={pagoForm.monto} onChange={e => setPagoForm({...pagoForm, monto: e.target.value})} placeholder="0" /></div>
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Método</label><select className={inp} value={pagoForm.metodo} onChange={e => setPagoForm({...pagoForm, metodo: e.target.value})}><option value="BANK">🏦 Banco</option><option value="CASH">💵 Efectivo</option></select></div>
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Notas</label><input className={inp} value={pagoForm.notas} onChange={e => setPagoForm({...pagoForm, notas: e.target.value})} placeholder="Cuota 1, pago parcial..." /></div>
-                                        {cuotaIdxParaPagar !== null && (
-                                            <>
-                                                <div className={`flex items-center gap-3 p-3 rounded-lg border ${darkMode?'border-slate-600 bg-slate-700/50':'border-slate-200 bg-slate-50'}`}>
+                                        <div className={`flex items-center gap-3 p-3 rounded-lg border ${darkMode?'border-slate-600 bg-slate-700/50':'border-slate-200 bg-slate-50'}`}>
                                                     <input type="checkbox" id="cargarCaja" checked={pagoForm.cargarEnCaja} onChange={e => setPagoForm({...pagoForm, cargarEnCaja: e.target.checked})} className="w-4 h-4 rounded" />
                                                     <label htmlFor="cargarCaja" className={`text-sm font-medium cursor-pointer ${txt}`}>Cargar en Caja Diaria</label>
                                                 </div>
@@ -6853,8 +6870,6 @@ ${invoice.items.map(item => `
                                                         <input className={inp} type="number" value={pagoForm.montoCZK} onChange={e => setPagoForm({...pagoForm, montoCZK: e.target.value})} placeholder="Monto en CZK" />
                                                     </div>
                                                 )}
-                                            </>
-                                        )}
                                     </div>
                                     <div className="flex gap-2 mt-5">
                                         <button onClick={() => { setShowPagoModal(false); setCuotaIdxParaPagar(null); }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cancelar</button>
