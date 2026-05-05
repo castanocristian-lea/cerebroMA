@@ -1565,13 +1565,15 @@ ${invoice.items.map(item => `
                                 const jsonStr = JSON.stringify(data, null, 2);
                                 const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
                                 const email = settings?.email || 'cristian@malaargenta.cz';
-                                // Enviar a Make webhook (Drive + Email)
+                                // Guardar en Supabase y notificar Make
+                                const backupId = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}`;
+                                await window._sb.from('backups').upsert({ id: backupId, data: { filename: fileName, content: jsonStr, date: new Date().toLocaleString('es-AR'), email, size: Math.round(jsonStr.length/1024) + 'KB' } });
                                 await fetch('https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
+                                        backupId,
                                         filename: fileName,
-                                        content: jsonStr,
                                         date: new Date().toLocaleString('es-AR'),
                                         email,
                                         size: Math.round(jsonStr.length/1024) + 'KB'
@@ -6308,13 +6310,16 @@ ${invoice.items.map(item => `
                     const jsonStr = JSON.stringify(data, null, 2);
                     const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
 
-                    setBackupStatus('📤 Enviando a Make (Drive + Email)...');
+                    setBackupStatus('💾 Guardando en Supabase...');
+                    const backupId = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}`;
+                    await window._sb.from('backups').upsert({ id: backupId, data: { filename: fileName, content: jsonStr, date: new Date().toLocaleString('es-AR'), email: backupEmail, size: Math.round(jsonStr.length/1024) + 'KB' } });
+                    setBackupStatus('📤 Notificando a Make...');
                     await fetch('https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            backupId,
                             filename: fileName,
-                            content: jsonStr,
                             date: new Date().toLocaleString('es-AR'),
                             email: backupEmail,
                             size: Math.round(jsonStr.length/1024) + 'KB'
