@@ -3177,22 +3177,27 @@ ${invoice.items.map(item => `
                             if (!noVistas.length) return null;
                             const notifKeyFinal = k1 || k2;
                             const ultima = noVistas[noVistas.length - 1];
+                            // Un banner por cada pago no visto
                             return (
-                                <div className="flex items-center gap-3 px-4 py-2.5"
-                                    style={{background:'linear-gradient(90deg,#0f4c75,#1b6ca8)',color:'white'}}>
-                                    <span className="text-xl shrink-0">🏦</span>
-                                    <p className="text-sm font-medium flex-1">
-                                        {noVistas.length > 1
-                                            ? `${noVistas.length} pagos de préstamos registrados`
-                                            : `Pago de "${ultima.prestamoNombre}": ${ultima.moneda} ${Number(ultima.monto).toLocaleString('es-CZ')}`
-                                        }
-                                    </p>
-                                    <button onClick={() => {
-                                        const all = JSON.parse(localStorage.getItem(notifKey) || '[]');
-                                        notifSet(notifKey, all.map(n => ({...n, visto: true})));
-                                        window.dispatchEvent(new Event('prestamoNotifUpdate'));
-                                    }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
-                                        style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
+                                <div>
+                                    {noVistas.map((nv, idx) => (
+                                        <div key={idx} className="flex items-center gap-3 px-4 py-2.5"
+                                            style={{background:'linear-gradient(90deg,#0f4c75,#1b6ca8)',color:'white'}}>
+                                            <span className="text-lg shrink-0">🏦</span>
+                                            <p className="text-sm font-medium flex-1">
+                                                {`Pago de "${nv.prestamoNombre}": ${nv.moneda} ${Number(nv.monto).toLocaleString('es-CZ')}`}
+                                            </p>
+                                            <button onClick={() => {
+                                                const all1 = k1 ? JSON.parse(localStorage.getItem(k1)||'[]') : [];
+                                                const all2 = JSON.parse(localStorage.getItem(k2)||'[]');
+                                                const mark = arr => arr.map(n => String(n.id)===String(nv.id) ? {...n,visto:true} : n);
+                                                if (k1) notifSet(k1, mark(all1));
+                                                notifSet(k2, mark(all2));
+                                                window.dispatchEvent(new Event('prestamoNotifUpdate'));
+                                            }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                                style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
+                                        </div>
+                                    ))}
                                 </div>
                             );
                         } catch(e) { return null; }
