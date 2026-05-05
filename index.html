@@ -6307,6 +6307,7 @@ ${invoice.items.map(item => `
                 setShowPagoModal(true);
             };
             const savePago = async () => {
+                console.log("💾 savePago llamado, selected:", selected?.nombre, "notificar:", selected?.notificarUsuarios, "cuotaIdx:", cuotaIdxParaPagar);
                 if (!pagoForm.monto || isNaN(parseFloat(pagoForm.monto))) return alert('Ingresá un monto válido');
                 const p = selected;
 
