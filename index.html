@@ -3156,18 +3156,26 @@ ${invoice.items.map(item => `
                     {/* Banner préstamo pagado */}
                     {(()=>{
                         try {
-                            // Check both employee-based and user-based key
-                            const prestamoKey = yoEmpN ? `prestamoNotif_${yoEmpN.id}` : null;
-                            const altKey = `prestamoNotif_user_${currentUser?.id}`;
-                            const notifKey = prestamoKey || altKey;
-                            // Merge both keys
-                            const n1 = JSON.parse(localStorage.getItem(prestamoKey)||'[]');
-                            const n2 = prestamoKey !== altKey ? JSON.parse(localStorage.getItem(altKey)||'[]') : [];
+                            // Buscar empId del usuario actual
+                            const empsLSP = JSON.parse(localStorage.getItem('employees') || '[]');
+                            const nameLCP = (currentUser?.name||'').toLowerCase();
+                            const userLCP = (currentUser?.username||'').toLowerCase();
+                            const yoEmpP = empsLSP.find(e => {
+                                const en = `${e.nombre} ${e.apellido}`.toLowerCase();
+                                return en.includes(nameLCP)||(nameLCP&&nameLCP.includes((e.nombre||'').toLowerCase()))||
+                                       (e.nombre||'').toLowerCase().includes(userLCP)||
+                                       String(e.id)===String(currentUser?.id);
+                            });
+                            // Leer de ambas keys posibles
+                            const k1 = yoEmpP ? `prestamoNotif_${yoEmpP.id}` : null;
+                            const k2 = `prestamoNotif_user_${currentUser?.id}`;
+                            const notifKey = k1 || k2;
+                            const n1 = k1 ? JSON.parse(localStorage.getItem(k1)||'[]') : [];
+                            const n2 = JSON.parse(localStorage.getItem(k2)||'[]');
                             const allN = [...n1, ...n2.filter(x => !n1.find(y=>String(y.id)===String(x.id)))];
-                            if (!allN.filter(n=>!n.visto).length) return null;
-                            // Reuse notifKey for enterado action
-                            const notifKeyFinal = notifKey;
                             const noVistas = allN.filter(n => !n.visto);
+                            if (!noVistas.length) return null;
+                            const notifKeyFinal = k1 || k2;
                             const ultima = noVistas[noVistas.length - 1];
                             return (
                                 <div className="flex items-center gap-3 px-4 py-2.5"
