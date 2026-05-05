@@ -1553,6 +1553,13 @@ ${invoice.items.map(item => `
                 };
                 cargar();
                 const t = setInterval(cargar, 15000);
+                // Precargar tareas miCerebro para que el banner funcione sin abrir el módulo
+                const uid_mc = String(currentUser.id||'');
+                const tarKey = `miCerebroTareas_${uid_mc}`;
+                window._sb?.from('app_config').select('data').eq('id', tarKey).maybeSingle()
+                    .then(r => { if (r?.data?.data) { window.__mcTareas=window.__mcTareas||{}; window.__mcTareas[tarKey]=r.data.data; setNotifKey(k=>k+1); }});
+                window._sb?.from('app_config').select('id,data').like('id','miCerebroTareas_%')
+                    .then(r => { if (r?.data) { let comp=[]; r.data.forEach(row => { if(row.id===tarKey) return; (row.data||[]).forEach(t=>{ if((t.compartidoCon||[]).includes(uid_mc)) comp.push(t); }); }); window.__mcCompartidas=window.__mcCompartidas||{}; window.__mcCompartidas[uid_mc]=comp; setNotifKey(k=>k+1); }});
                 const onEvt = () => setTimeout(cargar, 300);
                 const evts = ['supabase-loaded','sueldoNotifUpdate','solicNotifUpdate','calendarioNotifUpdate','prestamoNotifUpdate','notifUpdate'];
                 evts.forEach(e => window.addEventListener(e, onEvt));
@@ -2977,7 +2984,7 @@ ${invoice.items.map(item => `
                                 const solics = (window.__calendarioSolicitudesPrecargadas || []);
                                 const solic = solics.find(s => String(s.id)===String(solicId));
                                 if (solic) {
-                                    const rk = `solicRespNotif_${solic.solicitanteId}`;
+                                    const rk = `solicRespNotif_${solic.solicitanteUserId || solic.solicitanteId}`;
                                     notifPush(rk, { id: solicId, tipo: solic.tipo, estado, visto: false });
                                 }
                                 window.dispatchEvent(new CustomEvent('solicResponder', {detail: {id: solicId, estado}}));
@@ -4167,7 +4174,7 @@ ${invoice.items.map(item => `
                         const solic = prev.find(s => String(s.id)===String(id));
                         if (solic) {
                             try {
-                                const rk = `solicRespNotif_${solic.solicitanteId}`;
+                                const rk = `solicRespNotif_${solic.solicitanteUserId || solic.solicitanteId}`;
                                 notifPush(rk, { id, tipo: solic.tipo, estado, fechaInicio: solic.fechaInicio||'', fechaFin: solic.fechaFin||'', visto: false });
                             } catch(e2) {}
                         }
@@ -4226,6 +4233,7 @@ ${invoice.items.map(item => `
                     id: Date.now(),
                     tipo: solicForm.tipo,
                     solicitanteId: yoEmp?.id,
+                    solicitanteUserId: String(currentUser?.id || ''),
                     solicitanteNombre: yoEmp ? `${yoEmp.nombre} ${yoEmp.apellido}` : currentUser?.name,
                     destinatarioId: solicForm.destinatarioId,
                     fechaInicio: solicForm.fechaInicio,
@@ -4252,7 +4260,7 @@ ${invoice.items.map(item => `
                 const solic = solicitudes.find(s => s.id === id);
                 if (solic) {
                     try {
-                        const notifKey = `solicRespNotif_${solic.solicitanteId}`;
+                        const notifKey = `solicRespNotif_${solic.solicitanteUserId || solic.solicitanteId}`;
                         await notifPush(notifKey, { id, tipo: solic.tipo, estado, fechaInicio: solic.fechaInicio||'', fechaFin: solic.fechaFin||'', visto: false });
                         window.dispatchEvent(new Event('solicNotifUpdate'));
                     } catch(e) {}
