@@ -3172,7 +3172,15 @@ ${invoice.items.map(item => `
                             const notifKey = k1 || k2;
                             const n1 = k1 ? JSON.parse(localStorage.getItem(k1)||'[]') : [];
                             const n2 = JSON.parse(localStorage.getItem(k2)||'[]');
-                            const allN = [...n1, ...n2.filter(x => !n1.find(y=>String(y.id)===String(x.id)))];
+                            // Merge deduplicando por id Y por contenido (evita duplicados de saves anteriores)
+                            const allRaw = [...n1, ...n2.filter(x => !n1.find(y=>String(y.id)===String(x.id)))];
+                            const seen = new Set();
+                            const allN = allRaw.filter(x => {
+                                const key = `${x.prestamoNombre}_${x.monto}_${x.fecha}`;
+                                if (seen.has(key)) return false;
+                                seen.add(key);
+                                return true;
+                            });
                             const noVistas = allN.filter(n => !n.visto);
                             if (!noVistas.length) return null;
                             const notifKeyFinal = k1 || k2;
@@ -6353,11 +6361,13 @@ ${invoice.items.map(item => `
                         console.log('👷 empleado encontrado:', emp?.nombre, emp?.id);
                         const empId = emp ? emp.id : null;
                         const notifItem = { id: Date.now(), prestamoNombre: p.nombre, monto: parseFloat(pagoForm.monto), moneda: p.moneda, fecha: pagoForm.fecha, visto: false };
-                        console.log('📤 enviando notif:', notifItem, 'keys:', empId ? `prestamoNotif_${empId}` : 'sin emp', `prestamoNotif_user_${uid}`);
-                        if (empId) await notifPush(`prestamoNotif_${empId}`, {...notifItem});
-                        await notifPush(`prestamoNotif_user_${uid}`, {...notifItem, id: Date.now()+1});
+                        // Guardar solo en una clave para evitar duplicados
+                        if (empId) {
+                            await notifPush(`prestamoNotif_${empId}`, notifItem);
+                        } else {
+                            await notifPush(`prestamoNotif_user_${uid}`, notifItem);
+                        }
                         window.dispatchEvent(new Event('prestamoNotifUpdate'));
-                        console.log('✅ notif enviada');
                     }
                 } else {
                     console.log('⚠️ sin usuarios para notificar en este préstamo');
