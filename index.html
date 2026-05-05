@@ -1565,15 +1565,18 @@ ${invoice.items.map(item => `
                                 const jsonStr = JSON.stringify(data, null, 2);
                                 const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
                                 const email = settings?.email || 'cristian@malaargenta.cz';
+                                const backupId = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}`;
+                                const chunkSize = 400000;
+                                const totalChunks = Math.ceil(jsonStr.length / chunkSize);
+                                await window._sb.from('backups').upsert({ id: `${backupId}_meta`, data: { backupId, filename: fileName, date: new Date().toISOString(), totalChunks, size: Math.round(jsonStr.length/1024)+'KB', email } });
+                                for (let i = 0; i < totalChunks; i++) {
+                                    const chunk = jsonStr.slice(i * chunkSize, (i+1) * chunkSize);
+                                    await window._sb.from('backups').upsert({ id: `${backupId}_chunk_${i}`, data: { chunk, index: i } });
+                                }
                                 await fetch('https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        filename: fileName,
-                                        date: new Date().toLocaleString('es-AR'),
-                                        email,
-                                        size: Math.round(jsonStr.length/1024) + 'KB'
-                                    })
+                                    body: JSON.stringify({ backupId, filename: fileName, date: new Date().toLocaleString('es-AR'), email, size: Math.round(jsonStr.length/1024)+'KB', totalChunks })
                                 });
                                 await registrarBackup(true);
                                 console.log('✅ Backup automático completado');
@@ -6275,15 +6278,29 @@ ${invoice.items.map(item => `
                     const jsonStr = JSON.stringify(data, null, 2);
                     const fileName = `cerebrома-backup-${new Date().toISOString().split('T')[0]}.json`;
 
-                    setBackupStatus('📧 Enviando notificación...');
+                    setBackupStatus('💾 Guardando en Supabase...');
+                    const backupId = `backup_${new Date().toISOString().split('T')[0]}_${Date.now()}`;
+                    const chunkSize = 400000; // 400KB por chunk
+                    const totalChunks = Math.ceil(jsonStr.length / chunkSize);
+                    // Guardar metadata
+                    await window._sb.from('backups').upsert({ id: `${backupId}_meta`, data: { backupId, filename: fileName, date: new Date().toISOString(), totalChunks, size: Math.round(jsonStr.length/1024) + 'KB', email: backupEmail } });
+                    // Guardar chunks
+                    for (let i = 0; i < totalChunks; i++) {
+                        const chunk = jsonStr.slice(i * chunkSize, (i + 1) * chunkSize);
+                        await window._sb.from('backups').upsert({ id: `${backupId}_chunk_${i}`, data: { chunk, index: i } });
+                        setBackupStatus(`💾 Guardando chunk ${i+1}/${totalChunks}...`);
+                    }
+                    setBackupStatus('📧 Notificando a Make...');
                     await fetch('https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            backupId,
                             filename: fileName,
                             date: new Date().toLocaleString('es-AR'),
                             email: backupEmail,
-                            size: Math.round(jsonStr.length/1024) + 'KB'
+                            size: Math.round(jsonStr.length/1024) + 'KB',
+                            totalChunks
                         })
                     });
 
