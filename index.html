@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-17:10 - Fix taxRates undefined en SalesInvoicing -->
+<!-- Version: 2026-05-06-17:20 - Fix caja diaria: cajaPrecargada seteada en carga inicial -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -240,7 +240,7 @@
 
                 // cash_transactions multiyear
                 const txRow = cashTx.data?.find(r => r.id === 'multiyear');
-                const _cashTx = txRow?.data || {}; window.__cashTxPrecargadas = _cashTx; // no localStorage
+                const _cashTx = txRow?.data || {}; window.__cashTxPrecargadas = _cashTx; window.__cajaPrecargada = _cashTx; // no localStorage
 
                 // calendar_config
                 const calUbic = calCfg.data?.find(r => r.id === 'ubicaciones');
