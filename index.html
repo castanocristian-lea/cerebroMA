@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-03-11-14:20 - Header actualizado con pendientes/vencidas -->
+<!-- Version: 2026-05-06-09:15 - Fix React error #310: hooks movidos antes del return condicional en SeguridadModule -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -6261,6 +6261,16 @@ ${invoice.items.map(item => `
             const [pinVerificado, setPinVerificado] = React.useState(false);
             const [pinInput, setPinInput] = React.useState('');
             const [pinError, setPinError] = React.useState('');
+            const [backupEmail, setBackupEmail] = React.useState(() => {
+                return window.__backupEmailPrecargado || 'cristian@malaargenta.cz';
+            });
+            const [editingEmail, setEditingEmail] = React.useState(false);
+            const [emailInput, setEmailInput] = React.useState('');
+            const [saving, setSaving] = React.useState(false);
+            const [lastBackup, setLastBackup] = React.useState(null);
+            const [backupHistory, setBackupHistory] = React.useState([]);
+            const [runningBackup, setRunningBackup] = React.useState(false);
+            const [backupStatus, setBackupStatus] = React.useState(null);
 
             const verificarPin = () => {
                 const users = window.__systemUsersPrecargados || [];
@@ -6293,17 +6303,6 @@ ${invoice.items.map(item => `
                     </div>
                 </div>
             );
-
-            const [backupEmail, setBackupEmail] = React.useState(() => {
-                return window.__backupEmailPrecargado || 'cristian@malaargenta.cz';
-            });
-            const [editingEmail, setEditingEmail] = React.useState(false);
-            const [emailInput, setEmailInput] = React.useState('');
-            const [saving, setSaving] = React.useState(false);
-            const [lastBackup, setLastBackup] = React.useState(null);
-            const [backupHistory, setBackupHistory] = React.useState([]);
-            const [runningBackup, setRunningBackup] = React.useState(false);
-            const [backupStatus, setBackupStatus] = React.useState(null);
 
             React.useEffect(() => {
                 dbGetKey('app_config', 'backupSettings').then(d => {
