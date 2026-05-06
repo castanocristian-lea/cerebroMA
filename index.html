@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-18:10 - Mis eventos: pantalla fullscreen con 3 columnas desktop, plegables mobile -->
+<!-- Version: 2026-05-06-18:15 - Fix React #310: hooks fuera del IIFE en MisEvs -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -4170,6 +4170,9 @@ ${invoice.items.map(item => `
             const [verTodos7,   setVerTodos7]   = useState(false);
             const [showFiltros,  setShowFiltros]  = useState(false);
             const [selectedMesDay, setSelectedMesDay] = useState(null);
+            const [misEvsFiltroDesde, setMisEvsFiltroDesde] = useState('');
+            const [misEvsFiltroHasta, setMisEvsFiltroHasta] = useState('');
+            const [misEvsOpenSec, setMisEvsOpenSec] = useState({pasados:false,hoy:true,proximos:true});
 
             useEffect(() => {
                 // Escuchar solicitud de abrir nuevo evento desde banner
@@ -5320,10 +5323,7 @@ ${invoice.items.map(item => `
                             ? <p className={`text-sm ${sub} text-center py-8`}>No se encontró tu perfil</p>
                             : (()=>{
                                 const todasEntradas = misEvs.flatMap(ev => diasEv(ev).map(d=>({ev,d}))).sort((a,b)=>a.d.localeCompare(b.d));
-                                const [filtroDesde, setFiltroDesde] = React.useState('');
-                                const [filtroHasta, setFiltroHasta] = React.useState('');
-                                const [openSec, setOpenSec] = React.useState({pasados:false,hoy:true,proximos:true});
-                                const filtradas = todasEntradas.filter(({d})=>(!filtroDesde||d>=filtroDesde)&&(!filtroHasta||d<=filtroHasta));
+                                const filtradas = todasEntradas.filter(({d})=>(!misEvsFiltroDesde||d>=misEvsFiltroDesde)&&(!misEvsFiltroHasta||d<=misEvsFiltroHasta));
                                 const pasados  = filtradas.filter(({d})=>d<hoy);
                                 const hoyEvs   = filtradas.filter(({d})=>d===hoy);
                                 const proximos = filtradas.filter(({d})=>d>hoy);
@@ -5350,12 +5350,12 @@ ${invoice.items.map(item => `
                                         {/* Filtro fechas */}
                                         <div className={`flex items-center gap-2 mb-4 p-3 rounded-xl ${darkMode?'bg-slate-800':'bg-white'} border ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                             <span className={`text-xs ${sub} shrink-0`}>Desde</span>
-                                            <input type="date" value={filtroDesde} onChange={e=>setFiltroDesde(e.target.value)}
+                                            <input type="date" value={misEvsFiltroDesde} onChange={e=>setMisEvsFiltroDesde(e.target.value)}
                                                 className={`flex-1 text-xs px-2 py-1.5 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
                                             <span className={`text-xs ${sub} shrink-0`}>Hasta</span>
-                                            <input type="date" value={filtroHasta} onChange={e=>setFiltroHasta(e.target.value)}
+                                            <input type="date" value={misEvsFiltroHasta} onChange={e=>setMisEvsFiltroHasta(e.target.value)}
                                                 className={`flex-1 text-xs px-2 py-1.5 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
-                                            {(filtroDesde||filtroHasta) && <button onClick={()=>{setFiltroDesde('');setFiltroHasta('');}} className="text-xs text-red-400 shrink-0">✕</button>}
+                                            {(misEvsFiltroDesde||misEvsFiltroHasta) && <button onClick={()=>{setMisEvsFiltroDesde('');setMisEvsFiltroHasta('');}} className="text-xs text-red-400 shrink-0">✕</button>}
                                         </div>
                                         {/* Secciones — desktop: 3 columnas, mobile: plegables */}
                                         <div className="hidden sm:grid sm:grid-cols-3 sm:gap-4">
@@ -5369,12 +5369,12 @@ ${invoice.items.map(item => `
                                         <div className="sm:hidden space-y-2">
                                             {[['🕐 Pasados',pasados,false,'text-slate-500','pasados'],['⭐ Hoy',hoyEvs,true,'text-blue-500','hoy'],['📅 Próximos',proximos,false,'text-emerald-500','proximos']].map(([titulo,lista,esHoy,color,key])=>(
                                                 <div key={key} className={`rounded-xl border overflow-hidden ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
-                                                    <button onClick={()=>setOpenSec(s=>({...s,[key]:!s[key]}))}
+                                                    <button onClick={()=>setMisEvsOpenSec(s=>({...s,[key]:!s[key]}))}
                                                         className={`w-full flex items-center justify-between px-4 py-3 ${darkMode?'hover:bg-slate-700/50':'hover:bg-slate-50'}`}>
                                                         <span className={`text-sm font-bold ${color}`}>{titulo} <span className="opacity-60 font-normal text-xs">({lista.length})</span></span>
-                                                        <span className={`text-xs transition-transform ${openSec[key]?'rotate-180':'rotate-0'} inline-block ${sub}`}>▼</span>
+                                                        <span className={`text-xs transition-transform ${misEvsOpenSec[key]?'rotate-180':'rotate-0'} inline-block ${sub}`}>▼</span>
                                                     </button>
-                                                    {openSec[key] && (
+                                                    {misEvsOpenSec[key] && (
                                                         <div className="px-3 pb-3">
                                                             {lista.length===0 ? <p className={`text-xs ${sub} italic`}>Sin eventos</p> : lista.map(e=>renderEntrada(e,esHoy))}
                                                         </div>
