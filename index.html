@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-09:15 - Fix React error #310: hooks movidos antes del return condicional en SeguridadModule -->
+<!-- Version: 2026-05-06-09:25 - Fix React error #310: todos los hooks (useState + useEffect) antes del return condicional en SeguridadModule -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -6272,6 +6272,14 @@ ${invoice.items.map(item => `
             const [runningBackup, setRunningBackup] = React.useState(false);
             const [backupStatus, setBackupStatus] = React.useState(null);
 
+            React.useEffect(() => {
+                dbGetKey('app_config', 'backupSettings').then(d => {
+                    if (d?.email) { setBackupEmail(d.email); window.__backupEmailPrecargado = d.email; }
+                    if (d?.lastBackup) setLastBackup(d.lastBackup);
+                    if (d?.history) setBackupHistory(d.history || []);
+                });
+            }, []);
+
             const verificarPin = () => {
                 const users = window.__systemUsersPrecargados || [];
                 const user = users.find(u => String(u.id) === String(currentUser?.id));
@@ -6303,14 +6311,6 @@ ${invoice.items.map(item => `
                     </div>
                 </div>
             );
-
-            React.useEffect(() => {
-                dbGetKey('app_config', 'backupSettings').then(d => {
-                    if (d?.email) { setBackupEmail(d.email); window.__backupEmailPrecargado = d.email; }
-                    if (d?.lastBackup) setLastBackup(d.lastBackup);
-                    if (d?.history) setBackupHistory(d.history || []);
-                });
-            }, []);
 
             const hacerBackup = async () => {
                 setRunningBackup(true);
