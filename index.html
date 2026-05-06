@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-17:20 - Fix caja diaria: cajaPrecargada seteada en carga inicial -->
+<!-- Version: 2026-05-06-17:30 - Fix caja: allTxLoaded forzado antes de guardar -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -10402,6 +10402,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             };
 
             const saveIngreso = () => {
+                if (!allTxLoaded) setAllTxLoaded(true); // garantizar que el useEffect persista
                 const fechaDate = ingresoForm.fecha ? new Date(ingresoForm.fecha + 'T12:00:00') : new Date();
                 const yearReal = ingresoForm.fecha ? fechaDate.getFullYear() : selectedYear;
                 const dia = fechaDate.getDate();
@@ -10487,6 +10488,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Guardar transacción (crear o editar)
             const saveTransaction = () => {
+                if (!allTxLoaded) setAllTxLoaded(true);
                 if (!formData.origen) { alert('Seleccioná el origen: Banco o Efectivo'); return; }
                 if (!formData.tipoCosto) { alert('Seleccioná el Tipo de Costo'); return; }
                 const fechaDate = formData.fecha ? new Date(formData.fecha + 'T12:00:00') : new Date();
