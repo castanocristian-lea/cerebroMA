@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-17:05 - Facturador Ventas: campo Descuento con selección IVA trilingual -->
+<!-- Version: 2026-05-06-17:10 - Fix taxRates undefined en SalesInvoicing -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -17906,9 +17906,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             value={invoiceForm.discountIva}
                                             onChange={(e) => setInvoiceForm({...invoiceForm, discountIva: e.target.value})}
                                             className={'px-1.5 py-0.5 text-xs rounded font-mono flex-shrink-0 border ' + (darkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600')}>
-                                            {taxRates.length > 0 ? taxRates.map(r => (
-                                                <option key={r} value={r}>{r}% {taxLabel}</option>
-                                            )) : [0,10,21].map(r => (
+                                            {(window.__taxRatesPrecargados||[0,10,21]).map(r => (
                                                 <option key={r} value={r}>{r}% {taxLabel}</option>
                                             ))}
                                         </select>
