@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-19:40 - Modales mobile: más angostos con 95vw -->
+<!-- Version: 2026-05-06-19:50 - Campos fecha y hora con maxWidth en modales mobile -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -4911,11 +4911,11 @@ ${invoice.items.map(item => `
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                     <div>
                                                         <label className={`block text-xs font-medium mb-1 ${sub}`}>Inicio *</label>
-                                                        <input type="date" value={horasForm.fecha||hoy} onChange={e=>setHorasForm({...horasForm,fecha:e.target.value})} className={inp}/>
+                                                        <input type="date" value={horasForm.fecha||hoy} onChange={e=>setHorasForm({...horasForm,fecha:e.target.value})} className={inp} style={{maxWidth:"220px"}}/>
                                                     </div>
                                                     <div>
                                                         <label className={`block text-xs font-medium mb-1 ${sub}`}>Fin (opcional)</label>
-                                                        <input type="date" value={horasForm.fechaFin||''} onChange={e=>setHorasForm({...horasForm,fechaFin:e.target.value})} className={inp}/>
+                                                        <input type="date" value={horasForm.fechaFin||''} onChange={e=>setHorasForm({...horasForm,fechaFin:e.target.value})} className={inp} style={{maxWidth:"220px"}}/>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -5231,11 +5231,11 @@ ${invoice.items.map(item => `
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             <div>
                                                 <label className={`block text-xs font-medium mb-1 ${sub}`}>Hora inicio</label>
-                                                <input type="time" value={form.horaInicio} onChange={e=>setForm({...form,horaInicio:e.target.value})} className={inp}/>
+                                                <input type="time" value={form.horaInicio} onChange={e=>setForm({...form,horaInicio:e.target.value})} className={inp} style={{maxWidth:'160px'}}/>
                                             </div>
                                             <div>
                                                 <label className={`block text-xs font-medium mb-1 ${sub}`}>Hora fin</label>
-                                                <input type="time" value={form.horaFin} onChange={e=>setForm({...form,horaFin:e.target.value})} className={inp}/>
+                                                <input type="time" value={form.horaFin} onChange={e=>setForm({...form,horaFin:e.target.value})} className={inp} style={{maxWidth:'160px'}}/>
                                             </div>
                                         </div>
                                     )}
@@ -5253,11 +5253,11 @@ ${invoice.items.map(item => `
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             <div>
                                                 <label className={`block text-xs font-medium mb-1 ${sub}`}>Inicio *</label>
-                                                <input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})} className={inp}/>
+                                                <input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})} className={inp} style={{maxWidth:'220px'}}/>
                                             </div>
                                             <div>
                                                 <label className={`block text-xs font-medium mb-1 ${sub}`}>Fin (opcional)</label>
-                                                <input type="date" value={form.fechaFin} onChange={e=>setForm({...form,fechaFin:e.target.value})} className={inp}/>
+                                                <input type="date" value={form.fechaFin} onChange={e=>setForm({...form,fechaFin:e.target.value})} className={inp} style={{maxWidth:'220px'}}/>
                                             </div>
                                         </div>
                                     ) : (
@@ -5504,11 +5504,11 @@ ${invoice.items.map(item => `
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha inicio *</label>
-                                            <input type="date" value={solicForm.fechaInicio||''} onChange={e=>setSolicForm({...solicForm,fechaInicio:e.target.value})} className={inp}/>
+                                            <input type="date" value={solicForm.fechaInicio||''} onChange={e=>setSolicForm({...solicForm,fechaInicio:e.target.value})} className={inp} style={{maxWidth:'220px'}}/>
                                         </div>
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha fin (opcional)</label>
-                                            <input type="date" value={solicForm.fechaFin||''} onChange={e=>setSolicForm({...solicForm,fechaFin:e.target.value})} className={inp}/>
+                                            <input type="date" value={solicForm.fechaFin||''} onChange={e=>setSolicForm({...solicForm,fechaFin:e.target.value})} className={inp} style={{maxWidth:'220px'}}/>
                                         </div>
                                     </div>
                                     <div>
@@ -24512,7 +24512,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <div>
                                             <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>VENCIMIENTO</label>
                                             <input type="date" value={form.vencimiento} onChange={e=>setForm(f=>({...f,vencimiento:e.target.value}))}
-                                                style={{width:'100%',padding:'8px 12px',borderRadius:'10px',fontSize:'13px',boxSizing:'border-box',
+                                                style={{width:'100%',maxWidth:'220px',padding:'8px 12px',borderRadius:'10px',fontSize:'13px',boxSizing:'border-box',
                                                         border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',
                                                         background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}/>
                                         </div>
