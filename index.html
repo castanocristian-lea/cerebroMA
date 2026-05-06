@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-18:25 - Semana más ancha, botones 2x2 en mobile -->
+<!-- Version: 2026-05-06-18:40 - Fix: vencimiento/prioridad wrap, openNew con fecha precargada -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -4415,7 +4415,9 @@ ${invoice.items.map(item => `
             const openNew = (iso='') => {
                 setEditingEv(null);
                 const defEmpId = yoEmp?.id ? String(yoEmp.id) : (empleados[0]?.id ? String(empleados[0].id) : '');
+                const fechaDef = iso || hoy;
                 setForm({ empleadoIds:defEmpId?[defEmpId]:[], tipo:tipoLabel(tipos[0])||'', modoFecha:'rango',
+                    fecha:fechaDef, fechaFin:'', _mes:fechaDef.slice(0,7),
                     horaInicio:'09:00', horaFin:'17:00', notas:'', privado:false, cargarHoras:false, mediaJornada:false });
                 setShowModal(true);
             };
@@ -4615,8 +4617,8 @@ ${invoice.items.map(item => `
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                 Mis eventos
                             </button>
-                            <button onClick={()=>setShowConfig(true)} className={`col-span-2 sm:col-span-1 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 ${darkMode?'hover:bg-slate-700 text-slate-300 bg-slate-700/50':'hover:bg-slate-100 text-slate-600 bg-slate-100'}`}>
-                                ⚙️ Configuración
+                            <button onClick={()=>setShowConfig(true)} className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 ${darkMode?'hover:bg-slate-700 text-slate-300 bg-slate-700/50':'hover:bg-slate-100 text-slate-600 bg-slate-100'}`}>
+                                ⚙️ Config.
                             </button>
                         </div>
                         {/* Fila 2: filtro por tipo - plegable en mobile */}
@@ -24499,14 +24501,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}/>
                                     </div>
                                     <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
-                                        <div style={{flex:'1 1 140px',minWidth:'140px'}}>
+                                        <div style={{flex:'1 1 160px',minWidth:'160px'}}>
                                             <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>VENCIMIENTO</label>
                                             <input type="date" value={form.vencimiento} onChange={e=>setForm(f=>({...f,vencimiento:e.target.value}))}
                                                 style={{width:'100%',padding:'8px 12px',borderRadius:'10px',fontSize:'13px',boxSizing:'border-box',
                                                         border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',
                                                         background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}/>
                                         </div>
-                                        <div style={{flex:'1 1 140px',minWidth:'140px'}}>
+                                        <div style={{flex:'1 1 160px',minWidth:'160px'}}>
                                             <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>PRIORIDAD</label>
                                             <select value={form.prioridad} onChange={e=>setForm(f=>({...f,prioridad:e.target.value}))}
                                                 style={{width:'100%',padding:'8px 12px',borderRadius:'10px',fontSize:'13px',boxSizing:'border-box',
