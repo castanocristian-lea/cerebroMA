@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-16:50 - Fix CalendarioModule: balance JSX correcto, modales todos balanceados -->
+<!-- Version: 2026-05-06-17:05 - Facturador Ventas: campo Descuento con selección IVA trilingual -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -16483,6 +16483,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 notes: '',
                 tipAmount: '',
                 shippingAmount: '',
+                discountAmount: '',
+                discountIva: '21',
                 recurrenceMode: 'none', // 'none' | 'forever' | 'until'
                 recurrenceUntil: ''     // fecha límite si mode === 'until'
             });
@@ -16725,7 +16727,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 }, 0);
                 const tip = parseFloat(invoiceForm.tipAmount) || 0;
                 const shipping = parseFloat(invoiceForm.shippingAmount) || 0;
-                return prodTotal + tip + shipping;
+                const discount = parseFloat(invoiceForm.discountAmount) || 0;
+                return prodTotal + tip + shipping - discount;
             };
             
             const calculateInvoiceDetails = () => {
@@ -16779,6 +16782,25 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     });
                 }
                 
+                // Agregar descuento como ítem negativo con IVA elegido
+                const discountAmt = parseFloat(invoiceForm.discountAmount) || 0;
+                if (discountAmt > 0) {
+                    const discIva = parseFloat(invoiceForm.discountIva) || 0;
+                    const discBase = discountAmt / (1 + discIva / 100);
+                    const discIvaAmt = discountAmt - discBase;
+                    items.push({
+                        productId: 'discount',
+                        productName: 'Descuento / Discount / Sleva',
+                        quantity: 1,
+                        price: -discountAmt,
+                        iva: discIva,
+                        subtotal: -discBase,
+                        ivaAmount: -discIvaAmt,
+                        total: -discountAmt,
+                        isDiscount: true
+                    });
+                }
+
                 const subtotalGeneral = items.reduce((sum, i) => sum + i.subtotal, 0);
                 const ivaGeneral = items.reduce((sum, i) => sum + i.ivaAmount, 0);
                 const totalGeneral = items.reduce((sum, i) => sum + i.total, 0);
@@ -16803,6 +16825,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     notes: '',
                     tipAmount: '',
                     shippingAmount: '',
+                    discountAmount: '',
+                    discountIva: '21',
                     recurrenceMode: 'none',
                     recurrenceUntil: ''
                 });
@@ -16843,7 +16867,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     total: details.totalGeneral,
                     notes: invoiceForm.notes,
                     tipAmount: parseFloat(invoiceForm.tipAmount) || 0,
-                    shippingAmount: parseFloat(invoiceForm.shippingAmount) || 0
+                    shippingAmount: parseFloat(invoiceForm.shippingAmount) || 0,
+                    discountAmount: parseFloat(invoiceForm.discountAmount) || 0,
+                    discountIva: parseFloat(invoiceForm.discountIva) || 0
                 };
                 
                 if (editingInvoiceId) {
@@ -16920,11 +16946,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     notes: invoice.notes || '',
                     tipAmount: invoice.tipAmount || '',
                     shippingAmount: invoice.shippingAmount || '',
+                    discountAmount: invoice.discountAmount || '',
+                    discountIva: invoice.discountIva !== undefined ? String(invoice.discountIva) : '21',
                     recurrenceMode: 'none',
                     recurrenceUntil: ''
                 });
                 // Excluir el item tip de selectedProducts (se maneja por separado)
-                const nonTipItems = invoice.items.filter(item => !item.isTip && !item.isShipping);
+                const nonTipItems = invoice.items.filter(item => !item.isTip && !item.isShipping && !item.isDiscount);
                 setSelectedProducts(nonTipItems.map(item => ({
                     productId: item.productId ? item.productId.toString() : '',
                     quantity: item.quantity || 1,
@@ -17315,7 +17343,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             setInvoiceForm({
                                                 holder: '', client: '', invoiceNumber: '',
                                                 invoiceDate: new Date().toISOString().split('T')[0],
-                                                dueDate: '', items: [], notes: '', tipAmount: '', shippingAmount: '',
+                                                dueDate: '', items: [], notes: '', tipAmount: '', shippingAmount: '', discountAmount: '', discountIva: '21',
                                                 recurrenceMode: 'none', recurrenceUntil: ''
                                             });
                                             setShowInvoiceModal(true);
@@ -17845,6 +17873,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <div className={'flex justify-between text-xs mb-1 ' + (darkMode ? 'text-slate-400' : 'text-slate-500')}>
                                                         <span>{taxLabel} incluido:</span><span className="font-mono">{det.ivaGeneral.toFixed(2)} CZK</span>
                                                     </div>
+                                                    {(parseFloat(invoiceForm.discountAmount) || 0) > 0 && (
+                                                        <div className={'flex justify-between text-xs mb-1 ' + (darkMode ? 'text-red-400' : 'text-red-600')}>
+                                                            <span>Descuento ({invoiceForm.discountIva}% {taxLabel}):</span>
+                                                            <span className="font-mono">- {parseFloat(invoiceForm.discountAmount).toFixed(2)} CZK</span>
+                                                        </div>
+                                                    )}
                                                     {tip > 0 && (
                                                         <div className={'flex justify-between text-xs mb-1 ' + (darkMode ? 'text-amber-400' : 'text-amber-600')}>
                                                             <span>Tip (0% {taxLabel}):</span><span className="font-mono">+ {tip.toFixed(2)} CZK</span>
@@ -17862,6 +17896,43 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                             );
                                         })()}
+                                    </div>
+                                    {/* Descuento */}
+                                    <div className={'flex items-center gap-3 py-2 border-t ' + (darkMode ? 'border-slate-700' : 'border-slate-200')}>
+                                        <span className={'text-xs font-semibold flex-shrink-0 ' + (darkMode ? 'text-red-400' : 'text-red-600')}>
+                                            {language === 'cz' ? 'Sleva' : language === 'en' ? 'Discount' : 'Descuento'}
+                                        </span>
+                                        <select
+                                            value={invoiceForm.discountIva}
+                                            onChange={(e) => setInvoiceForm({...invoiceForm, discountIva: e.target.value})}
+                                            className={'px-1.5 py-0.5 text-xs rounded font-mono flex-shrink-0 border ' + (darkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600')}>
+                                            {taxRates.length > 0 ? taxRates.map(r => (
+                                                <option key={r} value={r}>{r}% {taxLabel}</option>
+                                            )) : [0,10,21].map(r => (
+                                                <option key={r} value={r}>{r}% {taxLabel}</option>
+                                            ))}
+                                        </select>
+                                        <div className="relative w-44">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={invoiceForm.discountAmount}
+                                                onChange={(e) => setInvoiceForm({...invoiceForm, discountAmount: e.target.value})}
+                                                placeholder="0.00"
+                                                className={'w-full px-3 py-1.5 pr-12 text-sm border rounded-lg font-mono ' + (darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300')}
+                                            />
+                                            <span className={'absolute right-3 top-1.5 text-xs pointer-events-none ' + (darkMode ? 'text-slate-400' : 'text-slate-400')}>CZK</span>
+                                        </div>
+                                        {parseFloat(invoiceForm.discountAmount) > 0 && (
+                                            <button onClick={() => setInvoiceForm({...invoiceForm, discountAmount: ''})}
+                                                className="text-red-400 hover:text-red-600 text-sm font-bold">✕</button>
+                                        )}
+                                        {parseFloat(invoiceForm.discountAmount) > 0 && (
+                                            <span className={'text-xs ml-auto ' + (darkMode ? 'text-red-400' : 'text-red-600')}>
+                                                - {parseFloat(invoiceForm.discountAmount).toLocaleString('es-CZ',{minimumFractionDigits:2})} CZK del total
+                                            </span>
+                                        )}
                                     </div>
                                     {/* Tip — 0% {taxLabel}, monto directo */}
                                     <div className={'flex items-center gap-3 py-2 border-t ' + (darkMode ? 'border-slate-700' : 'border-slate-200')}>
