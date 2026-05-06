@@ -1558,7 +1558,7 @@ ${invoice.items.map(item => `
                     dbGetKey('app_config', 'backupSettings').then(async settings => {
                         const last = settings?.lastBackup ? new Date(settings.lastBackup) : null;
                         const daysSince = last ? (Date.now() - last.getTime()) / (1000*60*60*24) : 999;
-                        if (daysSince >= 7) {
+                        if (daysSince >= 3) {
                             console.log('🔄 Backup automático semanal iniciando...');
                             try {
                                 const data = await generarBackupJSON();
@@ -6258,6 +6258,41 @@ ${invoice.items.map(item => `
             const txt = darkMode ? 'text-white' : 'text-slate-900';
             const sub = darkMode ? 'text-slate-400' : 'text-slate-500';
             const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+            const [pinVerificado, setPinVerificado] = React.useState(false);
+            const [pinInput, setPinInput] = React.useState('');
+            const [pinError, setPinError] = React.useState('');
+
+            const verificarPin = () => {
+                const users = window.__systemUsersPrecargados || [];
+                const user = users.find(u => String(u.id) === String(currentUser?.id));
+                if (!user) { setPinError('Usuario no encontrado'); return; }
+                if (user.pin === pinInput) {
+                    setPinVerificado(true);
+                } else {
+                    setPinError('PIN incorrecto');
+                    setPinInput('');
+                }
+            };
+
+            if (!pinVerificado) return (
+                <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                    <div className={`rounded-2xl shadow-xl p-8 w-full max-w-xs ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
+                        <div className="text-center mb-6">
+                            <span className="text-4xl">🛡️</span>
+                            <h2 className={`text-lg font-bold mt-2 ${txt}`}>Seguridad del Sistema</h2>
+                            <p className={`text-sm mt-1 ${sub}`}>Ingresá tu PIN para continuar</p>
+                        </div>
+                        <input type="password" inputMode="numeric" maxLength={8}
+                            value={pinInput} onChange={e => { setPinInput(e.target.value); setPinError(''); }}
+                            onKeyDown={e => e.key === 'Enter' && verificarPin()}
+                            className={`w-full text-center text-2xl tracking-widest px-4 py-3 rounded-xl border mb-3 ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`}
+                            placeholder="••••" autoFocus />
+                        {pinError && <p className="text-red-500 text-sm text-center mb-3">{pinError}</p>}
+                        <button onClick={verificarPin} className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold">Verificar</button>
+                        <button onClick={onBack} className={`w-full py-2 mt-2 text-sm ${sub}`}>← Volver</button>
+                    </div>
+                </div>
+            );
 
             const [backupEmail, setBackupEmail] = React.useState(() => {
                 return window.__backupEmailPrecargado || 'cristian@malaargenta.cz';
@@ -6391,7 +6426,7 @@ ${invoice.items.map(item => `
                                     El archivo JSON puede importarse desde el botón "Importar" del menú principal para restaurar todos los datos.
                                 </p>
                             </div>
-                            <Row label="Frecuencia" value="Semanal — al loguear si pasaron 7+ días" />
+                            <Row label="Frecuencia" value="Cada 3 días — al loguear si pasaron 3+ días" />
                             <Row label="Sistema de automatización" value="Make.com (ex-Integromat)" />
                             <Row label="Webhook URL" value="https://hook.eu1.make.com/355xb36lgunpaxxbvpkkurk6do50k1in" mono />
                             <Row label="Escenario Make" value="Integration Webhooks, Google Drive, Gmail" />
