@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-17:40 - Fix caja: guardar ingreso persiste inmediatamente en Supabase y window -->
+<!-- Version: 2026-05-06-18:10 - Mis eventos: pantalla fullscreen con 3 columnas desktop, plegables mobile -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -4169,6 +4169,7 @@ ${invoice.items.map(item => `
             const [filtroTipo,  setFiltroTipo]  = useState('');
             const [verTodos7,   setVerTodos7]   = useState(false);
             const [showFiltros,  setShowFiltros]  = useState(false);
+            const [selectedMesDay, setSelectedMesDay] = useState(null);
 
             useEffect(() => {
                 // Escuchar solicitud de abrir nuevo evento desde banner
@@ -4244,7 +4245,7 @@ ${invoice.items.map(item => `
 
             // Body scroll lock cuando hay modal abierto
             useEffect(() => {
-                const isOpen = showModal || showConfig || showMisEvs || showHorasModal || showSolicitudes || showNuevaSolic;
+                const isOpen = showModal || showConfig || showHorasModal || showSolicitudes || showNuevaSolic;
                 if (isOpen) {
                     const scrollY = window.scrollY;
                     document.body.style.position = 'fixed';
@@ -4265,7 +4266,7 @@ ${invoice.items.map(item => `
                     document.body.style.width = '';
                     document.body.style.overflow = '';
                 };
-            }, [showModal, showConfig, showMisEvs, showHorasModal, showSolicitudes, showNuevaSolic]);
+            }, [showModal, showConfig, showHorasModal, showSolicitudes, showNuevaSolic]);
 
             const saveHorasBatch = (batch) => {
                 // Guardar múltiples horas de una vez
@@ -4683,26 +4684,56 @@ ${invoice.items.map(item => `
 
                         {view==='mes' && (
                             <div className={`rounded-xl border ${card} overflow-hidden`}>
-                                <div className="overflow-x-auto">
-                                <div style={{minWidth:'420px'}}>
+                                {/* Header días */}
                                 <div className="grid grid-cols-7 border-b">
-                                    {DIAS.map(d=><div key={d} className={`text-center py-2 text-xs font-semibold ${sub}`}>{d}</div>)}
+                                    {['L','M','X','J','V','S','D'].map(d=><div key={d} className={`text-center py-2 text-xs font-semibold ${sub}`}>{d}</div>)}
                                 </div>
-                                <div className="grid grid-cols-7 divide-x divide-y divide-slate-200">
+                                {/* Grid compacto estilo Google */}
+                                <div className="grid grid-cols-7 divide-x divide-y" style={{borderColor:darkMode?'#334155':'#e2e8f0'}}>
                                     {dm.map((d,i)=>{
-                                        if(!d) return <div key={"e"+i} className={darkMode?'bg-slate-800/30':'bg-slate-50/50'}/>;
-                                        const iso=toISO(d), esH=iso===hoy;
+                                        if(!d) return <div key={"e"+i} className={darkMode?'bg-slate-800/30':'bg-slate-50/30'}/>;
+                                        const iso=toISO(d), esH=iso===hoy, esSel=selectedMesDay===iso;
+                                        const evs=evsDelDia(iso);
                                         return (
-                                            <div key={i} onClick={()=>openNew(iso)} className={`min-h-[90px] p-1 cursor-pointer ${esH?(darkMode?'bg-blue-900/20':'bg-blue-50'):(darkMode?'hover:bg-slate-700/30':'hover:bg-slate-50')}`}>
-                                                <p onClick={e=>{e.stopPropagation();setCurrentDate(new Date(iso+'T12:00:00'));setView('dia');}} className={`text-xs font-bold mb-1 w-5 h-5 flex items-center justify-center rounded-full cursor-pointer hover:ring-2 hover:ring-blue-400 ${esH?'bg-blue-600 text-white':txt}`}>{d.getDate()}</p>
-                                                {evsDelDia(iso).slice(0,3).map(ev=>renderEv(ev))}
-                                                {evsDelDia(iso).length>3 && <button onClick={e=>{e.stopPropagation();setCurrentDate(new Date(iso+'T12:00:00'));setView('dia');}} className={`text-xs font-semibold px-1.5 py-0.5 rounded-full mt-0.5 w-full text-center ${darkMode?'bg-slate-600 text-slate-200 hover:bg-slate-500':'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}>+{evsDelDia(iso).length-3} más</button>}
+                                            <div key={i} onClick={()=>setSelectedMesDay(esSel?null:iso)}
+                                                className={`p-1 cursor-pointer transition-colors ${esSel?(darkMode?'bg-blue-900/30':'bg-blue-50'):(darkMode?'hover:bg-slate-700/20':'hover:bg-slate-50')}`}
+                                                style={{minHeight:'48px'}}>
+                                                <p className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mx-auto mb-0.5 ${esH?'bg-blue-600 text-white':(esSel?(darkMode?'bg-blue-700 text-white':'bg-blue-100 text-blue-700'):txt)}`}>{d.getDate()}</p>
+                                                {/* Puntos de colores */}
+                                                {evs.length > 0 && (
+                                                    <div className="flex flex-wrap justify-center gap-0.5 px-0.5">
+                                                        {evs.slice(0,4).map(ev=>{
+                                                            const tipoObj=tipos.find(t=>t.label===tipoLabel(ev.tipo));
+                                                            const c=tipoObj?.color||'#6366f1';
+                                                            return <div key={ev.id} style={{width:'6px',height:'6px',borderRadius:'50%',backgroundColor:c}} title={tipoLabel(ev.tipo)}/>;
+                                                        })}
+                                                        {evs.length>4 && <div style={{width:'6px',height:'6px',borderRadius:'50%',backgroundColor:darkMode?'#64748b':'#94a3b8'}}/>}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
                                 </div>
-                                </div>
-                                </div>
+                                {/* Panel de eventos del día seleccionado */}
+                                {selectedMesDay && (()=>{
+                                    const evsSel = evsDelDia(selectedMesDay);
+                                    const dSel = new Date(selectedMesDay+'T12:00:00');
+                                    return (
+                                        <div className={`border-t px-3 py-3 ${darkMode?'border-slate-700 bg-slate-800/50':'border-slate-200 bg-slate-50'}`}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <p className={`text-xs font-bold ${txt}`}>{dSel.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'})}</p>
+                                                <div className="flex gap-2">
+                                                    <button onClick={()=>openNew(selectedMesDay)} className="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg font-medium">+ Evento</button>
+                                                    <button onClick={()=>setSelectedMesDay(null)} className={`text-xs px-2 py-1 rounded-lg ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-200 text-slate-600'}`}>✕</button>
+                                                </div>
+                                            </div>
+                                            {evsSel.length === 0
+                                                ? <p className={`text-xs ${sub} italic`}>Sin eventos</p>
+                                                : <div className="space-y-1">{evsSel.map(ev=>renderEv(ev))}</div>
+                                            }
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         )}
 
@@ -5277,51 +5308,84 @@ ${invoice.items.map(item => `
                 )}
 
                 {showMisEvs && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:"none"}}>
-                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
-                            <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <h3 className={`font-bold text-base ${txt}`}>📋 Todos mis eventos</h3>
-                                <button onClick={()=>setShowMisEvs(false)} className={`p-1.5 rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
-                            {!yoEmp
-                                ? <p className={`text-sm ${sub} text-center py-8`}>No se encontró tu perfil</p>
-                                : misEvs.length===0
-                                ? <p className={`text-sm ${sub} text-center py-8`}>No tenés eventos cargados</p>
-                                : <div>
-                                    {(() => {
-                                        // Expandir cada evento en entradas día por día
-                                        const todasEntradas = misEvs.flatMap(ev =>
-                                            diasEv(ev).map(d => ({ev, d}))
-                                        );
-                                        const pasados  = todasEntradas.filter(({d}) => d < hoy);
-                                        const hoyEvs   = todasEntradas.filter(({d}) => d === hoy);
-                                        const proximos = todasEntradas.filter(({d}) => d > hoy);
-                                        const renderEntrada = ({ev, d}, esHoy) => (
-                                            <div key={ev.id+d} onClick={()=>{setShowMisEvs(false);openEdit(ev);}} className={`rounded-lg p-2.5 cursor-pointer hover:opacity-80 ${esHoy?(darkMode?'bg-blue-900/40 border border-blue-600':'bg-blue-50 border border-blue-300'):(darkMode?'bg-slate-700/50':'bg-slate-50')}`}>
-                                                <div className="flex items-center gap-2 text-xs mb-0.5">
-                                                    <span className={`${esHoy?'text-blue-500 font-semibold':sub} w-28 shrink-0`}>{d===hoy?'Hoy':fmtF(d)}</span>
-                                                    <span className={`font-bold ${txt} flex-1`}>{tipoLabel(ev.tipo)}</span>
-                                                    {ev.horaInicio && <span className={`font-medium ${sub}`}>{ev.horaInicio}–{ev.horaFin}</span>}
-                                                    {calcH(ev) && <span className={`font-bold ${darkMode?'text-blue-400':'text-blue-600'}`}>{calcH(ev)}</span>}
+                    <div className={`fixed inset-0 z-50 flex flex-col ${darkMode?'bg-slate-900':'bg-slate-50'}`}>
+                        {/* Header */}
+                        <div className={`flex items-center gap-3 px-4 py-3 border-b flex-shrink-0 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                            <button onClick={()=>setShowMisEvs(false)} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>
+                            <h2 className={`font-bold text-base flex-1 ${txt}`}>📋 Mis eventos</h2>
+                        </div>
+                        {/* Contenido */}
+                        <div className="flex-1 overflow-y-auto p-4">
+                        {!yoEmp
+                            ? <p className={`text-sm ${sub} text-center py-8`}>No se encontró tu perfil</p>
+                            : (()=>{
+                                const todasEntradas = misEvs.flatMap(ev => diasEv(ev).map(d=>({ev,d}))).sort((a,b)=>a.d.localeCompare(b.d));
+                                const [filtroDesde, setFiltroDesde] = React.useState('');
+                                const [filtroHasta, setFiltroHasta] = React.useState('');
+                                const [openSec, setOpenSec] = React.useState({pasados:false,hoy:true,proximos:true});
+                                const filtradas = todasEntradas.filter(({d})=>(!filtroDesde||d>=filtroDesde)&&(!filtroHasta||d<=filtroHasta));
+                                const pasados  = filtradas.filter(({d})=>d<hoy);
+                                const hoyEvs   = filtradas.filter(({d})=>d===hoy);
+                                const proximos = filtradas.filter(({d})=>d>hoy);
+                                const renderEntrada = ({ev,d},esHoy) => {
+                                    const tipoObj=tipos.find(t=>t.label===tipoLabel(ev.tipo));
+                                    const c=tipoObj?.color||'#6366f1';
+                                    return (
+                                        <div key={ev.id+d} onClick={()=>{setShowMisEvs(false);openEdit(ev);}}
+                                            className="rounded-lg p-3 cursor-pointer hover:opacity-80 mb-2"
+                                            style={{backgroundColor:c+'18',borderLeft:`3px solid ${c}`}}>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-xs font-bold ${txt}`}>{tipoLabel(ev.tipo)}</p>
+                                                    <p className={`text-xs ${sub}`}>{d===hoy?'Hoy':fmtF(d)}{ev.horaInicio?` · ${ev.horaInicio}–${ev.horaFin}`:''}</p>
+                                                    {ev.notas && <p className={`text-xs italic mt-0.5 truncate ${darkMode?'text-amber-300':'text-amber-700'}`}>📝 {ev.notas}</p>}
                                                 </div>
-                                                {ev.notas && <p className={`text-xs font-medium pl-28 ${darkMode?'text-amber-300':'text-amber-700'}`}>{ev.notas}</p>}
+                                                {calcH(ev) && <span className={`text-xs font-bold shrink-0 ${darkMode?'text-blue-400':'text-blue-600'}`}>{calcH(ev)}</span>}
                                             </div>
-                                        );
-                                        return [
-                                            ['🕐 Pasados', pasados, false],
-                                            ['⭐ Hoy', hoyEvs, true],
-                                            ['📅 Próximos', proximos, false],
-                                        ].map(([titulo, lista, esHoy]) => lista.length === 0 ? null : (
-                                            <div key={titulo} className="mb-4">
-                                                <p className={`text-xs font-bold mb-2 ${esHoy?'text-blue-500':sub}`}>{titulo} · {lista.length} día{lista.length!==1?'s':''}</p>
-                                                <div className="space-y-1.5">{lista.map(entrada=>renderEntrada(entrada,esHoy))}</div>
-                                            </div>
-                                        ));
-                                    })()}
-                                </div>
-                            }
-                            </div>
+                                        </div>
+                                    );
+                                };
+                                return (
+                                    <div>
+                                        {/* Filtro fechas */}
+                                        <div className={`flex items-center gap-2 mb-4 p-3 rounded-xl ${darkMode?'bg-slate-800':'bg-white'} border ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                            <span className={`text-xs ${sub} shrink-0`}>Desde</span>
+                                            <input type="date" value={filtroDesde} onChange={e=>setFiltroDesde(e.target.value)}
+                                                className={`flex-1 text-xs px-2 py-1.5 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                                            <span className={`text-xs ${sub} shrink-0`}>Hasta</span>
+                                            <input type="date" value={filtroHasta} onChange={e=>setFiltroHasta(e.target.value)}
+                                                className={`flex-1 text-xs px-2 py-1.5 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                                            {(filtroDesde||filtroHasta) && <button onClick={()=>{setFiltroDesde('');setFiltroHasta('');}} className="text-xs text-red-400 shrink-0">✕</button>}
+                                        </div>
+                                        {/* Secciones — desktop: 3 columnas, mobile: plegables */}
+                                        <div className="hidden sm:grid sm:grid-cols-3 sm:gap-4">
+                                            {[['🕐 Pasados',pasados,false,'text-slate-500'],['⭐ Hoy',hoyEvs,true,'text-blue-500'],['📅 Próximos',proximos,false,'text-emerald-500']].map(([titulo,lista,esHoy,color])=>(
+                                                <div key={titulo} className={`rounded-xl border p-3 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                                                    <p className={`text-xs font-bold mb-3 ${color}`}>{titulo} <span className="opacity-60">({lista.length})</span></p>
+                                                    {lista.length===0 ? <p className={`text-xs ${sub} italic`}>Sin eventos</p> : lista.map(e=>renderEntrada(e,esHoy))}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="sm:hidden space-y-2">
+                                            {[['🕐 Pasados',pasados,false,'text-slate-500','pasados'],['⭐ Hoy',hoyEvs,true,'text-blue-500','hoy'],['📅 Próximos',proximos,false,'text-emerald-500','proximos']].map(([titulo,lista,esHoy,color,key])=>(
+                                                <div key={key} className={`rounded-xl border overflow-hidden ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
+                                                    <button onClick={()=>setOpenSec(s=>({...s,[key]:!s[key]}))}
+                                                        className={`w-full flex items-center justify-between px-4 py-3 ${darkMode?'hover:bg-slate-700/50':'hover:bg-slate-50'}`}>
+                                                        <span className={`text-sm font-bold ${color}`}>{titulo} <span className="opacity-60 font-normal text-xs">({lista.length})</span></span>
+                                                        <span className={`text-xs transition-transform ${openSec[key]?'rotate-180':'rotate-0'} inline-block ${sub}`}>▼</span>
+                                                    </button>
+                                                    {openSec[key] && (
+                                                        <div className="px-3 pb-3">
+                                                            {lista.length===0 ? <p className={`text-xs ${sub} italic`}>Sin eventos</p> : lista.map(e=>renderEntrada(e,esHoy))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()
+                        }
                         </div>
                     </div>
                 )}
