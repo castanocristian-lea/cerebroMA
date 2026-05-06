@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-22:35 - MiSueldo: sección Cobrado Hoy dinámica con polling 30s -->
+<!-- Version: 2026-05-06-22:40 - Cobrado hoy incluye seguro médico -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -5667,8 +5667,12 @@ ${invoice.items.map(item => `
             // Polling cada 30s para actualizar cobros del día
             useEffect(() => {
                 const interval = setInterval(() => {
-                    dbGetKey('payroll_monthly', 'main').then(pay => {
+                    Promise.all([
+                        dbGetKey('payroll_monthly', 'main'),
+                        dbGetKey('payroll_insurance', 'main'),
+                    ]).then(([pay, seg]) => {
                         if (pay) { setPayroll(pay); window.__payrollDataPrecargada = pay; }
+                        if (seg) setSeguros(seg);
                     });
                 }, 30000);
                 return () => clearInterval(interval);
@@ -5733,9 +5737,11 @@ ${invoice.items.map(item => `
                 const mesActual = new Date().getMonth();
                 const yearActual = new Date().getFullYear();
                 const key = `${empId}_${yearActual}_${mesActual}`;
-                const pagos = payroll[key] || [];
-                return pagos.filter(p => p.fecha === hoyISO);
-            }, [yoEmp, payroll, hoyISO]);
+                const pagos = (payroll[key] || []).filter(p => p.fecha === hoyISO);
+                const segs  = (seguros[key] || []).filter(p => p.fecha === hoyISO)
+                                .map(p => ({...p, concepto: p.concepto || 'Seguro médico', tipo: 'seguro'}));
+                return [...pagos, ...segs];
+            }, [yoEmp, payroll, seguros, hoyISO]);
 
             const totalHoy = cobrosHoy.reduce((s,p)=>s+(parseFloat(p.monto)||0),0);
 
