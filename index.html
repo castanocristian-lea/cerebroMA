@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-17:30 - Fix caja: allTxLoaded forzado antes de guardar -->
+<!-- Version: 2026-05-06-17:40 - Fix caja: guardar ingreso persiste inmediatamente en Supabase y window -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -10427,9 +10427,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 }));
 
                 if (yearReal !== selectedYear) {
-                    setAllTransactions(prev => ({...prev, [yearReal]: [...(prev[yearReal]||[]), ...nuevas]}));
+                    const updated = {...allTransactions, [yearReal]: [...(allTransactions[yearReal]||[]), ...nuevas]};
+                    window.__cajaPrecargada = updated;
+                    window.__cashTxPrecargadas = updated;
+                    setAllTransactions(updated);
+                    dbUpsertOne('cash_transactions', 'multiyear', updated);
                     alert(`✅ ${nuevas.length} ingreso${nuevas.length>1?'s':''} registrado${nuevas.length>1?'s':''} en ${yearReal}`);
                 } else {
+                    const updated = {...allTransactions, [selectedYear]: [...transactions, ...nuevas]};
+                    window.__cajaPrecargada = updated;
+                    window.__cashTxPrecargadas = updated;
+                    dbUpsertOne('cash_transactions', 'multiyear', updated);
                     updateYearTransactions([...transactions, ...nuevas]);
                 }
                 setShowIngresoModal(false);
