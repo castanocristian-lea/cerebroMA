@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-18:50 - Fix: vencimiento/prioridad columna, horas ee flex-wrap -->
+<!-- Version: 2026-05-06-19:00 - Un campo por fila en todos los modales -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -4900,7 +4900,7 @@ ${invoice.items.map(item => `
                                                 ))}
                                             </div>
                                             {(!horasForm.modoFecha||horasForm.modoFecha==='rango') ? (
-                                                <div className="grid grid-cols-2 gap-3">
+                                                <div className="grid grid-cols-1 gap-3">
                                                     <div>
                                                         <label className={`block text-xs font-medium mb-1 ${sub}`}>Inicio *</label>
                                                         <input type="date" value={horasForm.fecha||hoy} onChange={e=>setHorasForm({...horasForm,fecha:e.target.value})} className={inp}/>
@@ -5220,7 +5220,7 @@ ${invoice.items.map(item => `
                                         <span className={`text-xs font-medium ${sub}`}>Sin horario / Todo el día</span>
                                     </label>
                                     {!form.todoDia && (
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 gap-3">
                                             <div>
                                                 <label className={`block text-xs font-medium mb-1 ${sub}`}>Hora inicio</label>
                                                 <input type="time" value={form.horaInicio} onChange={e=>setForm({...form,horaInicio:e.target.value})} className={inp}/>
@@ -5242,7 +5242,7 @@ ${invoice.items.map(item => `
                                         ))}
                                     </div>
                                     {form.modoFecha==='rango' ? (
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 gap-3">
                                             <div>
                                                 <label className={`block text-xs font-medium mb-1 ${sub}`}>Inicio *</label>
                                                 <input type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})} className={inp}/>
@@ -5493,7 +5493,7 @@ ${invoice.items.map(item => `
                                             ))}
                                         </select>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha inicio *</label>
                                             <input type="date" value={solicForm.fechaInicio||''} onChange={e=>setSolicForm({...solicForm,fechaInicio:e.target.value})} className={inp}/>
@@ -6003,7 +6003,7 @@ ${invoice.items.map(item => `
                                     <input value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} className={inp} placeholder="https://..."/>
                                 </div>
                             )}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-3">
                                 <div>
                                     <label className={`block text-xs font-medium mb-1 ${sub}`}>Cantidad</label>
                                     <input type="number" min="1" max="50" value={form.cantidad} onChange={e=>setForm(f=>({...f,cantidad:e.target.value}))} className={inp}/>
@@ -7332,7 +7332,7 @@ ${invoice.items.map(item => `
                                         {canEdit && <button onClick={() => openEditPrestamo(selected)} className={`text-xs px-3 py-1.5 rounded-lg border ${darkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>Editar</button>}
                                         {canEdit && <button onClick={() => openEditPrestamo(selected)} className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1 ${darkMode ? 'border-teal-700 text-teal-400 hover:bg-teal-900/30' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}`}>🔔 Notificaciones{(selected.notificarUsuarios||[]).length > 0 ? ` (${selected.notificarUsuarios.length})` : ''}</button>}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="grid grid-cols-1 gap-4 mb-4">
                                         <div><p className={`text-xs ${sub}`}>Fecha del préstamo</p><p className={`font-medium ${txt}`}>{selected.fecha}</p></div>
                                         <div><p className={`text-xs ${sub}`}>Moneda</p><p className={`font-medium ${txt}`}>{selected.moneda}</p></div>
                                     </div>
@@ -7351,7 +7351,7 @@ ${invoice.items.map(item => `
                                     <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingPrestamo ? 'Editar préstamo' : 'Nuevo préstamo'}</h3>
                                     <div className="space-y-3">
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Nombre del prestamista *</label><input className={inp} value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Ej: Jorge, RFN, Cristian..." /></div>
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 gap-3">
                                             <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Moneda *</label><select className={inp} value={form.moneda} onChange={e => setForm({...form, moneda: e.target.value})}><option value="CZK">CZK</option><option value="EUR">EUR</option><option value="USD">USD</option></select></div>
                                             <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Monto total *</label><input className={inp} type="number" value={form.monto} onChange={e => setForm({...form, monto: e.target.value})} placeholder="0" /></div>
                                         </div>
@@ -7422,7 +7422,7 @@ ${invoice.items.map(item => `
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha de la primera cuota</label><input className={inp} type="date" value={cuotaForm.fechaInicio} onChange={e => setCuotaForm({...cuotaForm, fechaInicio: e.target.value})} /></div>
                                         <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Monto por cuota ({selected?.moneda})</label><input className={inp} type="number" value={cuotaForm.monto} onChange={e => setCuotaForm({...cuotaForm, monto: e.target.value})} placeholder="0" /></div>
                                         {editingCuotaIdx === null && (
-                                            <div className="grid grid-cols-2 gap-3">
+                                            <div className="grid grid-cols-1 gap-3">
                                                 <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Cantidad de cuotas</label><input className={inp} type="number" min="1" max="60" value={cuotaForm.repetir} onChange={e => setCuotaForm({...cuotaForm, repetir: e.target.value})} /></div>
                                                 <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Frecuencia</label>
                                                     <select className={inp} value={cuotaForm.frecuencia} onChange={e => setCuotaForm({...cuotaForm, frecuencia: e.target.value})}>
@@ -9067,7 +9067,7 @@ ${invoice.items.map(item => `
                                 <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Fecha *</label>
                                     <input className={inp} type="date" value={acreditacionForm.fecha} onChange={e => setAcreditacionForm({...acreditacionForm, fecha: e.target.value})} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Monto *</label>
                                         <input className={inp} type="number" value={acreditacionForm.monto} onChange={e => setAcreditacionForm({...acreditacionForm, monto: e.target.value})} placeholder="0" />
                                     </div>
@@ -9100,7 +9100,7 @@ ${invoice.items.map(item => `
                                         {lugares.map(l => <option key={l} value={l}>{l}</option>)}
                                     </select>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Monto *</label><input className={inp} type="number" value={fondoForm.monto} onChange={e => setFondoForm({...fondoForm, monto: e.target.value})} placeholder="0" /></div>
                                     <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Moneda</label>
                                         <select className={inp} value={fondoForm.moneda} onChange={e => setFondoForm({...fondoForm, moneda: e.target.value})}>
@@ -9125,7 +9125,7 @@ ${invoice.items.map(item => `
                             <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingGasto ? 'Editar gasto' : 'Gasto planificado'}</h3>
                             <div className="space-y-3">
                                 <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Nombre *</label><input className={inp} value={gastoForm.nombre} onChange={e => setGastoForm({...gastoForm, nombre: e.target.value})} placeholder="Ej: Alquiler mayo, Seguro anual..." /></div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Monto *</label><input className={inp} type="number" value={gastoForm.monto} onChange={e => setGastoForm({...gastoForm, monto: e.target.value})} placeholder="0" /></div>
                                     <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Moneda</label>
                                         <select className={inp} value={gastoForm.moneda} onChange={e => setGastoForm({...gastoForm, moneda: e.target.value})}>
@@ -9632,7 +9632,7 @@ ${invoice.items.map(item => `
                     )}
 
                     <div className={`rounded-xl border p-5 mb-5 ${card}`}>
-                        <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                        <div className="grid grid-cols-1 gap-3 text-sm mb-3">
                             <div><span className={`text-xs ${sub}`}>Dónde</span><p className={`font-medium ${txt}`}>{lugarLabel(selectedAhorro.lugar)}</p></div>
                             {selectedAhorro.para && <div><span className={`text-xs ${sub}`}>Para qué</span><p className={`font-medium ${txt}`}>{selectedAhorro.para}</p></div>}
                             {selectedAhorro.fechaMeta && <div><span className={`text-xs ${sub}`}>Fecha meta</span><p className={`font-medium ${txt}`}>{selectedAhorro.fechaMeta}</p></div>}
@@ -9698,7 +9698,7 @@ ${invoice.items.map(item => `
                             <h3 className={`text-lg font-bold mb-4 ${txt}`}>{editingAhorro ? 'Editar ahorro' : 'Nuevo ahorro'}</h3>
                             <div className="space-y-3">
                                 <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Nombre *</label><input className={inp} value={ahorroForm.nombre} onChange={e => setAhorroForm({...ahorroForm, nombre: e.target.value})} placeholder="Ej: Alquiler Korunni, Vacaciones..." /></div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Meta de ahorro</label><input className={inp} type="number" value={ahorroForm.meta} onChange={e => setAhorroForm({...ahorroForm, meta: e.target.value})} placeholder="0" /></div>
                                     <div><label className={`block text-xs font-medium mb-1 ${sub}`}>Moneda</label>
                                         <select className={inp} value={ahorroForm.moneda} onChange={e => setAhorroForm({...ahorroForm, moneda: e.target.value})}>
@@ -11554,7 +11554,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="space-y-5">
 
                                 {/* ── RESUMEN ANUAL: cards de métricas clave ── */}
-                                <div className="grid grid-cols-2 gap-3" style={{gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))'}}>
+                                <div className="grid grid-cols-1 gap-3" style={{gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))'}}>
                                     {[
                                         { label: `Ingresos ${selectedYear}`, val: getAnual(selectedYear,'INGRESOS'), prev: getAnual(selectedYear-1,'INGRESOS'), color:'text-green-600' },
                                         { label: `Egresos ${selectedYear}`, val: getAnual(selectedYear,'EGRESOS'), prev: getAnual(selectedYear-1,'EGRESOS'), color:'text-red-500' },
@@ -11877,7 +11877,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                                 <div className="space-y-2">
                                     {/* Fecha + Tipo en grid */}
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-1 gap-2">
                                         <div>
                                             <label className={`block text-xs font-medium mb-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Fecha</label>
                                             <input type="date" value={formData.fecha}
@@ -11917,7 +11917,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
 
                                     {/* Proveedor + Empleado en grid */}
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-1 gap-2">
                                         <div>
                                             <label className={`block text-xs font-medium mb-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Proveedor</label>
                                             <input type="text" list="caja-proveedores-list"
@@ -11957,7 +11957,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                                     {/* Filas de Nº Factura + Monto (multi si es nuevo, simple si es edición) */}
                                     {editingTransaction ? (
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <div className="grid grid-cols-1 gap-2">
                                             <div>
                                                 <label className={`block text-xs font-medium mb-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Nº Factura</label>
                                                 <input type="text" value={formData.nroFactura || ''}
@@ -12085,7 +12085,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     ))}
 
                                     {exportCajaFiltro === 'rango' && (
-                                        <div className="grid grid-cols-2 gap-2 pt-1">
+                                        <div className="grid grid-cols-1 gap-2 pt-1">
                                             <div>
                                                 <label className={`block text-xs mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Desde</label>
                                                 <input type="date" value={exportCajaDesde}
@@ -15579,7 +15579,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             ))}
                                         </select>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.amount} (CZK)</label>
                                             <input type="number" min="0" step="100"
@@ -15651,7 +15651,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             {...{placeholder: t.medicalInsurance}}
                                             className={`w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.amount} (CZK)</label>
                                             <input type="number" min="0" step="0.01" value={seguroForm.monto} onChange={e => setSeguroForm({...seguroForm, monto: e.target.value})}
@@ -15879,7 +15879,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Datos personales */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>👤 Datos personales</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Nombre *</label>
                                             <input type="text" value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})}
@@ -15974,7 +15974,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Contratación */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>📋 Contratación</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.joinDate}</label>
                                             <input type="date" value={formData.fechaIngreso || ''} onChange={e => setFormData({...formData, fechaIngreso: e.target.value})}
@@ -16006,7 +16006,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             <input type="text" value={formData.numeroSeguroMedico || ''} onChange={e => setFormData({...formData, numeroSeguroMedico: e.target.value})}
                                                 className={`w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`} />
                                         </div>
-                                        <div className="col-span-2 grid grid-cols-2 gap-2 pt-1">
+                                        <div className="col-span-2 grid grid-cols-1 gap-2 pt-1">
                                             {[['tieneVisa','Tiene visa de trabajo'],['tieneResidencia','Residencia temporal'],['tieneCiudadaniaEU','Ciudadanía europea 🇪🇺'],['tienePermanente','Residencia permanente']].map(([field, label]) => (
                                                 <label key={field} className="flex items-center gap-2 cursor-pointer">
                                                     <input type="checkbox" checked={!!formData[field]} onChange={e => setFormData({...formData, [field]: e.target.checked})}
@@ -16042,7 +16042,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             </div>
                                         )}
                                         {formData.tieneResidencia && (
-                                            <div className="col-span-2 grid grid-cols-2 gap-3">
+                                            <div className="col-span-2 grid grid-cols-1 gap-3">
                                                 <div>
                                                     <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Número de permiso de residencia</label>
                                                     <input type="text" value={formData.numeroDNICheco || ''} onChange={e => setFormData({...formData, numeroDNICheco: e.target.value})}
@@ -16062,7 +16062,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Estudios */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>🎓 Estudios</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Nivel de estudios</label>
                                             <select value={formData.estudios || ''} onChange={e => setFormData({...formData, estudios: e.target.value})}
@@ -16091,7 +16091,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Pensión */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>🏛️ Pensión</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>¿Recibe alguna pensión?</label>
                                             <select value={formData.recibePension || 'no'} onChange={e => setFormData({...formData, recibePension: e.target.value})}
@@ -16113,7 +16113,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Domicilio */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>🏠 Domicilio</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Calle</label>
                                             <input type="text" value={formData.domicilioCalle || ''} onChange={e => setFormData({...formData, domicilioCalle: e.target.value})}
@@ -16145,7 +16145,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Datos bancarios */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>🏦 Datos bancarios</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Nombre del banco</label>
                                             <input type="text" value={formData.nombreBanco || ''} onChange={e => setFormData({...formData, nombreBanco: e.target.value})}
@@ -16162,7 +16162,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Otro empleo */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>💼 Otro empleo</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>¿Tiene otro empleo?</label>
                                             <select value={formData.tieneOtroEmpleo || 'no'} onChange={e => setFormData({...formData, tieneOtroEmpleo: e.target.value})}
@@ -16199,7 +16199,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Hijos */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>👶 Hijos</p>
-                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                    <div className="grid grid-cols-1 gap-3 mb-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>¿Tiene hijos?</label>
                                             <select value={formData.tieneHijosLegajo || 'no'} onChange={e => setFormData({...formData, tieneHijosLegajo: e.target.value, hijosData: e.target.value === 'no' ? [] : (formData.hijosData || [])})}
@@ -16224,7 +16224,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <button onClick={() => setFormData({...formData, hijosData: formData.hijosData.filter((_,i) => i !== idx)})}
                                                     className="text-xs text-red-500 hover:text-red-700">✕ Quitar</button>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2">
+                                            <div className="grid grid-cols-1 gap-2">
                                                 {[['apellido','Apellido'],['nombre','Nombre'],['fechaNac','Fecha de nacimiento'],['rodneCislo','Rodné číslo']].map(([f, lbl]) => (
                                                     <div key={f}>
                                                         <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{lbl}</label>
@@ -16241,7 +16241,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Datos para la empresa */}
                                 <div className={`mt-5 pt-4 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>🏢 Datos para la empresa</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{language==='en'?'Gross Salary (CZK)':language==='cs'?'Hrubá mzda (CZK)':'Salario Bruto (CZK)'}</label>
                                             <input type="number" value={formData.salarioBruto || ''} onChange={e => setFormData({...formData, salarioBruto: e.target.value})}
@@ -16339,7 +16339,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             </p>
                                         )}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.amount} (CZK)</label>
                                             <input type="number" min="0" step="0.01" value={payForm.monto} onChange={e => setPayForm({...payForm, monto: e.target.value})}
@@ -17588,7 +17588,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         />
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-slate-300' : 'text-slate-700')}>Precio (CZK) *</label>
                                             <input
@@ -17653,7 +17653,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     {editingHolder ? ' Editar Titular' : '🏢 Nuevo Titular'}
                                 </h3>
                                 
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-slate-300' : 'text-slate-700')}>Nombre de Empresa *</label>
                                         <input type="text" value={holderForm.companyName} onChange={(e) => setHolderForm({...holderForm, companyName: e.target.value})} className={'w-full px-3 py-2 border rounded-lg ' + (darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300')} />
@@ -17745,7 +17745,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                 )}
                                 
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={'block text-sm font-medium mb-1 ' + (darkMode ? 'text-slate-300' : 'text-slate-700')}>Nombre de Empresa *</label>
                                         <input type="text" value={clientForm.companyName} onChange={(e) => setClientForm({...clientForm, companyName: e.target.value})} className={'w-full px-3 py-2 border rounded-lg ' + (darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300')} />
@@ -17810,7 +17810,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </div>
                                 <div className="space-y-3">
                                     {/* Titular y Cliente */}
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
                                             <label className={'block text-xs font-medium mb-1 ' + (darkMode ? 'text-slate-300' : 'text-slate-700')}>Titular (Tu Empresa) *</label>
                                             <input list="holders-list" value={holderSearch}
@@ -18297,7 +18297,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                     
                                     {/* Emisor y Cliente */}
-                                    <div className="grid grid-cols-2 gap-6 mb-8">
+                                    <div className="grid grid-cols-1 gap-6 mb-8">
                                         <div className={'p-4 rounded-lg ' + (darkMode ? 'bg-slate-700' : 'bg-slate-50')}>
                                             <div className={'text-xs font-semibold uppercase mb-2 ' + (darkMode?'text-slate-400':'text-slate-500')}>Emisor</div>
                                             <div className={'font-bold text-lg ' + (darkMode?'text-white':'text-slate-900')}>{previewInvoice.holder.companyName}</div>
@@ -18888,7 +18888,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </p>
                                 <div className="mb-4">
                                     <label className={`block text-xs font-medium mb-2 ${darkMode?'text-slate-300':'text-slate-600'}`}>Método de pago</label>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-1 gap-2">
                                         {[['BANK','🏦 Banco'],['CASH','💵 Efectivo']].map(([val,lbl]) => (
                                             <button key={val} onClick={() => setPagoMasivoOrigen(val)}
                                                 className={`py-2 rounded-lg text-sm font-medium border transition-all ${
@@ -22319,7 +22319,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                             <div className="relative h-2 rounded-full bg-slate-100 mb-3">
                                                                 <div className={`absolute h-2 rounded-full ${provider.pctTotal >= 20 ? 'bg-red-500' : provider.pctTotal >= 10 ? 'bg-orange-400' : 'bg-teal-500'}`} style={{ width: `${provider.pctTotal}%` }} />
                                                             </div>
-                                                            <div className="grid grid-cols-2 gap-2">
+                                                            <div className="grid grid-cols-1 gap-2">
                                                                 <div className="bg-slate-50 rounded-lg px-3 py-2">
                                                                     <div className="flex justify-between items-center mb-1">
                                                                         <span className="text-xs text-slate-500">⏳ Deuda pendiente</span>
@@ -22431,7 +22431,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <div className={`mt-6 pt-6 border-t ${'border-slate-200'}`}>
                                         <h4 className={`font-medium mb-3 ${'text-slate-700'}`}>IVAs Configurados</h4>
                                         <div className="max-h-64 overflow-y-auto">
-                                            <div className="grid grid-cols-2 gap-2">
+                                            <div className="grid grid-cols-1 gap-2">
                                                 {taxRates.map(rate => (
                                                     <div key={rate} className={`flex items-center justify-between px-3 py-2 rounded border ${'bg-white border-slate-200'}`}>
                                                         <span className={`text-sm font-mono ${'text-slate-700'}`}>{rate}%</span>
@@ -22759,7 +22759,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                             {suppliersInfo[supplier] ? (
                                                                 <div className="space-y-4">
                                                                     {(suppliersInfo[supplier].ico || suppliersInfo[supplier].dic) && (
-                                                                        <div className={`grid grid-cols-2 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
+                                                                        <div className={`grid grid-cols-1 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
                                                                             {suppliersInfo[supplier].ico && (
                                                                                 <div>
                                                                                     <div className={`text-xs font-semibold mb-1 ${'text-slate-600'}`}>IČO</div>
@@ -22807,7 +22807,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                     )}
                                                                     
                                                                     {(suppliersInfo[supplier].phone || suppliersInfo[supplier].email) && (
-                                                                        <div className={`grid grid-cols-2 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
+                                                                        <div className={`grid grid-cols-1 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
                                                                             {suppliersInfo[supplier].phone && (
                                                                                 <div>
                                                                                     <div className={`text-xs font-semibold mb-1 ${'text-slate-600'}`}>Teléfono</div>
@@ -22840,7 +22840,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                     )}
                                                                     
                                                                     {(suppliersInfo[supplier].bankAccount || suppliersInfo[supplier].bankCode) && (
-                                                                        <div className={`grid grid-cols-2 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
+                                                                        <div className={`grid grid-cols-1 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
                                                                             {suppliersInfo[supplier].bankAccount && (
                                                                                 <div>
                                                                                     <div className={`text-xs font-semibold mb-1 ${'text-slate-600'}`}>Cuenta Bancaria</div>
@@ -22873,7 +22873,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                     )}
                                                                     
                                                                     {(suppliersInfo[supplier].vs || suppliersInfo[supplier].ks) && (
-                                                                        <div className={`grid grid-cols-2 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
+                                                                        <div className={`grid grid-cols-1 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
                                                                             {suppliersInfo[supplier].vs && (
                                                                                 <div>
                                                                                     <div className={`text-xs font-semibold mb-1 ${'text-slate-600'}`}>VS (Variable Symbol)</div>
@@ -22923,7 +22923,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                     )}
                                                                     
                                                                     {(suppliersInfo[supplier].username || suppliersInfo[supplier].password) && (
-                                                                        <div className={`grid grid-cols-2 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
+                                                                        <div className={`grid grid-cols-1 gap-4 p-4 rounded-lg ${'bg-slate-100'}`}>
                                                                             {suppliersInfo[supplier].username && (
                                                                                 <div>
                                                                                     <div className={`text-xs font-semibold mb-1 ${'text-slate-600'}`}>Usuario</div>
@@ -23029,7 +23029,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </h3>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="grid grid-cols-1 gap-3 mb-4">
                                 {/* Proveedor */}
                                 {/* Proveedor - OCULTO (ahora se usa el desplegable de categoría) */}
                                 <div className="col-span-2" style={{display: 'none'}}>
@@ -23525,7 +23525,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         placeholder="Nombre del proveedor"
                                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${'border-slate-300'}`} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>IČO</label>
                                         <input type="text" value={newSupplierInfo.ico}
@@ -23548,7 +23548,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         placeholder="Domicilio completo"
                                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${'border-slate-300'}`} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>Teléfono</label>
                                         <input type="text" value={newSupplierInfo.phone}
@@ -23564,7 +23564,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${'border-slate-300'}`} />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>Cuenta Bancaria</label>
                                         <input type="text" value={newSupplierInfo.bankAccount}
@@ -23580,7 +23580,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${'border-slate-300'}`} />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>VS (Variable Symbol)</label>
                                         <input type="text" value={newSupplierInfo.vs || ''}
@@ -23603,7 +23603,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         placeholder="https://ejemplo.com"
                                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${'border-slate-300'}`} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>Usuario</label>
                                         <input type="text" value={newSupplierInfo.username || ''}
@@ -23672,7 +23672,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                             
                             <div className="space-y-3 mb-6">
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>IČO</label>
                                         <input
@@ -23706,7 +23706,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     />
                                 </div>
                                 
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>Teléfono</label>
                                         <input
@@ -23729,7 +23729,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                 </div>
                                 
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>Cuenta Bancaria</label>
                                         <input
@@ -23752,7 +23752,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                 </div>
                                 
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>VS (Variable Symbol)</label>
                                         <input
@@ -23786,7 +23786,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     />
                                 </div>
                                 
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 gap-3">
                                     <div>
                                         <label className={`block text-xs font-medium ${'text-slate-700'} mb-1`}>Usuario</label>
                                         <input
@@ -24500,7 +24500,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',
                                                     background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}/>
                                     </div>
-                                    <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+                                    <div style={{display:'flex',gap:'16px',flexDirection:'column'}}>
                                         <div>
                                             <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>VENCIMIENTO</label>
                                             <input type="date" value={form.vencimiento} onChange={e=>setForm(f=>({...f,vencimiento:e.target.value}))}
