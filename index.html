@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-06-23:55 - Stock: sección Envíos con notificación a usuario -->
+<!-- Version: 2026-05-07-12:15 - Productos: Save bilingüe, categorías editables, fix guardar -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -3206,29 +3206,36 @@ ${invoice.items.map(item => `
                         } catch(e) { return null; }
                     })()}
 
-                    {/* Banner envío pendiente */}
-                    {(() => {
+                    {/* Banner envío pendiente — solo para el usuario destinatario */}
+                    {(()=>{
                         if (!currentUser) return null;
                         try {
-                            const noVistos = (notificaciones.envioNotif||[]).filter(n=>!n.visto);
-                            if (!noVistos.length) return null;
-                            const ultimo = noVistos[0];
+                            const myId = String(currentUser.id||'');
+                            const enviosPend = (notificaciones.envioNotif||[]).filter(n=>!n.visto && String(n.destinatarioId||'')===myId);
+                            if (!enviosPend.length) return null;
+                            const notif = enviosPend[0];
+                            const enCamino = notif.tipo==='recibir_en_camino';
+                            const enPrep = notif.tipo==='recibir_preparacion';
+                            const bg = enCamino?'linear-gradient(90deg,#1d4ed8,#2563eb)':enPrep?'linear-gradient(90deg,#0f766e,#0d9488)':'linear-gradient(90deg,#c2410c,#ea580c)';
+                            const ico = enCamino?'🚚':enPrep?'📦':'🔔';
+                            const msg = enCamino
+                                ? ('¡Pedido en camino! '+notif.desde+' → '+notif.hasta+(notif.hora?' · '+notif.hora:''))
+                                : enPrep
+                                ? ('Pedido en preparación: '+notif.desde+' → '+notif.hasta)
+                                : ('Pedido a armar: '+notif.desde+' → '+notif.hasta+(notif.hora?' · '+notif.hora:''));
                             return (
-                                <div className="flex items-center gap-3 px-4 py-2.5"
-                                    style={{background:'linear-gradient(90deg,#c2410c,#ea580c)',color:'white'}}>
-                                    <span className="text-lg shrink-0">🚚</span>
-                                    <p className="text-sm font-medium flex-1">
-                                        {noVistos.length > 1 ? `Tenés ${noVistos.length} envíos pendientes` : `Envío de ${ultimo.desde} → ${ultimo.hasta} · ${ultimo.fecha}${ultimo.hora?' · '+ultimo.hora:''}`}
-                                    </p>
-                                    <button onClick={() => setActiveModule('cocina')}
+                                <div className="flex items-center gap-3 px-4 py-2.5" style={{background:bg,color:'white'}}>
+                                    <span className="text-lg shrink-0">{ico}</span>
+                                    <p className="text-sm font-medium flex-1">{msg}{enviosPend.length>1?' (+'+String(enviosPend.length-1)+' más)':''}</p>
+                                    <button onClick={()=>{setActiveModule('cocina');window.__cocinaTabInicial='stock';window.__stockTabInicial='envios';}}
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
-                                    <button onClick={() => marcarNotifVista('envioNotif', ()=>true)}
+                                    <button onClick={()=>marcarNotifVista('envioNotif',n=>String(n.destinatarioId)===myId)}
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
                             );
-                        } catch(e) { return null; }
+                        } catch(err2) { return null; }
                     })()}
 
                     {/* Banner notas nuevas */}
@@ -3378,8 +3385,8 @@ ${invoice.items.map(item => `
                                     navigate: 'seguridad',
                                     color: 'slate',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-slate-400' : 'text-slate-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
-                                    title: 'Seguridad del Sistema',
-                                    desc: 'Infraestructura, base de datos y backups',
+                                    title: currentLanguage==='en'?'System Security':'Seguridad del Sistema',
+                                    desc: currentLanguage==='en'?'Infrastructure, database and backups':'Infraestructura, base de datos y backups',
                                     detail: 'Información técnica del sistema y gestión de backups automáticos',
                                 },
                                 credenciales: {
@@ -3387,8 +3394,8 @@ ${invoice.items.map(item => `
                                     navigate: 'credenciales',
                                     color: 'indigo',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
-                                    title: 'Usuarios y Contraseñas',
-                                    desc: 'Almacén informativo de credenciales',
+                                    title: currentLanguage==='en'?'Users & Passwords':'Usuarios y Contraseñas',
+                                    desc: currentLanguage==='en'?'Credential information store':'Almacén informativo de credenciales',
                                     detail: 'Registro de usuarios, contraseñas y accesos para referencia interna.',
                                 },
                                 calendario: {
@@ -3396,8 +3403,8 @@ ${invoice.items.map(item => `
                                     navigate: 'calendario',
                                     color: 'blue',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-blue-400' : 'text-blue-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-                                    title: 'Gestión de Calendario',
-                                    desc: 'Eventos, turnos y fechas importantes',
+                                    title: currentLanguage==='en'?'Calendar Management':'Gestión de Calendario',
+                                    desc: currentLanguage==='en'?'Events, shifts and important dates':'Eventos, turnos y fechas importantes',
                                     detail: 'Agenda con vistas diaria, semanal y mensual por empleado y ubicación.',
                                 },
                                 codigos: {
@@ -3405,8 +3412,8 @@ ${invoice.items.map(item => `
                                     navigate: 'codigos',
                                     color: 'teal',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-teal-400' : 'text-teal-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>,
-                                    title: 'Generador de Códigos',
-                                    desc: 'Códigos de barras y QR para productos',
+                                    title: currentLanguage==='en'?'Code Generator':'Generador de Códigos',
+                                    desc: currentLanguage==='en'?'Barcode and QR for products':'Códigos de barras y QR para productos',
                                     detail: 'Generá códigos EAN-13 y QR con link, exportables a PDF para imprimir y usar en el sistema de cobro.',
                                 },
                                 misueldo: {
@@ -3414,8 +3421,8 @@ ${invoice.items.map(item => `
                                     navigate: 'misueldo',
                                     color: 'green',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-green-400' : 'text-green-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-                                    title: 'Mi Sueldo',
-                                    desc: 'Mis pagos, sueldos y seguros médicos',
+                                    title: currentLanguage==='en'?'My Salary':'Mi Sueldo',
+                                    desc: currentLanguage==='en'?'My payments, salary and medical insurance':'Mis pagos, sueldos y seguros médicos',
                                     detail: 'Historial personal de sueldos cobrados, seguros médicos y pagos mensuales.',
                                 },
                                 stock: {
@@ -3423,8 +3430,8 @@ ${invoice.items.map(item => `
                                     navigate: 'stock',
                                     color: 'amber',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-amber-400' : 'text-amber-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
-                                    title: 'Almacén',
-                                    desc: 'Control de inventario y stock',
+                                    title: currentLanguage==='en'?'Warehouse':'Almacén',
+                                    desc: currentLanguage==='en'?'Inventory and stock control':'Control de inventario y stock',
                                     detail: 'Módulo en construcción. Próximamente disponible.',
                                 },
                                 cocina: {
@@ -3432,8 +3439,8 @@ ${invoice.items.map(item => `
                                     navigate: 'cocina',
                                     color: 'orange',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-orange-400' : 'text-orange-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-                                    title: 'Gestión de Cocina',
-                                    desc: 'Gestión y organización de cocina',
+                                    title: currentLanguage==='en'?'Kitchen Management':'Gestión de Cocina',
+                                    desc: currentLanguage==='en'?'Kitchen management and organization':'Gestión y organización de cocina',
                                     detail: 'Módulo en construcción. Próximamente disponible.',
                                 },
                                 micerebro: {
@@ -3441,8 +3448,8 @@ ${invoice.items.map(item => `
                                     navigate: 'micerebro',
                                     color: 'purple',
                                     icon: <span className="text-3xl group-hover:brightness-0 group-hover:invert transition-all">🧠</span>,
-                                    title: 'Mi Cerebro',
-                                    desc: 'Tu espacio personal de notas e ideas',
+                                    title: currentLanguage==='en'?'My Brain':'Mi Cerebro',
+                                    desc: currentLanguage==='en'?'Your personal space for notes and ideas':'Tu espacio personal de notas e ideas',
                                     detail: 'Módulo en construcción. Próximamente disponible.',
                                 },
                             };
@@ -3720,7 +3727,7 @@ ${invoice.items.map(item => `
 
                     {/* Módulo: Seguimiento de Préstamos */}
                     {activeModule === 'cocina' && (
-                        <CocinaModule darkMode={darkMode} currentUser={currentUser} onBack={() => setActiveModule('home')} />
+                        <CocinaModule darkMode={darkMode} currentUser={currentUser} language={currentLanguage} onBack={() => setActiveModule('home')} />
                     )}
                     {activeModule === 'micerebro' && (
                         <MiCerebroModule darkMode={darkMode} currentUser={currentUser} systemUsers={systemUsers} onBack={() => setActiveModule('home')} />
@@ -24856,11 +24863,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
     //  GESTIÓN DE COCINA — CocinaModule
     //  Secciones: Recetas, Stock (próximamente)
     // ═══════════════════════════════════════════════
-    const CocinaModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
+    const CocinaModule = ({ darkMode = false, currentUser = null, onBack = null, language = 'es' }) => {
         const { useState, useEffect, useMemo } = React;
 
         // Permisos
         const { canEdit, canRead, isAdmin } = usePermissions(currentUser, 'cocina');
+
+        // i18n
+        const en = language === 'en';
+        const L = (es, eng) => en ? eng : es;
 
         // Estilos
         const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
@@ -24870,7 +24881,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const inp  = `w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-slate-200 placeholder-slate-400'}`;
 
         // Sub-sección activa
-        const [activeTab, setActiveTab] = useState('recetas');
+        const [activeTab, setActiveTab] = useState(() => { const t = window.__cocinaTabInicial; if(t){delete window.__cocinaTabInicial;} return t||'stock'; });
 
         // ── RECETAS ──
         const [recetas, setRecetas] = useState([]);
@@ -24881,7 +24892,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [recetaFiltroCategoria, setRecetaFiltroCategoria] = useState('');
 
         // Categorías de recetas
-        const CATEGORIAS = ['Entrada', 'Principal', 'Postre', 'Bebida', 'Salsa', 'Base', 'Snack', 'Otro'];
+        const CATEGORIAS = [L('Entrada','Starter'), L('Principal','Main'), L('Postre','Dessert'), L('Bebida','Drink'), L('Salsa','Sauce'), L('Base','Base'), L('Snack','Snack'), L('Otro','Other')];
 
         // Cargar recetas desde Supabase
         useEffect(() => {
@@ -24945,8 +24956,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         }, [showRecetaModal]);
 
         const TABS = [
-            { id: 'recetas', label: '📋 Recetas', badge: recetas.length },
-            { id: 'stock',   label: '📦 Stock',   badge: null },
+            { id: 'stock',    label: '📦 Stock',   badge: null },
+            { id: 'compras',  label: L('🛒 Compras', '🛒 Purchases'), badge: null, soon: true },
+            { id: 'costos',   label: L('💸 Costos',  '💸 Costs'),     badge: null, soon: true },
+            { id: 'recetas',  label: L('📋 Recetas', '📋 Recipes'),  badge: recetas.length },
         ];
 
         return (
@@ -24954,8 +24967,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {/* Header */}
                 <div className={`sticky top-0 z-10 border-b ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'} px-4 py-3`}>
                     <div className="flex items-center gap-3 max-w-5xl mx-auto">
-                        {onBack && <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>}
-                        <h1 className={`text-base font-bold ${txt} flex-1`}>👨‍🍳 Gestión de Cocina</h1>
+                        {onBack && <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>{L('← Volver','← Back')}</button>}
+                        <h1 className={`text-base font-bold ${txt} flex-1`}>{L('👨‍🍳 Gestión de Cocina','👨‍🍳 Kitchen Management')}</h1>
                     </div>
                     {/* Tabs */}
                     <div className="flex gap-1 mt-3 max-w-5xl mx-auto">
@@ -24981,14 +24994,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     <div className="p-4 max-w-5xl mx-auto">
                         {/* Toolbar */}
                         <div className="flex flex-wrap gap-3 mb-4 items-center">
-                            <input value={recetaSearch} onChange={e=>setRecetaSearch(e.target.value)} placeholder="🔍 Buscar recetas..." className={`${inp} flex-1 min-w-[180px]`}/>
+                            <input value={recetaSearch} onChange={e=>setRecetaSearch(e.target.value)} placeholder={L('🔍 Buscar recetas...','🔍 Search recipes...')} className={`${inp} flex-1 min-w-[180px]`}/>
                             <select value={recetaFiltroCategoria} onChange={e=>setRecetaFiltroCategoria(e.target.value)} className={`${inp} w-auto`}>
-                                <option value="">Todas las categorías</option>
+                                <option value="">{L('Todas las categorías','All categories')}</option>
                                 {CATEGORIAS.map(c=><option key={c} value={c}>{c}</option>)}
                             </select>
                             {canEdit && (
                                 <button onClick={openNewReceta} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium flex items-center gap-1.5 shrink-0">
-                                    + Nueva receta
+                                    {L('+ Nueva receta','+ New recipe')}
                                 </button>
                             )}
                         </div>
@@ -24997,10 +25010,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         {recetasFiltradas.length === 0 ? (
                             <div className={`rounded-xl border ${card} p-12 text-center`}>
                                 <p className="text-5xl mb-4">🍳</p>
-                                <p className={`font-semibold ${txt} mb-1`}>{recetas.length === 0 ? 'Sin recetas todavía' : 'Sin resultados'}</p>
-                                <p className={`text-sm ${sub}`}>{recetas.length === 0 ? 'Empezá cargando la primera receta' : 'Probá con otro filtro'}</p>
+                                <p className={`font-semibold ${txt} mb-1`}>{recetas.length === 0 ? L('Sin recetas todavía','No recipes yet') : L('Sin resultados','No results')}</p>
+                                <p className={`text-sm ${sub}`}>{recetas.length === 0 ? L('Empezá cargando la primera receta','Start by adding the first recipe') : L('Probá con otro filtro','Try a different filter')}</p>
                                 {canEdit && recetas.length === 0 && (
-                                    <button onClick={openNewReceta} className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">+ Nueva receta</button>
+                                    <button onClick={openNewReceta} className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nueva receta','+ New recipe')}</button>
                                 )}
                             </div>
                         ) : (
@@ -25014,7 +25027,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <p className={`font-bold text-sm ${txt} truncate`}>{r.nombre}</p>
                                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                                                         {r.categoria && <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{background:'#fed7aa',color:'#9a3412'}}>{r.categoria}</span>}
-                                                        {r.porciones && <span className={`text-xs ${sub}`}>👥 {r.porciones} porc.</span>}
+                                                        {r.porciones && <span className={`text-xs ${sub}`}>👥 {r.porciones} serv.</span>}
                                                         {r.tiempoPrep && <span className={`text-xs ${sub}`}>⏱ {r.tiempoPrep}'</span>}
                                                     </div>
                                                 </div>
@@ -25051,10 +25064,34 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     </div>
                 )}
 
+                {/* ── COMPRAS (en construcción) ── */}
+                {activeTab === 'compras' && (
+                    <div className="p-4 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+                        <div className="text-center">
+                            <p className="text-6xl mb-4">🛒</p>
+                            <p className={`text-xl font-bold ${txt} mb-2`}>{L('Compras','Purchases')}</p>
+                            <p className={`text-sm ${sub}`}>{L('Próximamente','Coming soon')}</p>
+                            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border" style={{borderColor:'#f97316',color:'#f97316'}}>🚧 {L('En construcción','Under construction')}</div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── COSTOS (en construcción) ── */}
+                {activeTab === 'costos' && (
+                    <div className="p-4 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
+                        <div className="text-center">
+                            <p className="text-6xl mb-4">💸</p>
+                            <p className={`text-xl font-bold ${txt} mb-2`}>{L('Costos','Costs')}</p>
+                            <p className={`text-sm ${sub}`}>{L('Próximamente','Coming soon')}</p>
+                            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border" style={{borderColor:'#f97316',color:'#f97316'}}>🚧 {L('En construcción','Under construction')}</div>
+                        </div>
+                    </div>
+                )}
+
                 {/* ── STOCK ── */}
                 {activeTab === 'stock' && (
                     <div className="p-4 max-w-5xl mx-auto">
-                        <StockModule darkMode={darkMode} currentUser={currentUser} />
+                        <StockModule darkMode={darkMode} currentUser={currentUser} language={language} />
                     </div>
                 )}
 
@@ -25064,48 +25101,48 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         <div className={`rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             {/* Header */}
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <h2 className={`font-bold text-base ${txt}`}>{editingReceta ? '✏️ Editar receta' : '🍳 Nueva receta'}</h2>
+                                <h2 className={`font-bold text-base ${txt}`}>{editingReceta ? L('✏️ Editar receta','✏️ Edit recipe') : L('🍳 Nueva receta','🍳 New recipe')}</h2>
                                 <button onClick={()=>setShowRecetaModal(false)} className={`w-8 h-8 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                             </div>
                             {/* Scroll */}
                             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
                                 {/* Nombre */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>NOMBRE *</label>
-                                    <input value={recetaForm.nombre} onChange={e=>setRecetaForm(f=>({...f,nombre:e.target.value}))} placeholder="Ej: Empanadas de carne" className={inp}/>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>NAME *</label>
+                                    <input value={recetaForm.nombre} onChange={e=>setRecetaForm(f=>({...f,nombre:e.target.value}))} placeholder={L('Ej: Empanadas de carne','E.g.: Beef empanadas')} className={inp}/>
                                 </div>
                                 {/* Categoría + Porciones + Tiempo */}
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>CATEGORÍA</label>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>CATEGORY</label>
                                         <select value={recetaForm.categoria} onChange={e=>setRecetaForm(f=>({...f,categoria:e.target.value}))} className={inp}>
-                                            <option value="">Sin categoría</option>
+                                            <option value="">No category</option>
                                             {CATEGORIAS.map(c=><option key={c} value={c}>{c}</option>)}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>PORCIONES</label>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>SERVINGS</label>
                                         <input type="number" min="1" value={recetaForm.porciones} onChange={e=>setRecetaForm(f=>({...f,porciones:e.target.value}))} className={inp} style={{maxWidth:'120px'}}/>
                                     </div>
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>TIEMPO PREP (min)</label>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>PREP TIME (min)</label>
                                         <input type="number" min="0" value={recetaForm.tiempoPrep} onChange={e=>setRecetaForm(f=>({...f,tiempoPrep:e.target.value}))} placeholder="30" className={inp} style={{maxWidth:'120px'}}/>
                                     </div>
                                 </div>
                                 {/* Descripción */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>DESCRIPCIÓN</label>
-                                    <textarea value={recetaForm.descripcion} onChange={e=>setRecetaForm(f=>({...f,descripcion:e.target.value}))} rows={2} placeholder="Descripción breve del plato..." className={`${inp} resize-none`}/>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>DESCRIPTION</label>
+                                    <textarea value={recetaForm.descripcion} onChange={e=>setRecetaForm(f=>({...f,descripcion:e.target.value}))} rows={2} placeholder={L('Descripción breve del plato...','Brief description of the dish...')} className={`${inp} resize-none`}/>
                                 </div>
-                                {/* Ingredientes */}
+                                {/* Ingredients */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>🥕 INGREDIENTES</label>
+                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>🥕 INGREDIENTS</label>
                                     <div className="space-y-2">
                                         {recetaForm.ingredientes.map((ing,i)=>(
                                             <div key={ing.id} className="flex gap-2 items-center">
-                                                <input value={ing.nombre} onChange={e=>setRecetaForm(f=>({...f,ingredientes:f.ingredientes.map((x,j)=>j===i?{...x,nombre:e.target.value}:x)}))} placeholder="Ingrediente" className={`${inp} flex-1`}/>
-                                                <input value={ing.cantidad} onChange={e=>setRecetaForm(f=>({...f,ingredientes:f.ingredientes.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}))} placeholder="Cant." className={`${inp}`} style={{width:'70px',flexShrink:0}}/>
-                                                <input value={ing.unidad} onChange={e=>setRecetaForm(f=>({...f,ingredientes:f.ingredientes.map((x,j)=>j===i?{...x,unidad:e.target.value}:x)}))} placeholder="Unid." className={`${inp}`} style={{width:'60px',flexShrink:0}}/>
+                                                <input value={ing.nombre} onChange={e=>setRecetaForm(f=>({...f,ingredientes:f.ingredientes.map((x,j)=>j===i?{...x,nombre:e.target.value}:x)}))} placeholder={L('Ingrediente','Ingredient')} className={`${inp} flex-1`}/>
+                                                <input value={ing.cantidad} onChange={e=>setRecetaForm(f=>({...f,ingredientes:f.ingredientes.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}))} placeholder={L('Cant.','Qty.')} className={`${inp}`} style={{width:'70px',flexShrink:0}}/>
+                                                <input value={ing.unidad} onChange={e=>setRecetaForm(f=>({...f,ingredientes:f.ingredientes.map((x,j)=>j===i?{...x,unidad:e.target.value}:x)}))} placeholder={L('Unid.','Unit')} className={`${inp}`} style={{width:'60px',flexShrink:0}}/>
                                                 {recetaForm.ingredientes.length > 1 && (
                                                     <button onClick={()=>setRecetaForm(f=>({...f,ingredientes:f.ingredientes.filter((_,j)=>j!==i)}))} className="text-red-400 hover:text-red-600 text-lg shrink-0">×</button>
                                                 )}
@@ -25114,17 +25151,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                     <button onClick={()=>setRecetaForm(f=>({...f,ingredientes:[...f.ingredientes,{id:Date.now(),nombre:'',cantidad:'',unidad:''}]}))}
                                         className={`mt-2 w-full py-1.5 text-xs font-medium border-2 border-dashed rounded-lg transition-colors ${darkMode?'border-slate-600 text-slate-400 hover:border-orange-500 hover:text-orange-400':'border-slate-300 text-slate-400 hover:border-orange-400 hover:text-orange-600'}`}>
-                                        + Agregar ingrediente
+                                        + Add ingredient
                                     </button>
                                 </div>
                                 {/* Pasos */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>📝 PASOS DE PREPARACIÓN</label>
+                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>📝 PREPARATION STEPS</label>
                                     <div className="space-y-2">
                                         {recetaForm.pasos.map((paso,i)=>(
                                             <div key={paso.id} className="flex gap-2 items-start">
                                                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-2 ${darkMode?'bg-orange-900/40 text-orange-300':'bg-orange-100 text-orange-700'}`}>{i+1}</span>
-                                                <textarea value={paso.texto} onChange={e=>setRecetaForm(f=>({...f,pasos:f.pasos.map((x,j)=>j===i?{...x,texto:e.target.value}:x)}))} rows={2} placeholder={`Paso ${i+1}...`} className={`${inp} flex-1 resize-none`}/>
+                                                <textarea value={paso.texto} onChange={e=>setRecetaForm(f=>({...f,pasos:f.pasos.map((x,j)=>j===i?{...x,texto:e.target.value}:x)}))} rows={2} placeholder={`${L('Paso','Step')} ${i+1}...`} className={`${inp} flex-1 resize-none`}/>
                                                 {recetaForm.pasos.length > 1 && (
                                                     <button onClick={()=>setRecetaForm(f=>({...f,pasos:f.pasos.filter((_,j)=>j!==i)}))} className="text-red-400 hover:text-red-600 text-lg shrink-0 mt-2">×</button>
                                                 )}
@@ -25133,14 +25170,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                     <button onClick={()=>setRecetaForm(f=>({...f,pasos:[...f.pasos,{id:Date.now(),texto:''}]}))}
                                         className={`mt-2 w-full py-1.5 text-xs font-medium border-2 border-dashed rounded-lg transition-colors ${darkMode?'border-slate-600 text-slate-400 hover:border-orange-500 hover:text-orange-400':'border-slate-300 text-slate-400 hover:border-orange-400 hover:text-orange-600'}`}>
-                                        + Agregar paso
+                                        + Add step
                                     </button>
                                 </div>
                             </div>
                             {/* Footer */}
                             <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <button onClick={()=>setShowRecetaModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm font-medium ${darkMode?'border-slate-600 text-slate-300 hover:bg-slate-700':'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Cancelar</button>
-                                <button onClick={guardarReceta} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium">💾 Guardar receta</button>
+                                <button onClick={()=>setShowRecetaModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm font-medium ${darkMode?'border-slate-600 text-slate-300 hover:bg-slate-700':'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Cancel</button>
+                                <button onClick={guardarReceta} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium">{L("💾 Guardar receta","💾 Save recipe")}</button>
                             </div>
                         </div>
                     </div>
@@ -25155,9 +25192,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
     // ═══════════════════════════════════════════════
     //  STOCK MODULE — dentro de CocinaModule
     // ═══════════════════════════════════════════════
-    const StockModule = ({ darkMode, currentUser }) => {
+    const StockModule = ({ darkMode, currentUser, language = 'es' }) => {
         const { useState, useEffect, useMemo, useRef } = React;
         const { canEdit, canRead, isAdmin } = usePermissions(currentUser, 'cocina');
+
+        // i18n
+        const L = (es, eng) => language === 'en' ? eng : es;
 
         const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
         const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
@@ -25167,12 +25207,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         // ── ESTADO ──
         const [sucursales, setSucursales]   = useState([]);
+        const [categoriasProd, setCategoriasProd] = useState([]);
         const [productos,  setProductos]    = useState([]);
         const [stock,      setStock]        = useState({}); // { productoId_sucursalId: cantidad }
         const [movimientos,setMovimientos]  = useState([]);
         const [loaded,     setLoaded]       = useState(false);
 
-        const [activeTab, setActiveTab]     = useState('stock');
+        const [activeTab, setActiveTab]     = useState(() => { const t = window.__stockTabInicial; if(t){delete window.__stockTabInicial;} return t||'stock'; });
         const [sucursalSel, setSucursalSel] = useState('');
 
         // Modales
@@ -25182,8 +25223,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [showVentasModal, setShowVentasModal] = useState(false);
         const [showMovManual,   setShowMovManual]   = useState(false);
         const [showEnvioModal,  setShowEnvioModal]  = useState(false);
+        const [showCatModal,    setShowCatModal]    = useState(false);
+        const [newCatName,      setNewCatName]      = useState('');
         const [editingEnvio,    setEditingEnvio]    = useState(null);
-        const [envioForm,       setEnvioForm]       = useState({ desde: '', hasta: '', fecha: '', hora: '', notas: '', destinatario: '', productos: [] });
+        const [envioForm,       setEnvioForm]       = useState({ desde: '', hasta: '', fecha: '', hora: '', notas: '', destinatario: '', destinatarioRecibe: '', descontarDe: '', productos: [] });
         const [envios,          setEnvios]          = useState([]);
         const [movManualTipo,   setMovManualTipo]   = useState('ingreso'); // 'ingreso' | 'venta'
         const [movManualSuc,    setMovManualSuc]    = useState('');
@@ -25192,8 +25235,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [editingProd,   setEditingProd]   = useState(null);
 
         const [sucForm,  setSucForm]  = useState({ nombre: '' });
-        const [prodForm, setProdForm] = useState({ nombre: '', categoria: '', unidad: 'unidad', minimo: '' });
-        const [ingForm,  setIngForm]  = useState({ productoId: '', sucursalId: '', cantidad: '', notas: '' });
+        const [prodForm, setProdForm] = useState({ nombre: '', categoria: '', unidad: 'unidad', minimo: '', aliases: [] });
+        const [ingForm,  setIngForm]  = useState({ productoId: '', branchId: '', cantidad: '', notas: '' });
 
         // Importar ventas
         const [ventasPreview, setVentasPreview] = useState([]);
@@ -25209,13 +25252,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 dbGetKey('app_config', 'stock_niveles'),
                 dbGetKey('app_config', 'stock_movimientos'),
                 dbGetKey('app_config', 'stock_envios'),
-            ]).then(([sucs, prods, niveles, movs, envs]) => {
+                dbGetKey('app_config', 'stock_categorias'),
+            ]).then(([sucs, prods, niveles, movs, envs, cats]) => {
                 const sucList = sucs || [{ id: 1, nombre: 'Vinohrady' }, { id: 2, nombre: 'Malá Strana' }];
                 setSucursales(sucList);
                 setProductos(prods || []);
                 setStock(niveles || {});
                 setMovimientos(movs || []);
                 setEnvios(envs || []);
+                setCategoriasProd(Array.isArray(cats) && cats.length ? cats : CATEGORIAS_PROD_DEFAULT);
                 if (sucList.length) setSucursalSel(String(sucList[0].id));
                 setLoaded(true);
             });
@@ -25228,11 +25273,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveStock      = (v) => { setStock(v);      save('stock_niveles', v); };
         const saveMovimientos = (v) => { setMovimientos(v); save('stock_movimientos', v); };
         const saveEnvios = (v) => { setEnvios(v); save('stock_envios', v); };
+        const saveCategoriasProd = (v) => { setCategoriasProd(v); save('stock_categorias', v); };
 
         const stockKey = (pId, sId) => `${pId}_${sId}`;
         const getStock = (pId, sId) => parseFloat(stock[stockKey(pId, sId)] || 0);
 
-        // ── SUCURSALES ──
+        // ── BRANCHES ──
         const guardarSucursal = () => {
             if (!sucForm.nombre.trim()) return;
             const newList = editingSuc
@@ -25242,12 +25288,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             setShowSucModal(false);
         };
 
-        // ── PRODUCTOS ──
+        // ── PRODUCTS ──
         const guardarProducto = () => {
-            if (!prodForm.nombre.trim()) return;
+            if (!(prodForm.nombre||'').trim()) return;
             const newList = editingProd
                 ? productos.map(p => p.id === editingProd.id ? { ...p, ...prodForm } : p)
-                : [...productos, { id: Date.now(), ...prodForm }];
+                : [...productos, { id: Date.now(), ...prodForm, aliases: prodForm.aliases || [] }];
             saveProductos(newList);
             setShowProdModal(false);
         };
@@ -25263,9 +25309,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const k = stockKey(ingForm.productoId, ingForm.sucursalId);
             const newStock = { ...stock, [k]: (getStock(ingForm.productoId, ingForm.sucursalId) + parseFloat(ingForm.cantidad)) };
             saveStock(newStock);
-            const mov = { id: Date.now(), tipo: 'ingreso', productoId: ingForm.productoId, sucursalId: ingForm.sucursalId, cantidad: parseFloat(ingForm.cantidad), notas: ingForm.notas, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+            const mov = { id: Date.now(), tipo: 'ingreso', productoId: ingForm.productoId, branchId: ingForm.sucursalId, cantidad: parseFloat(ingForm.cantidad), notas: ingForm.notas, fecha: new Date().toISOString(), user: currentUser?.name || '' };
             saveMovimientos([mov, ...movimientos].slice(0, 500));
-            setIngForm({ productoId: '', sucursalId: '', cantidad: '', notas: '' });
+            setIngForm({ productoId: '', branchId: '', cantidad: '', notas: '' });
             setShowIngModal(false);
         };
 
@@ -25288,7 +25334,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const cols = l.split(sep).map(c => c.trim().replace(/"/g,''));
                         return { producto: cols[prodIdx], cantidad: parseFloat(cols[qtyIdx]) || 0 };
                     }).filter(r => r.producto && r.cantidad > 0 && !/variable|tip|bolsa|taška/i.test(r.producto));
-                    setVentasPreview(rows);
+                    const canonicalize2 = (name) => {
+                        const lc = name.toLowerCase().trim();
+                        const match = productos.find(p => p.nombre.toLowerCase().trim()===lc || (p.aliases||[]).some(a=>a.toLowerCase().trim()===lc));
+                        return match ? match.nombre : name;
+                    };
+                    const merged2 = {};
+                    rows.forEach(r => { const canon = canonicalize2(r.producto); merged2[canon] = (merged2[canon]||0) + r.cantidad; });
+                    const mergedRows2 = Object.entries(merged2).map(([producto,cantidad])=>({producto,cantidad}));
+                    setVentasPreview(mergedRows2);
                 };
                 reader.readAsText(file);
             } else {
@@ -25306,7 +25360,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             const qty  = parseFloat(row['Quantity sold'] || row['Množství'] || row['Qty'] || Object.values(row)[2]) || 0;
                             return { producto: String(prod||'').trim(), cantidad: qty };
                         }).filter(r => r.producto && r.cantidad > 0 && !/variable|tip|bolsa|taška/i.test(r.producto));
-                        setVentasPreview(rows);
+                        setVentasPreview(mergedRows);
                     } catch(e) { setVentasError('Error al leer el archivo: ' + e.message); }
                 };
                 reader.readAsArrayBuffer(file);
@@ -25321,7 +25375,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const prod = productos.find(p => p.nombre.toLowerCase().trim() === producto.toLowerCase().trim());
                 if (!prod) return;
                 const k = stockKey(prod.id, ventasSucursal);
-                newStock[k] = Math.max(0, (parseFloat(newStock[k] || 0)) - cantidad);
+                newStock[k] = (parseFloat(newStock[k] || 0)) - cantidad; // permite negativo para detectar errores
                 newMovs.push({ id: Date.now() + Math.random(), tipo: 'venta', productoId: prod.id, sucursalId: ventasSucursal, cantidad, fecha: new Date().toISOString(), user: 'Storyous Import' });
             });
             saveStock(newStock);
@@ -25358,7 +25412,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 if (!cant || cant <= 0) return;
                 const k = stockKey(f.id, movManualSuc);
                 const prev = parseFloat(newStock[k] || 0);
-                newStock[k] = movManualTipo === 'ingreso' ? prev + cant : Math.max(0, prev - cant);
+                newStock[k] = movManualTipo === 'ingreso' ? prev + cant : prev - cant; // permite negativo
                 newMovs.push({ id: Date.now() + Math.random(), tipo: movManualTipo, productoId: f.id, sucursalId: movManualSuc, cantidad: cant, notas: 'Carga manual', fecha: new Date().toISOString(), user: currentUser?.name || '' });
             });
             if (newMovs.length === 0) return;
@@ -25369,18 +25423,47 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         const guardarEnvio = () => {
             if (!envioForm.desde || !envioForm.hasta || !envioForm.fecha || envioForm.productos.length === 0) return;
-            const data = { ...envioForm, id: editingEnvio?.id || Date.now(), creadoAt: editingEnvio?.creadoAt || new Date().toISOString(), estado: editingEnvio?.estado || 'pendiente' };
+            const data = { ...envioForm, id: editingEnvio?.id || Date.now(), creadoAt: editingEnvio?.creadoAt || new Date().toISOString(), creadoPor: editingEnvio?.creadoPor || (currentUser?.name || currentUser?.username || ''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || currentUser?.username || '', estado: editingEnvio?.estado || 'pendiente' };
             const newEnvios = editingEnvio ? envios.map(e => e.id === editingEnvio.id ? data : e) : [data, ...envios];
             saveEnvios(newEnvios);
-            // Notificar al destinatario — mismo patrón que sueldoNotif
-            if (envioForm.destinatario) {
+            // Descontar stock automáticamente si se eligió branch
+            if (envioForm.descontarDe && !editingEnvio) {
+                const newStock = { ...stock };
+                (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                    const k = stockKey(p.id, envioForm.descontarDe);
+                    newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
+                });
+                saveStock(newStock);
+                const movDescuento = (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p => ({
+                    id: Date.now()+Math.random(), tipo:'envio', productoId:p.id,
+                    branchId: envioForm.descontarDe, cantidad: parseFloat(p.cantidad),
+                    notas:`Envío a ${sucursales.find(s=>String(s.id)===String(envioForm.hasta))?.nombre||envioForm.hasta}`,
+                    fecha: new Date().toISOString(), user: currentUser?.name||''
+                }));
+                saveMovimientos([...movDescuento, ...movimientos].slice(0,500));
+            }
+
+            // Notificar al que arma el pedido
+            if (envioForm.destinatario && !editingEnvio) {
                 const destId = String(envioForm.destinatario);
                 const notifKey = `notif_envioNotif_${destId}`;
                 dbGetKey('app_config', notifKey).then(existing => {
                     const arr = Array.isArray(existing) ? existing : [];
                     const desde = sucursales.find(s=>String(s.id)===String(envioForm.desde));
                     const hasta  = sucursales.find(s=>String(s.id)===String(envioForm.hasta));
-                    const newNotif = { id: Date.now(), envioId: data.id, desde: desde?.nombre||envioForm.desde, hasta: hasta?.nombre||envioForm.hasta, fecha: envioForm.fecha, hora: envioForm.hora, productos: (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0), notas: envioForm.notas, visto: false, creadoAt: new Date().toISOString() };
+                    const newNotif = { id: Date.now(), envioId: data.id, destinatarioId: destId, tipo: 'armar', desde: desde?.nombre||envioForm.desde, hasta: hasta?.nombre||envioForm.hasta, fecha: envioForm.fecha, hora: envioForm.hora, productos: (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0), notas: envioForm.notas, visto: false, creadoAt: new Date().toISOString() };
+                    dbUpsertOne('app_config', notifKey, [newNotif, ...arr].slice(0,20));
+                });
+            }
+            // Notificar al que recibe — "hay un pedido en preparación"
+            if (envioForm.destinatarioRecibe && !editingEnvio) {
+                const recId = String(envioForm.destinatarioRecibe);
+                const notifKey = `notif_envioNotif_${recId}`;
+                dbGetKey('app_config', notifKey).then(existing => {
+                    const arr = Array.isArray(existing) ? existing : [];
+                    const desde = sucursales.find(s=>String(s.id)===String(envioForm.desde));
+                    const hasta  = sucursales.find(s=>String(s.id)===String(envioForm.hasta));
+                    const newNotif = { id: Date.now(), envioId: data.id, destinatarioId: recId, tipo: 'recibir_preparacion', desde: desde?.nombre||envioForm.desde, hasta: hasta?.nombre||envioForm.hasta, fecha: envioForm.fecha, hora: envioForm.hora, productos: (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0), notas: envioForm.notas, visto: false, creadoAt: new Date().toISOString() };
                     dbUpsertOne('app_config', notifKey, [newNotif, ...arr].slice(0,20));
                 });
             }
@@ -25388,24 +25471,40 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             setEditingEnvio(null);
         };
 
+        const eliminarEnvio = (id) => {
+            if (!confirm('Delete this shipment?')) return;
+            saveEnvios(envios.filter(e => e.id !== id));
+        };
+
         const marcarEnvioEstado = (id, estado) => {
+            const envio = envios.find(e => e.id === id);
             saveEnvios(envios.map(e => e.id === id ? { ...e, estado } : e));
+            // Notificar al que recibe cuando pasa a "en_camino"
+            if (estado === 'en_camino' && envio?.destinatarioRecibe) {
+                const recId = String(envio.destinatarioRecibe);
+                const notifKey = `notif_envioNotif_${recId}`;
+                dbGetKey('app_config', notifKey).then(existing => {
+                    const arr = Array.isArray(existing) ? existing : [];
+                    const newNotif = { id: Date.now(), envioId: id, destinatarioId: recId, tipo: 'recibir_en_camino', desde: envio.desde, hasta: envio.hasta, fecha: envio.fecha, hora: envio.hora, productos: envio.productos, visto: false, creadoAt: new Date().toISOString() };
+                    dbUpsertOne('app_config', notifKey, [newNotif, ...arr].slice(0,20));
+                });
+            }
         };
 
         const UNIDADES = ['unidad', 'kg', 'g', 'litro', 'ml', 'porción', 'bandeja', 'caja'];
-        const CATEGORIAS_PROD = ['Carne', 'Verdura', 'Lácteo', 'Bebida', 'Condimento', 'Panadería', 'Limpieza', 'Otro'];
+        const CATEGORIAS_PROD_DEFAULT = ['Carne', 'Verdura', 'Lácteo', 'Bebida', 'Condimento', 'Panadería', 'Limpieza', 'Otro'];
 
         const TABS = [
             { id: 'stock',     label: '📦 Stock' },
-            { id: 'ingresos',  label: '📥 Ingresos' },
-            { id: 'ventas',    label: '📤 Ventas' },
-            { id: 'productos', label: '🗂 Productos' },
-            { id: 'sucursales',label: '🏪 Sucursales' },
-            { id: 'envios',    label: '🚚 Envíos' },
+            { id: 'ingresos',  label: L('📥 Ingresos','📥 Inbound') },
+            { id: 'ventas',    label: L('📤 Egresos','📤 Outbound') },
+            { id: 'productos', label: L('🗂 Productos','🗂 Products') },
+            { id: 'sucursales', label: L('🏪 Sucursales','🏪 Branches') },
+            { id: 'envios',    label: L('🚚 Envíos','🚚 Shipments') },
         ];
 
         // Body scroll lock
-        const anyModal = showSucModal || showProdModal || showIngModal || showVentasModal || showMovManual || showEnvioModal;
+        const anyModal = showSucModal || showProdModal || showIngModal || showVentasModal || showMovManual || showEnvioModal || showCatModal;
         useEffect(() => {
             if (anyModal) {
                 const sy = window.scrollY;
@@ -25418,24 +25517,24 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             return () => { document.body.style.cssText = ''; };
         }, [anyModal]);
 
-        if (!loaded) return <div className={`flex items-center justify-center py-20 ${sub}`}>Cargando...</div>;
+        if (!loaded) return <div className={`flex items-center justify-center py-20 ${sub}`}>{L("Cargando...","Loading...")}</div>;
 
         return (
             <div>
                 {/* Sub-tabs del stock */}
-                <div className={`flex gap-1 overflow-x-auto pb-1`}>
+                <div className={`flex gap-1.5 overflow-x-auto pb-1`}>
                     {TABS.map(t => (
                         <button key={t.id} onClick={() => setActiveTab(t.id)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0 ${activeTab === t.id ? 'bg-orange-500 text-white' : darkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+                            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all shrink-0 ${activeTab === t.id ? 'bg-orange-500 text-white' : darkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}>
                             {t.label}
                         </button>
                     ))}
                 </div>
 
-                {/* ── STOCK ACTUAL ── */}
+                {/* ── CURRENT STOCK ── */}
                 {activeTab === 'stock' && (
                     <div className="mt-4 space-y-4">
-                        {/* Selector sucursal */}
+                        {/* Selector branch */}
                         <div className="flex items-center gap-3 flex-wrap">
                             <div className="flex gap-2 flex-wrap">
                                 {sucursales.map(s => (
@@ -25449,37 +25548,26 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     🗺 Todas
                                 </button>
                             </div>
-                            {canEdit && (
-                                <div className="flex gap-2 ml-auto">
-                                    <button onClick={() => { setIngForm({ productoId: '', sucursalId: sucursalSel, cantidad: '', notas: '' }); setShowIngModal(true); }}
-                                        className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
-                                        📥 Ingresar
-                                    </button>
-                                    <button onClick={() => { setVentasSucursal(sucursalSel); setShowVentasModal(true); }}
-                                        className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
-                                        📤 Importar ventas
-                                    </button>
-                                </div>
-                            )}
+
                         </div>
 
                         {/* Tabla de stock */}
                         {stockFiltrado.length === 0 ? (
                             <div className={`rounded-xl border ${card} p-10 text-center`}>
                                 <p className="text-4xl mb-3">📦</p>
-                                <p className={`font-semibold ${txt}`}>Sin productos</p>
-                                <p className={`text-sm ${sub} mt-1`}>Agregá productos en la pestaña Productos</p>
+                                <p className={`font-semibold ${txt}`}>{L("Sin productos","No products")}</p>
+                                <p className={`text-sm ${sub} mt-1`}>{L("Agregá productos en la pestaña Productos","Add products in the Products tab")}</p>
                             </div>
                         ) : (
                             <div className={`rounded-xl border ${card} overflow-hidden`}>
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                            <th className={`px-4 py-4 text-left text-sm font-semibold ${sub}`}>PRODUCTO</th>
-                                            <th className={`px-4 py-4 text-left text-sm font-semibold ${sub}`}>CATEGORÍA</th>
+                                            <th className={`px-4 py-4 text-left text-sm font-semibold ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
+                                            <th className={`px-4 py-4 text-left text-sm font-semibold ${sub}`}>{L('CATEGORÍA','CATEGORY')}</th>
                                             <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>STOCK</th>
-                                            <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>MÍNIMO</th>
-                                            <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>ESTADO</th>
+                                            <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{L('MÍNIMO','MINIMUM')}</th>
+                                            <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{L('ESTADO','STATUS')}</th>
                                         </tr>
                                     </thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
@@ -25488,6 +25576,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <td className={`px-4 py-4 font-semibold text-base ${txt}`}>{p.nombre}</td>
                                                 <td className={`px-4 py-4 text-sm ${sub}`}>{p.categoria || '—'}</td>
                                                 <td className="px-4 py-4 text-right">
+                                                    {(() => {
+                                                        const curSuc = sucursalSel === 'todas' ? null : sucursalSel;
+                                                        const lastMov = movimientos.filter(m=>String(m.productoId)===String(p.id)&&(!curSuc||String(m.sucursalId)===curSuc)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
+                                                        return lastMov ? <p className={`text-xs ${sub} mb-1`}>Last edit: {lastMov.user||'—'} · {new Date(lastMov.fecha).toLocaleDateString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</p> : null;
+                                                    })()}
                                                     {p.bySuc && (
                                                         <div className="flex flex-col items-end gap-0.5 mb-1">
                                                             {p.bySuc.map(s => (
@@ -25497,6 +25590,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     )}
                                                     {canEdit && sucursalSel !== 'todas' ? (
                                                         <input
+                                                            key={`${p.id}_${sucursalSel}`}
                                                             type="number" min="0" step="0.01"
                                                             defaultValue={p.cantidad}
                                                             onBlur={e => {
@@ -25508,20 +25602,20 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 const diff = val - prev;
                                                                 const newStock = { ...stock, [k]: val };
                                                                 saveStock(newStock);
-                                                                const mov = { id: Date.now(), tipo: diff > 0 ? 'ingreso' : 'ajuste', productoId: p.id, sucursalId: sucursalSel, cantidad: Math.abs(diff), notas: 'Edición manual', fecha: new Date().toISOString(), user: currentUser?.name || '' };
+                                                                const mov = { id: Date.now(), tipo: diff > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, cantidad: Math.abs(diff), notas: 'Edición manual', fecha: new Date().toISOString(), user: currentUser?.name || '' };
                                                                 saveMovimientos([mov, ...movimientos].slice(0, 500));
                                                             }}
                                                             className={`w-24 px-2 py-1.5 text-right font-mono font-bold text-base border-2 rounded-lg ${p.alerta ? 'text-red-500 border-red-300' : 'text-green-600 border-green-300'} ${darkMode ? 'bg-slate-700' : 'bg-white'}`}
                                                         />
                                                     ) : (
-                                                        <span className={`font-mono font-bold text-base ${p.alerta ? 'text-red-500' : 'text-green-600'}`}>{p.cantidad}</span>
+                                                        <span className={`font-mono font-bold text-base ${p.cantidad < 0 ? 'text-red-600 font-extrabold' : p.alerta ? 'text-red-500' : 'text-green-600'}`}>{p.cantidad < 0 ? '⚠️ ' : ''}{p.cantidad}</span>
                                                     ) }
                                                     <span className={`text-sm ml-1 ${sub}`}>{p.unidad}</span>
                                                 </td>
                                                 <td className={`px-4 py-4 text-right font-mono text-sm ${sub}`}>{p.minimo || '—'}</td>
                                                 <td className="px-4 py-4 text-right">
                                                     {p.alerta
-                                                        ? <span className="text-sm px-2.5 py-1 rounded-full bg-red-100 text-red-700 font-semibold">⚠️ Bajo</span>
+                                                        ? <span className="text-sm px-2.5 py-1 rounded-full bg-red-100 text-red-700 font-semibold">⚠️ Low</span>
                                                         : <span className="text-sm px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-semibold">✓ OK</span>
                                                     }
                                                 </td>
@@ -25538,18 +25632,18 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {activeTab === 'ingresos' && (
                     <div className="mt-4 space-y-3">
                         <div className="flex justify-between items-center">
-                            <p className={`text-sm font-semibold ${txt}`}>Historial de ingresos</p>
+                            <p className={`text-sm font-semibold ${txt}`}>{L("Historial de ingresos","Inbound history")}</p>
                             {canEdit && <div className="flex gap-2">
-                                <button onClick={() => { setIngForm({ productoId: '', sucursalId: sucursalSel || String(sucursales[0]?.id||''), cantidad: '', notas: '' }); setShowIngModal(true); }} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">📥 1 producto</button>
-                                <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">📋 Lista completa</button>
+                                <button onClick={() => { setIngForm({ productoId: '', branchId: sucursalSel || String(sucursales[0]?.id||''), cantidad: '', notas: '' }); setShowIngModal(true); }} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">{L('📥 1 producto','📥 1 product')}</button>
+                                <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">{L('📋 Lista completa','📋 Full list')}</button>
                             </div>}
                         </div>
                         <div className={`rounded-xl border ${card} overflow-hidden`}>
                             {movimientos.filter(m => m.tipo === 'ingreso').length === 0
-                                ? <p className={`text-center py-10 ${sub} text-sm`}>Sin ingresos registrados</p>
+                                ? <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>
                                 : <table className="w-full text-sm">
                                     <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                        {['FECHA','PRODUCTO','SUCURSAL','CANTIDAD','USUARIO'].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                        {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QUANTITY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                     </tr></thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                         {movimientos.filter(m => m.tipo === 'ingreso').slice(0,50).map(m => {
@@ -25575,33 +25669,33 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {/* ── HISTORIAL VENTAS ── */}
                 {activeTab === 'ventas' && (
                     <div className="mt-4 space-y-3">
-                        <div className="flex justify-between items-center">
-                            <p className={`text-sm font-semibold ${txt}`}>Historial de ventas</p>
+                        <div className="flex justify-between items-center flex-wrap gap-2">
+                            <p className={`text-sm font-semibold ${txt}`}>{L('Historial de egresos','Outbound history')}</p>
                             {canEdit && <div className="flex gap-2">
-                                <button onClick={() => { setMovManualTipo('venta'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">📋 Carga manual</button>
-                                <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">📤 Importar Excel/CSV</button>
+                                <button onClick={() => { setMovManualTipo('venta'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('📋 Carga manual','📋 Manual entry')}</button>
+                                <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>
                             </div>}
                         </div>
                         <div className={`rounded-xl border ${card} overflow-hidden`}>
-                            {movimientos.filter(m => m.tipo === 'venta').length === 0
-                                ? <p className={`text-center py-10 ${sub} text-sm`}>Sin importaciones registradas</p>
+                            {movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo)).length === 0
+                                ? <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>
                                 : <table className="w-full text-sm">
                                     <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                        {['FECHA','PRODUCTO','SUCURSAL','DESCONTADO'].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                        {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                     </tr></thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
-                                        {movimientos.filter(m => m.tipo === 'venta').slice(0,100).map(m => {
-                                            const prod = productos.find(p => String(p.id) === String(m.productoId));
-                                            const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId));
-                                            return (
+                                        {movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo))
+                                            .sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))
+                                            .slice(0,200).map(m => (
                                                 <tr key={m.id}>
-                                                    <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short'}) : '—'}</td>
-                                                    <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
-                                                    <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
-                                                    <td className={`px-4 py-2.5 font-mono font-bold text-red-400`}>-{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
+                                                    <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                    <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
+                                                    <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{(productos.find(p=>String(p.id)===String(m.productoId)))?.nombre || '—'}</td>
+                                                    <td className={`px-3 py-2.5 text-xs ${sub}`}>{(sucursales.find(s=>String(s.id)===String(m.sucursalId)))?.nombre || m.notas || '—'}</td>
+                                                    <td className={`px-3 py-2.5 font-mono font-bold text-red-400 text-sm`}>-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{(productos.find(p=>String(p.id)===String(m.productoId)))?.unidad||''}</span></td>
+                                                    <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
                                                 </tr>
-                                            );
-                                        })}
+                                            ))}
                                     </tbody>
                                 </table>
                             }
@@ -25609,19 +25703,22 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     </div>
                 )}
 
-                {/* ── PRODUCTOS ── */}
+                {/* ── PRODUCTS ── */}
                 {activeTab === 'productos' && (
                     <div className="mt-4 space-y-3">
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center flex-wrap gap-2">
                             <p className={`text-sm font-semibold ${txt}`}>{productos.length} producto{productos.length!==1?'s':''}</p>
-                            {canEdit && <button onClick={() => { setEditingProd(null); setProdForm({ nombre: '', categoria: '', unidad: 'unidad', minimo: '' }); setShowProdModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">+ Nuevo producto</button>}
+                            <div className="flex gap-2">
+                                {canEdit && <button onClick={()=>setShowCatModal(true)} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>🏷️ {L('Categorías','Categories')}</button>}
+                                {canEdit && <button onClick={() => { setEditingProd(null); setProdForm({ nombre: '', categoria: '', unidad: 'unidad', minimo: '', aliases: [] }); setShowProdModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nuevo producto','+ New product')}</button>}
+                            </div>
                         </div>
                         <div className={`rounded-xl border ${card} overflow-hidden`}>
                             {productos.length === 0
-                                ? <p className={`text-center py-10 ${sub} text-sm`}>Sin productos. Agregá el primero.</p>
+                                ? <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin productos. Agregá el primero.","No products. Add the first one.")}</p>
                                 : <table className="w-full text-sm">
                                     <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                        {['NOMBRE','CATEGORÍA','UNIDAD','MÍNIMO',''].map((h,i) => <th key={i} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                        {[L('NOMBRE','NAME'),L('CATEGORÍA','CATEGORY'),L('UNIDAD','UNIT'),L('MÍNIMO','MINIMUM'),''].map((h,i) => <th key={i} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                     </tr></thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                         {productos.map(p => (
@@ -25632,7 +25729,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <td className={`px-4 py-2.5 text-xs ${sub}`}>{p.minimo||'—'}</td>
                                                 <td className="px-4 py-2.5">
                                                     {canEdit && <div className="flex gap-1 justify-end">
-                                                        <button onClick={() => { setEditingProd(p); setProdForm({nombre:p.nombre,categoria:p.categoria||'',unidad:p.unidad,minimo:p.minimo||''}); setShowProdModal(true); }} className={`w-7 h-7 flex items-center justify-center rounded ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>
+                                                        <button onClick={() => { setEditingProd(p); setProdForm({nombre:p.nombre,categoria:p.categoria||'',unidad:p.unidad,minimo:p.minimo||'',aliases:p.aliases||[]}); setShowProdModal(true); }} className={`w-7 h-7 flex items-center justify-center rounded ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>
                                                         <button onClick={() => eliminarProducto(p.id)} className={`w-7 h-7 flex items-center justify-center rounded ${darkMode?'hover:bg-red-900/30 text-red-400':'hover:bg-red-50 text-red-500'}`}>🗑️</button>
                                                     </div>}
                                                 </td>
@@ -25645,12 +25742,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     </div>
                 )}
 
-                {/* ── SUCURSALES ── */}
+                {/* ── BRANCHES ── */}
                 {activeTab === 'sucursales' && (
                     <div className="mt-4 space-y-3">
                         <div className="flex justify-between items-center">
-                            <p className={`text-sm font-semibold ${txt}`}>{sucursales.length} sucursal{sucursales.length!==1?'es':''}</p>
-                            {canEdit && <button onClick={() => { setEditingSuc(null); setSucForm({ nombre: '' }); setShowSucModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">+ Nueva sucursal</button>}
+                            <p className={`text-sm font-semibold ${txt}`}>{sucursales.length} branch{sucursales.length!==1?'es':''}</p>
+                            {canEdit && <button onClick={() => { setEditingSuc(null); setSucForm({ nombre: '' }); setShowSucModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nueva sucursal','+ New branch')}</button>}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {sucursales.map(s => (
@@ -25661,7 +25758,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                     {canEdit && <div className="flex gap-1">
                                         <button onClick={() => { setEditingSuc(s); setSucForm({ nombre: s.nombre }); setShowSucModal(true); }} className={`w-8 h-8 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>
-                                        {sucursales.length > 1 && <button onClick={() => { if(confirm('¿Eliminar sucursal?')) saveSucursales(sucursales.filter(x=>x.id!==s.id)); }} className={`w-8 h-8 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-red-900/30 text-red-400':'hover:bg-red-50 text-red-500'}`}>🗑️</button>}
+                                        {sucursales.length > 1 && <button onClick={() => { if(confirm('¿Eliminar branch?')) saveSucursales(sucursales.filter(x=>x.id!==s.id)); }} className={`w-8 h-8 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-red-900/30 text-red-400':'hover:bg-red-50 text-red-500'}`}>🗑️</button>}
                                     </div>}
                                 </div>
                             ))}
@@ -25676,15 +25773,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <p className={`text-sm font-semibold ${txt}`}>{envios.length} envío{envios.length!==1?'s':''}</p>
                             {canEdit && <button onClick={() => {
                                 setEditingEnvio(null);
-                                setEnvioForm({ desde: String(sucursales[0]?.id||''), hasta: String(sucursales[1]?.id||''), fecha: new Date().toISOString().split('T')[0], hora: '09:00', notas: '', destinatario: '', productos: productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''})) });
+                                setEnvioForm({ desde: String(sucursales[0]?.id||''), hasta: String(sucursales[1]?.id||''), fecha: new Date().toISOString().split('T')[0], hora: '09:00', notas: '', destinatario: '', destinatarioRecibe: '', descontarDe: String(sucursales[0]?.id||''), productos: productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''})) });
                                 setShowEnvioModal(true);
-                            }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">🚚 Nuevo envío</button>}
+                            }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('🚚 Nuevo envío','🚚 New shipment')}</button>}
                         </div>
                         {envios.length === 0 ? (
                             <div className={`rounded-xl border ${card} p-10 text-center`}>
                                 <p className="text-4xl mb-3">🚚</p>
-                                <p className={`font-semibold ${txt}`}>Sin envíos registrados</p>
-                                <p className={`text-sm ${sub} mt-1`}>Creá el primero con el botón de arriba</p>
+                                <p className={`font-semibold ${txt}`}>{L("Sin envíos registrados","No shipments yet")}</p>
+                                <p className={`text-sm ${sub} mt-1`}>{L("Creá el primero con el botón de arriba","Create the first one above")}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -25705,15 +25802,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${estadoColor}`}>
-                                                        {e.estado === 'entregado' ? '✓ Entregado' : e.estado === 'en_camino' ? '🚚 En camino' : '⏳ Pendiente'}
+                                                        {e.estado === 'entregado' ? '✓ Delivered' : e.estado === 'en_camino' ? '🚚 In transit' : '⏳ Pending'}
                                                     </span>
                                                     {canEdit && e.estado !== 'entregado' && (
                                                         <button onClick={() => marcarEnvioEstado(e.id, e.estado === 'pendiente' ? 'en_camino' : 'entregado')}
                                                             className={`text-xs px-2.5 py-1 rounded-lg font-medium ${darkMode?'bg-slate-600 text-slate-200 hover:bg-slate-500':'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                                                            {e.estado === 'pendiente' ? 'Marcar en camino →' : 'Marcar entregado ✓'}
+                                                            {e.estado === 'pendiente' ? 'Mark in transit →' : 'Mark delivered ✓'}
                                                         </button>
                                                     )}
-                                                    {canEdit && <button onClick={() => { setEditingEnvio(e); setEnvioForm({...e, productos: productos.map(p => { const ex = e.productos?.find(x=>String(x.id)===String(p.id)); return {...p, cantidad: ex?.cantidad||''}; })}); setShowEnvioModal(true); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>}
+                                                    {canEdit && <button onClick={() => { if(confirm('Delete shipment?')) eliminarEnvio(e.id); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-red-900/30 text-red-400':'hover:bg-red-50 text-red-500'}`}>🗑️</button>}
+                                                    {canEdit && <button onClick={() => { setEditingEnvio(e); setEnvioForm({...e, descontarDe: e.descontarDe||String(e.desde||''), destinatarioRecibe: e.destinatarioRecibe||'', productos: productos.map(p => { const ex = e.productos?.find(x=>String(x.id)===String(p.id)); return {...p, cantidad: ex?.cantidad||''}; })}); setShowEnvioModal(true); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>}
                                                 </div>
                                             </div>
                                             {prods.length > 0 && (
@@ -25725,7 +25823,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     ))}
                                                 </div>
                                             )}
-                                            {e.notas && <p className={`px-4 pb-3 text-xs ${sub} italic`}>📝 {e.notas}</p>}
+                                            {e.notas && <p className={`px-4 pb-2 text-xs ${sub} italic`}>📝 {e.notas}</p>}
+                                            {(()=>{ const d=e.creadoAt?new Date(e.creadoAt).toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):null; return d ? <p className={`px-4 pb-3 text-xs ${sub}`}>👤 {e.creadoPor||'—'} · {d}</p> : null; })()}
                                         </div>
                                     );
                                 })}
@@ -25736,21 +25835,52 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {/* ═══ MODALES ═══ */}
 
+                {/* Modal Categorías */}
+                {showCatModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-sm max-h-[80vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <h2 className={`font-bold ${txt}`}>🏷️ {L('Categorías de productos','Product categories')}</h2>
+                                <button onClick={()=>setShowCatModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-2">
+                                {categoriasProd.map((cat, i) => (
+                                    <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${darkMode?'bg-slate-700':'bg-slate-50'}`}>
+                                        <input value={cat} onChange={e => { const v=[...categoriasProd]; v[i]=e.target.value; saveCategoriasProd(v); }}
+                                            className={`flex-1 text-sm bg-transparent border-none outline-none ${txt}`}/>
+                                        <button onClick={()=>{ if(confirm(L('¿Eliminar esta categoría?','Delete this category?'))) saveCategoriasProd(categoriasProd.filter((_,j)=>j!==i)); }}
+                                            className="text-red-400 hover:text-red-600 shrink-0">🗑️</button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className={`px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <div className="flex gap-2">
+                                    <input value={newCatName} onChange={e=>setNewCatName(e.target.value)}
+                                        onKeyDown={e=>{ if(e.key==='Enter'&&newCatName.trim()){ saveCategoriasProd([...categoriasProd,newCatName.trim()]); setNewCatName(''); }}}
+                                        placeholder={L('Nueva categoría...','New category...')} className={`${inp} flex-1`}/>
+                                    <button onClick={()=>{ if(newCatName.trim()){ saveCategoriasProd([...categoriasProd,newCatName.trim()]); setNewCatName(''); }}}
+                                        className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Modal Sucursal */}
                 {showSucModal && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
                         <div className={`rounded-xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <h2 className={`font-bold ${txt}`}>{editingSuc ? 'Editar sucursal' : '🏪 Nueva sucursal'}</h2>
+                                <h2 className={`font-bold ${txt}`}>{editingSuc ? L('Editar sucursal','Edit branch') : L('🏪 Nueva sucursal','🏪 New branch')}</h2>
                                 <button onClick={() => setShowSucModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                             </div>
                             <div className="px-5 py-4">
-                                <label className={`block text-xs font-semibold mb-1 ${sub}`}>NOMBRE</label>
-                                <input value={sucForm.nombre} onChange={e=>setSucForm({...sucForm,nombre:e.target.value})} placeholder="Ej: Vinohrady" className={inp} autoFocus/>
+                                <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('NOMBRE','NAME')}</label>
+                                <input value={sucForm.nombre} onChange={e=>setSucForm({...sucForm,nombre:e.target.value})} placeholder="E.g.: Vinohrady" className={inp} autoFocus/>
                             </div>
                             <div className={`flex gap-3 px-5 py-3 border-t ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <button onClick={() => setShowSucModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>Cancelar</button>
-                                <button onClick={guardarSucursal} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">💾 Guardar</button>
+                                <button onClick={() => setShowSucModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L("Cancelar","Cancel")}</button>
+                                <button onClick={guardarSucursal} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L("💾 Guardar","💾 Save")}</button>
                             </div>
                         </div>
                     </div>
@@ -25761,36 +25891,54 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
                         <div className={`rounded-xl shadow-2xl w-full max-w-md max-h-[88vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <h2 className={`font-bold ${txt}`}>{editingProd ? 'Editar producto' : '🗂 Nuevo producto'}</h2>
+                                <h2 className={`font-bold ${txt}`}>{editingProd ? L('Editar producto','Edit product') : L('🗂 Nuevo producto','🗂 New product')}</h2>
                                 <button onClick={() => setShowProdModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                             </div>
                             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-3">
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>NOMBRE *</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('NOMBRE *','NAME *')}</label>
                                     <input value={prodForm.nombre} onChange={e=>setProdForm(f=>({...f,nombre:e.target.value}))} placeholder="Ej: Chorizo" className={inp}/>
-                                    <p className={`text-xs mt-1 ${sub}`}>Debe coincidir exactamente con el nombre en Storyous</p>
+                                    <p className={`text-xs mt-1 ${sub}`}>{L("Debe coincidir exactamente con el nombre en Storyous","Must match exactly with the name in Storyous")}</p>
                                 </div>
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>CATEGORÍA</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('CATEGORÍA','CATEGORY')}</label>
                                     <select value={prodForm.categoria} onChange={e=>setProdForm(f=>({...f,categoria:e.target.value}))} className={inp}>
-                                        <option value="">Sin categoría</option>
-                                        {CATEGORIAS_PROD.map(c=><option key={c} value={c}>{c}</option>)}
+                                        <option value="">{L("Sin categoría","No category")}</option>
+                                        {categoriasProd.map(c=><option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>UNIDAD</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('UNIDAD','UNIT')}</label>
                                     <select value={prodForm.unidad} onChange={e=>setProdForm(f=>({...f,unidad:e.target.value}))} className={inp}>
                                         {UNIDADES.map(u=><option key={u} value={u}>{u}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>STOCK MÍNIMO (alerta)</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('STOCK MÍNIMO (alerta)','STOCK MINIMUM (alert)')}</label>
                                     <input type="number" min="0" value={prodForm.minimo} onChange={e=>setProdForm(f=>({...f,minimo:e.target.value}))} placeholder="0" className={inp} style={{maxWidth:'120px'}}/>
+                                </div>
+                                {/* Aliases / nombres alternativos */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('NOMBRES EN STORYOUS (aliases)','STORYOUS NAMES (aliases)')}</label>
+                                    <p className={`text-xs ${sub} mb-2`}>{L('Nombres alternativos del producto en el Excel de Storyous. Se suman al producto principal.','Alternative names in the Storyous Excel. They add up to the main product.')}</p>
+                                    <div className="space-y-1.5">
+                                        {(prodForm.aliases||[]).map((alias, i) => (
+                                            <div key={i} className="flex gap-2 items-center">
+                                                <input value={alias} onChange={e=>setProdForm(f=>({...f,aliases:f.aliases.map((a,j)=>j===i?e.target.value:a)}))}
+                                                    placeholder={L('Ej: Chorizo 1','E.g.: Chorizo 1')} className={`${inp} flex-1`}/>
+                                                <button onClick={()=>setProdForm(f=>({...f,aliases:f.aliases.filter((_,j)=>j!==i)}))} className="text-red-400 hover:text-red-600 text-lg shrink-0">×</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={()=>setProdForm(f=>({...f,aliases:[...(f.aliases||[]),'']})) }
+                                        className={`mt-2 w-full py-1.5 text-xs font-medium border-2 border-dashed rounded-lg ${darkMode?'border-slate-600 text-slate-400 hover:border-orange-500':'border-slate-300 text-slate-400 hover:border-orange-400'}`}>
+                                        {L('+ Agregar alias','+ Add alias')}
+                                    </button>
                                 </div>
                             </div>
                             <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <button onClick={() => setShowProdModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>Cancelar</button>
-                                <button onClick={guardarProducto} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">💾 Guardar</button>
+                                <button onClick={() => setShowProdModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L("Cancelar","Cancel")}</button>
+                                {L("💾 Guardar","💾 Save") && <button onClick={guardarProducto} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L("💾 Guardar","💾 Save")}</button>}
                             </div>
                         </div>
                     </div>
@@ -25801,36 +25949,36 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
                         <div className={`rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <h2 className={`font-bold ${txt}`}>📥 Ingreso de mercadería</h2>
+                                <h2 className={`font-bold ${txt}`}>{L('📥 Ingreso de mercadería','📥 Stock inbound')}</h2>
                                 <button onClick={() => setShowIngModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                             </div>
                             <div className="px-5 py-4 space-y-3">
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>PRODUCTO *</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('PRODUCTO *','PRODUCT *')}</label>
                                     <select value={ingForm.productoId} onChange={e=>setIngForm(f=>({...f,productoId:e.target.value}))} className={inp}>
-                                        <option value="">Seleccionar...</option>
+                                        <option value="">Select...</option>
                                         {productos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>SUCURSAL *</label>
-                                    <select value={ingForm.sucursalId} onChange={e=>setIngForm(f=>({...f,sucursalId:e.target.value}))} className={inp}>
-                                        <option value="">Seleccionar...</option>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('SUCURSAL *','BRANCH *')}</label>
+                                    <select value={ingForm.sucursalId} onChange={e=>setIngForm(f=>({...f,branchId:e.target.value}))} className={inp}>
+                                        <option value="">Select...</option>
                                         {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>CANTIDAD *</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('CANTIDAD *','QUANTITY *')}</label>
                                     <input type="number" min="0" step="0.01" value={ingForm.cantidad} onChange={e=>setIngForm(f=>({...f,cantidad:e.target.value}))} placeholder="0" className={inp} style={{maxWidth:'150px'}}/>
                                 </div>
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>NOTAS</label>
-                                    <input value={ingForm.notas} onChange={e=>setIngForm(f=>({...f,notas:e.target.value}))} placeholder="Proveedor, lote, etc..." className={inp}/>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('NOTAS','NOTES')}</label>
+                                    <input value={ingForm.notas} onChange={e=>setIngForm(f=>({...f,notas:e.target.value}))} placeholder={L('Proveedor, lote, etc...','Supplier, batch, etc...')} className={inp}/>
                                 </div>
                             </div>
                             <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <button onClick={() => setShowIngModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>Cancelar</button>
-                                <button onClick={guardarIngreso} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">💾 Guardar ingreso</button>
+                                <button onClick={() => setShowIngModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L("Cancelar","Cancel")}</button>
+                                <button onClick={guardarIngreso} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">{L("💾 Guardar ingreso","💾 Save inbound")}</button>
                             </div>
                         </div>
                     </div>
@@ -25841,23 +25989,23 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
                         <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <h2 className={`font-bold ${txt}`}>{editingEnvio ? '✏️ Editar envío' : '🚚 Nuevo envío'}</h2>
+                                <h2 className={`font-bold ${txt}`}>{editingEnvio ? L('✏️ Editar envío','✏️ Edit shipment') : L('🚚 Nuevo envío','🚚 New shipment')}</h2>
                                 <button onClick={() => { setShowEnvioModal(false); setEditingEnvio(null); }} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                             </div>
                             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
                                 {/* Desde / Hasta */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>DESDE *</label>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('DESDE *','FROM *')}</label>
                                         <select value={envioForm.desde} onChange={e=>setEnvioForm(f=>({...f,desde:e.target.value}))} className={inp}>
-                                            <option value="">Seleccionar...</option>
+                                            <option value="">Select...</option>
                                             {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>HASTA *</label>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('HASTA *','TO *')}</label>
                                         <select value={envioForm.hasta} onChange={e=>setEnvioForm(f=>({...f,hasta:e.target.value}))} className={inp}>
-                                            <option value="">Seleccionar...</option>
+                                            <option value="">Select...</option>
                                             {sucursales.filter(s=>String(s.id)!==String(envioForm.desde)).map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
                                         </select>
                                     </div>
@@ -25865,32 +26013,51 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Fecha / Hora */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>FECHA *</label>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('FECHA *','DATE *')}</label>
                                         <input type="date" value={envioForm.fecha} onChange={e=>setEnvioForm(f=>({...f,fecha:e.target.value}))} className={inp} style={{maxWidth:'200px'}}/>
                                     </div>
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>HORA</label>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('HORA','TIME')}</label>
                                         <input type="time" value={envioForm.hora} onChange={e=>setEnvioForm(f=>({...f,hora:e.target.value}))} className={inp} style={{maxWidth:'150px'}}/>
                                     </div>
                                 </div>
-                                {/* Notificar a */}
+                                {/* Descontar stock de */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>🔔 NOTIFICAR A</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>📦 DEDUCT STOCK FROM</label>
+                                    <select value={envioForm.descontarDe} onChange={e=>setEnvioForm(f=>({...f,descontarDe:e.target.value}))} className={inp}>
+                                        <option value="">Do not deduct stock</option>
+                                        {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+                                    </select>
+                                    {envioForm.descontarDe && <p className={`text-xs mt-1 ${sub}`}>⚡ Stock will be automatically deducted when confirming the shipment</p>}
+                                </div>
+
+                                {/* Notificar al que arma */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('🔔 NOTIFICAR AL QUE LO ARMA','🔔 NOTIFY WHO PREPARES IT')}</label>
                                     <select value={envioForm.destinatario} onChange={e=>setEnvioForm(f=>({...f,destinatario:e.target.value}))} className={inp}>
-                                        <option value="">Sin notificación</option>
+                                        <option value="">{L('Sin notificación','No notification')}</option>
                                         {(window.__systemUsersPrecargados||[]).filter(u=>u.activo!==false).map(u=><option key={u.id} value={u.id}>{u.name || u.username}</option>)}
                                     </select>
-                                    {envioForm.destinatario && <p className={`text-xs mt-1 ${sub}`}>📱 El usuario recibirá una notificación en CerebroMA</p>}
+                                    {envioForm.destinatario && <p className={`text-xs mt-1 text-amber-500`}>📦 {L('Recibirá aviso para armar el pedido','Will be notified to prepare the order')}</p>}
+                                </div>
+                                {/* Notificar al que recibe */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('🔔 NOTIFICAR AL QUE LO RECIBE','🔔 NOTIFY WHO RECEIVES IT')}</label>
+                                    <select value={envioForm.destinatarioRecibe} onChange={e=>setEnvioForm(f=>({...f,destinatarioRecibe:e.target.value}))} className={inp}>
+                                        <option value="">{L('Sin notificación','No notification')}</option>
+                                        {(window.__systemUsersPrecargados||[]).filter(u=>u.activo!==false).map(u=><option key={u.id} value={u.id}>{u.name || u.username}</option>)}
+                                    </select>
+                                    {envioForm.destinatarioRecibe && <p className={`text-xs mt-1 text-blue-500`}>🚚 {L('Recibirá aviso cuando esté en preparación y en camino','Will be notified when in preparation and in transit')}</p>}
                                 </div>
                                 {/* Productos */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>📦 PRODUCTOS A ENVIAR</label>
+                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>📦 PRODUCTS A ENVIAR</label>
                                     <div className={`rounded-xl border overflow-hidden ${card}`}>
                                         <table className="w-full text-sm">
                                             <thead className={darkMode?'bg-slate-700/50':'bg-slate-50'}>
                                                 <tr>
-                                                    <th className={`px-3 py-2 text-left text-xs ${sub}`}>PRODUCTO</th>
-                                                    <th className={`px-3 py-2 text-right text-xs text-orange-500`}>CANTIDAD</th>
+                                                    <th className={`px-3 py-2 text-left text-xs ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
+                                                    <th className={`px-3 py-2 text-right text-xs text-orange-500`}>{L('CANTIDAD','QUANTITY')}</th>
                                                 </tr>
                                             </thead>
                                             <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
@@ -25898,7 +26065,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <tr key={p.id} className={parseFloat(p.cantidad)>0?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
                                                         <td className={`px-3 py-2.5 font-medium ${txt}`}>
                                                             {p.nombre}
-                                                            {envioForm.desde && <span className={`text-xs ml-1 ${sub}`}>({getStock(p.id, envioForm.desde)} disp.)</span>}
+                                                            {envioForm.desde && <span className={`text-xs ml-1 ${sub}`}>({getStock(p.id, envioForm.desde)} avail.)</span>}
                                                         </td>
                                                         <td className="px-3 py-2.5 text-right">
                                                             <input type="number" min="0" step="0.01"
@@ -25916,15 +26083,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </div>
                                 {/* Notas */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>NOTAS</label>
-                                    <textarea value={envioForm.notas} onChange={e=>setEnvioForm(f=>({...f,notas:e.target.value}))} rows={2} placeholder="Instrucciones, comentarios..." className={`${inp} resize-none`}/>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('NOTAS','NOTES')}</label>
+                                    <textarea value={envioForm.notas} onChange={e=>setEnvioForm(f=>({...f,notas:e.target.value}))} rows={2} placeholder="Instructions, comments..." className={`${inp} resize-none`}/>
                                 </div>
                             </div>
                             <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <div className="flex-1">
-                                    <p className={`text-xs ${sub}`}>{(envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).length} productos seleccionados</p>
+                                    <p className={`text-xs ${sub}`}>{(envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).length} products selected</p>
                                 </div>
-                                <button onClick={() => { setShowEnvioModal(false); setEditingEnvio(null); }} className={`px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>Cancelar</button>
+                                <button onClick={() => { setShowEnvioModal(false); setEditingEnvio(null); }} className={`px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L("Cancelar","Cancel")}</button>
                                 <button onClick={guardarEnvio}
                                     disabled={!envioForm.desde || !envioForm.hasta || !envioForm.fecha || !(envioForm.productos||[]).some(p=>parseFloat(p.cantidad)>0)}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium ${envioForm.desde && envioForm.hasta && envioForm.fecha && (envioForm.productos||[]).some(p=>parseFloat(p.cantidad)>0) ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}>
@@ -25941,8 +26108,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <div>
-                                    <h2 className={`font-bold ${txt}`}>{movManualTipo === 'ingreso' ? '📥 Ingreso de mercadería' : '📤 Registro de ventas'}</h2>
-                                    <p className={`text-xs mt-0.5 ${sub}`}>{movManualTipo === 'ingreso' ? 'Completá las cantidades que ingresaron' : 'Completá las cantidades vendidas'}</p>
+                                    <h2 className={`font-bold ${txt}`}>{movManualTipo === 'ingreso' ? L('📥 Ingreso de mercadería','📥 Stock inbound') : '📤 Registro de ventas'}</h2>
+                                    <p className={`text-xs mt-0.5 ${sub}`}>{movManualTipo === 'ingreso' ? L('Completá las cantidades que ingresaron','Enter the quantities received') : L('Completá las cantidades vendidas','Enter the quantities sold')}</p>
                                 </div>
                                 <button onClick={() => setShowMovManual(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                             </div>
@@ -25962,9 +26129,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <table className="w-full text-sm">
                                     <thead className={`sticky top-0 ${darkMode?'bg-slate-800':'bg-white'}`}>
                                         <tr className={darkMode?'bg-slate-700/80':'bg-slate-50'}>
-                                            <th className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>PRODUCTO</th>
-                                            <th className={`px-4 py-3 text-right text-xs font-semibold ${sub}`}>STOCK ACTUAL</th>
-                                            <th className={`px-4 py-3 text-right text-xs font-semibold ${movManualTipo==='ingreso'?'text-green-500':'text-orange-500'}`}>{movManualTipo==='ingreso'?'+ INGRESAR':'- VENDER'}</th>
+                                            <th className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
+                                            <th className={`px-4 py-3 text-right text-xs font-semibold ${sub}`}>CURRENT STOCK</th>
+                                            <th className={`px-4 py-3 text-right text-xs font-semibold ${movManualTipo==='ingreso'?'text-green-500':'text-orange-500'}`}>{movManualTipo==='ingreso'?'+ ADD':'- DEDUCT'}</th>
                                         </tr>
                                     </thead>
                                     <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
@@ -25995,13 +26162,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             {/* Footer */}
                             <div className={`px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <div className="flex items-center justify-between mb-3">
-                                    <p className={`text-xs ${sub}`}>{movManualFilas.filter(f=>parseFloat(f.cantidad)>0).length} productos con cantidad</p>
+                                    <p className={`text-xs ${sub}`}>{movManualFilas.filter(f=>parseFloat(f.cantidad)>0).length} products with quantity</p>
                                     <p className={`text-sm font-bold ${movManualTipo==='ingreso'?'text-green-500':'text-orange-500'}`}>
                                         Total: {movManualFilas.reduce((s,f)=>s+(parseFloat(f.cantidad)||0),0)} unidades
                                     </p>
                                 </div>
                                 <div className="flex gap-3">
-                                    <button onClick={() => setShowMovManual(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>Cancelar</button>
+                                    <button onClick={() => setShowMovManual(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L("Cancelar","Cancel")}</button>
                                     <button onClick={guardarMovManual}
                                         disabled={!movManualSuc || movManualFilas.every(f=>!parseFloat(f.cantidad))}
                                         className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${movManualSuc && movManualFilas.some(f=>parseFloat(f.cantidad)>0) ? (movManualTipo==='ingreso'?'bg-green-600 hover:bg-green-700 text-white':'bg-orange-500 hover:bg-orange-600 text-white') : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}>
@@ -26018,13 +26185,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
                         <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <h2 className={`font-bold ${txt}`}>📤 Importar ventas de Storyous</h2>
+                                <h2 className={`font-bold ${txt}`}>{L('📤 Importar ventas de Storyous','📤 Import Sales from Storyous')}</h2>
                                 <button onClick={() => { setShowVentasModal(false); setVentasPreview([]); setVentasError(''); }} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                             </div>
                             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
                                 {/* Paso 1: Sucursal */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>1. SUCURSAL *</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>1. BRANCH *</label>
                                     <div className="flex gap-2 flex-wrap">
                                         {sucursales.map(s => (
                                             <button key={s.id} onClick={() => setVentasSucursal(String(s.id))}
@@ -26036,25 +26203,25 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </div>
                                 {/* Paso 2: Archivo */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>2. ARCHIVO STORYOUS (Excel o CSV)</label>
+                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>2. STORYOUS FILE (Excel or CSV)</label>
                                     <div className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${darkMode?'border-slate-600 hover:border-blue-500':'border-slate-300 hover:border-blue-400'}`}
                                         onClick={() => fileRef.current?.click()}>
                                         <input ref={fileRef} type="file" accept=".xls,.xlsx,.csv" className="hidden" onChange={e => { if(e.target.files[0]) parseStoryous(e.target.files[0]); }}/>
                                         <p className="text-3xl mb-2">📁</p>
-                                        <p className={`text-sm font-medium ${txt}`}>Click para seleccionar archivo</p>
-                                        <p className={`text-xs mt-1 ${sub}`}>.xls, .xlsx o .csv de Storyous</p>
+                                        <p className={`text-sm font-medium ${txt}`}>Click to select file</p>
+                                        <p className={`text-xs mt-1 ${sub}`}>.xls, .xlsx or .csv from Storyous</p>
                                     </div>
                                     {ventasError && <p className="text-xs text-red-500 mt-2">⚠️ {ventasError}</p>}
                                 </div>
                                 {/* Preview */}
                                 {ventasPreview.length > 0 && (
                                     <div>
-                                        <label className={`block text-xs font-semibold mb-2 ${sub}`}>3. PREVIEW — {ventasPreview.length} productos detectados</label>
+                                        <label className={`block text-xs font-semibold mb-2 ${sub}`}>3. PREVIEW — {ventasPreview.length} products detected</label>
                                         <div className={`rounded-xl border overflow-hidden ${card}`}>
                                             <table className="w-full text-xs">
                                                 <thead><tr className={darkMode?'bg-slate-700/50':'bg-slate-50'}>
-                                                    <th className={`px-3 py-2 text-left ${sub}`}>PRODUCTO STORYOUS</th>
-                                                    <th className={`px-3 py-2 text-left ${sub}`}>MATCH EN STOCK</th>
+                                                    <th className={`px-3 py-2 text-left ${sub}`}>PRODUCT STORYOUS</th>
+                                                    <th className={`px-3 py-2 text-left ${sub}`}>STOCK MATCH</th>
                                                     <th className={`px-3 py-2 text-right ${sub}`}>CANT.</th>
                                                 </tr></thead>
                                                 <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
@@ -26066,7 +26233,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 <td className="px-3 py-2">
                                                                     {match
                                                                         ? <span className="text-green-500 font-medium">✓ {match.nombre}</span>
-                                                                        : <span className="text-yellow-500">⚠️ Sin match</span>
+                                                                        : <span className="text-yellow-500">⚠️ No match</span>
                                                                     }
                                                                 </td>
                                                                 <td className={`px-3 py-2 text-right font-mono font-bold ${darkMode?'text-blue-300':'text-blue-600'}`}>{r.cantidad}</td>
@@ -26077,16 +26244,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             </table>
                                         </div>
                                         {ventasPreview.some(r => !productos.find(p => p.nombre.toLowerCase().trim() === r.producto.toLowerCase().trim())) && (
-                                            <p className={`text-xs mt-2 ${darkMode?'text-yellow-400':'text-yellow-600'}`}>⚠️ Los productos sin match no se descontarán. Verificá los nombres en Productos.</p>
+                                            <p className={`text-xs mt-2 ${darkMode?'text-yellow-400':'text-yellow-600'}`}>⚠️ Products without match will not be deducted. Check names in Products tab.</p>
                                         )}
                                     </div>
                                 )}
                             </div>
                             <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <button onClick={() => { setShowVentasModal(false); setVentasPreview([]); setVentasError(''); }} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>Cancelar</button>
+                                <button onClick={() => { setShowVentasModal(false); setVentasPreview([]); setVentasError(''); }} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L("Cancelar","Cancel")}</button>
                                 <button onClick={confirmarVentas} disabled={!ventasPreview.length || !ventasSucursal}
                                     className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${ventasPreview.length && ventasSucursal ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}>
-                                    ✓ Confirmar y descontar ({ventasPreview.filter(r => productos.find(p => p.nombre.toLowerCase().trim() === r.producto.toLowerCase().trim())).length} productos)
+                                    ✓ Confirm & deduct ({ventasPreview.filter(r => productos.find(p => p.nombre.toLowerCase().trim() === r.producto.toLowerCase().trim())).length} productos)
                                 </button>
                             </div>
                         </div>
