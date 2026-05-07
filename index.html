@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-07-14:48 - Import Storyous: botón Google Drive con fallback -->
+<!-- Version: 2026-05-07-14:52 - Google Drive: abre app nativa en iOS y Android, web en desktop -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -25357,21 +25357,26 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         };
 
         // ── PARSER EXCEL/CSV DE STORYOUS ──
-        // Google Drive Picker
+        // Google Drive Picker — abre la app nativa en mobile, web en desktop
         const openGoogleDrivePicker = () => {
-            const CLIENT_ID = ''; // El usuario necesita configurar esto
-            const API_KEY = '';   // El usuario necesita configurar esto
-            // Si no hay credenciales configuradas, mostrar instrucciones
-            if (!window.__gdrive_token) {
-                // Fallback: abrir Google Drive en nueva tab y pedir que compartan el archivo
-                const driveUrl = 'https://drive.google.com';
-                window.open(driveUrl, '_blank');
-                setVentasError(L(
-                    'Abrí Google Drive, descargá el Excel de Storyous a tu dispositivo y luego seleccionalo con el botón de arriba.',
-                    'Open Google Drive, download the Storyous Excel to your device, then select it with the button above.'
-                ));
-                return;
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            const msg = L(
+                'Abrí Google Drive, descargá el archivo Excel de Storyous y luego seleccionalo con el botón de arriba.',
+                'Open Google Drive, download the Storyous Excel file, then select it with the button above.'
+            );
+            if (isIOS) {
+                // Intentar abrir app nativa, fallback a web
+                window.location.href = 'googledrive://';
+                setTimeout(() => { window.open('https://drive.google.com', '_blank'); }, 1500);
+            } else if (isAndroid) {
+                // Intent para abrir la app de Drive en Android
+                window.location.href = 'intent://drive.google.com/#Intent;scheme=https;package=com.google.android.apps.docs;end';
+                setTimeout(() => { window.open('https://drive.google.com', '_blank'); }, 1500);
+            } else {
+                window.open('https://drive.google.com', '_blank');
             }
+            setVentasError(msg);
         };
 
         const parseStoryous = (file) => {
