@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-07-14:52 - Google Drive: abre app nativa en iOS y Android, web en desktop -->
+<!-- Version: 2026-05-07-15:45 - Mercados: notificaciones multi-usuario, descuento stock, PDF, banner, registro usuario -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1515,7 +1515,7 @@ ${invoice.items.map(item => `
                         });
                         if (!yo) { console.warn('🔔 no se encontró empleado para', currentUser.name); return; }
                         const empId = yo.id;
-                        const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif','envioNotif'];
+                        const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif','envioNotif','mercadoNotif'];
                         const userId = String(currentUser.id);
                         // solicNotif y solicRespNotif usan userId, el resto usa empId
                         // Buscar por userId Y por empId, mergear ambos
@@ -3247,6 +3247,31 @@ ${invoice.items.map(item => `
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={()=>marcarNotifVista('envioNotif',n=>String(n.destinatarioId)===myId)}
+                                        className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
+                                </div>
+                            );
+                        } catch(err2) { return null; }
+                    })()}
+
+                    {/* Banner mercado pendiente */}
+                    {(()=>{
+                        if (!currentUser) return null;
+                        try {
+                            const myId = String(currentUser.id||'');
+                            const pendientes = (notificaciones.mercadoNotif||[]).filter(n=>!n.visto && String(n.destinatarioId||'')===myId);
+                            if (!pendientes.length) return null;
+                            const notif = pendientes[0];
+                            return (
+                                <div className="flex items-center gap-3 px-4 py-2.5" style={{background:'linear-gradient(90deg,#7c3aed,#6d28d9)',color:'white'}}>
+                                    <span className="text-lg shrink-0">🏪</span>
+                                    <p className="text-sm font-medium flex-1">
+                                        {L('Lista de mercado: ','Market list: ')}{notif.mercadoNombre} · {notif.fecha}{pendientes.length>1?' (+'+String(pendientes.length-1)+' más)':''}
+                                    </p>
+                                    <button onClick={()=>{setActiveModule('cocina'); window.__cocinaTabInicial='stock'; window.__stockTabInicial='mercados';}}
+                                        className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                        style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
+                                    <button onClick={()=>marcarNotifVista('mercadoNotif',n=>String(n.destinatarioId)===myId)}
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
@@ -25263,6 +25288,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [showCatModal,    setShowCatModal]    = useState(false);
         const [newCatName,      setNewCatName]      = useState('');
         const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+        const [mercados, setMercados] = useState([]);
+        const [showMercadoModal, setShowMercadoModal] = useState(false);
+        const [showMercadosConfigModal, setShowMercadosConfigModal] = useState(false);
+        const [editingMercado, setEditingMercado] = useState(null);
+        const [mercadoForm, setMercadoForm] = useState({ mercadoNombre: '', fecha: '', productos: [], destinatarios: [], sucursalDescuento: '', notasGral: '' });
+        const [listaMercados, setListaMercados] = useState([]);
+        const [newMercadoName, setNewMercadoName] = useState('');
         const [deliveryData,      setDeliveryData]      = useState({ nombre: '', link: '', usuario: '', password: '', notas: '' });
         const [deliveryLoaded,    setDeliveryLoaded]    = useState(false);
         const [editingEnvio,    setEditingEnvio]    = useState(null);
@@ -25302,6 +25334,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 setEnvios(envs || []);
                 setCategoriasProd(Array.isArray(cats) && cats.length ? cats : CATEGORIAS_PROD_DEFAULT);
                 dbGetKey('app_config', 'stock_delivery').then(d => { if(d) setDeliveryData(d); setDeliveryLoaded(true); });
+                dbGetKey('app_config', 'stock_mercados').then(d => { if(Array.isArray(d)) setMercados(d); });
+                dbGetKey('app_config', 'stock_lista_mercados').then(d => { setListaMercados(Array.isArray(d) && d.length ? d : ['Mercado Central','Makro','Metro']); });
                 if (sucList.length) setSucursalSel(String(sucList[0].id));
                 setLoaded(true);
             });
@@ -25315,6 +25349,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveMovimientos = (v) => { setMovimientos(v); save('stock_movimientos', v); };
         const saveEnvios = (v) => { setEnvios(v); save('stock_envios', v); };
         const saveCategoriasProd = (v) => { setCategoriasProd(v); save('stock_categorias', v); };
+        const saveMercados = (v) => { setMercados(v); save('stock_mercados', v); };
+        const saveListaMercados = (v) => { setListaMercados(v); save('stock_lista_mercados', v); };
 
         const stockKey = (pId, sId) => `${pId}_${sId}`;
         const getStock = (pId, sId) => parseFloat(stock[stockKey(pId, sId)] || 0);
@@ -25486,11 +25522,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         const guardarEnvio = () => {
             if (!envioForm.desde || !envioForm.hasta || !envioForm.fecha || envioForm.productos.length === 0) return;
-            const data = { ...envioForm, id: editingEnvio?.id || Date.now(), creadoAt: editingEnvio?.creadoAt || new Date().toISOString(), creadoPor: editingEnvio?.creadoPor || (currentUser?.name || currentUser?.username || ''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || currentUser?.username || '', estado: editingEnvio?.estado || 'pendiente' };
+            const estadoNuevo = envioForm.estadoBorrador ? 'borrador' : (editingEnvio?.estado === 'borrador' ? 'pendiente' : (editingEnvio?.estado || 'pendiente'));
+            const data = { ...envioForm, id: editingEnvio?.id || Date.now(), creadoAt: editingEnvio?.creadoAt || new Date().toISOString(), creadoPor: editingEnvio?.creadoPor || (currentUser?.name || currentUser?.username || ''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || currentUser?.username || '', estado: estadoNuevo };
             const newEnvios = editingEnvio ? envios.map(e => e.id === editingEnvio.id ? data : e) : [data, ...envios];
             saveEnvios(newEnvios);
-            // Descontar stock automáticamente si se eligió branch
-            if (envioForm.descontarDe && !editingEnvio) {
+            // Descontar stock solo si NO es borrador
+            if (envioForm.descontarDe && !editingEnvio && !envioForm.estadoBorrador) {
                 const newStock = { ...stock };
                 (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
                     const k = stockKey(p.id, envioForm.descontarDe);
@@ -25506,8 +25543,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 saveMovimientos([...movDescuento, ...movimientos].slice(0,500));
             }
 
-            // Notificar al que arma el pedido
-            if (envioForm.destinatario && !editingEnvio) {
+            // Notificar solo si NO es borrador
+            if (envioForm.destinatario && !editingEnvio && !envioForm.estadoBorrador) {
                 const destId = String(envioForm.destinatario);
                 const notifKey = `notif_envioNotif_${destId}`;
                 dbGetKey('app_config', notifKey).then(existing => {
@@ -25518,8 +25555,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     dbUpsertOne('app_config', notifKey, [newNotif, ...arr].slice(0,20));
                 });
             }
-            // Notificar al que recibe — "hay un pedido en preparación"
-            if (envioForm.destinatarioRecibe && !editingEnvio) {
+            if (envioForm.destinatarioRecibe && !editingEnvio && !envioForm.estadoBorrador) {
                 const recId = String(envioForm.destinatarioRecibe);
                 const notifKey = `notif_envioNotif_${recId}`;
                 dbGetKey('app_config', notifKey).then(existing => {
@@ -25542,6 +25578,33 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const marcarEnvioEstado = (id, estado) => {
             const envio = envios.find(e => e.id === id);
             saveEnvios(envios.map(e => e.id === id ? { ...e, estado } : e));
+            // Si sale de borrador → disparar stock y notificaciones
+            if (envio?.estado === 'borrador' && estado !== 'borrador') {
+                if (envio.descontarDe) {
+                    const newStock = { ...stock };
+                    (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                        const k = stockKey(p.id, envio.descontarDe);
+                        newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
+                    });
+                    saveStock(newStock);
+                }
+                if (envio.destinatario) {
+                    const notifKey = `notif_envioNotif_${envio.destinatario}`;
+                    dbGetKey('app_config', notifKey).then(existing => {
+                        const arr = Array.isArray(existing) ? existing : [];
+                        const n = { id: Date.now(), envioId: id, destinatarioId: String(envio.destinatario), tipo: 'armar', desde: envio.desde, hasta: envio.hasta, fecha: envio.fecha, hora: envio.hora, productos: (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0), visto: false, creadoAt: new Date().toISOString() };
+                        dbUpsertOne('app_config', notifKey, [n, ...arr].slice(0,20));
+                    });
+                }
+                if (envio.destinatarioRecibe) {
+                    const notifKey = `notif_envioNotif_${envio.destinatarioRecibe}`;
+                    dbGetKey('app_config', notifKey).then(existing => {
+                        const arr = Array.isArray(existing) ? existing : [];
+                        const n = { id: Date.now(), envioId: id, destinatarioId: String(envio.destinatarioRecibe), tipo: 'recibir_preparacion', desde: envio.desde, hasta: envio.hasta, fecha: envio.fecha, hora: envio.hora, productos: (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0), visto: false, creadoAt: new Date().toISOString() };
+                        dbUpsertOne('app_config', notifKey, [n, ...arr].slice(0,20));
+                    });
+                }
+            }
             // Notificar al que recibe cuando pasa a "en_camino"
             if (estado === 'en_camino' && envio?.destinatarioRecibe) {
                 const recId = String(envio.destinatarioRecibe);
@@ -25558,16 +25621,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const CATEGORIAS_PROD_DEFAULT = ['Carne', 'Verdura', 'Lácteo', 'Bebida', 'Condimento', 'Panadería', 'Limpieza', 'Otro'];
 
         const TABS = [
-            { id: 'stock',     label: '📦 Stock' },
-            { id: 'ingresos',  label: L('📥 Ingresos','📥 Inbound') },
-            { id: 'ventas',    label: L('📤 Egresos','📤 Outbound') },
-            { id: 'productos', label: L('🗂 Productos','🗂 Products') },
+            { id: 'stock',      label: '📦 Stock' },
+            { id: 'envios',     label: L('🚚 Envíos','🚚 Shipments') },
+            { id: 'mercados',   label: L('🏪 Mercados','🏪 Markets') },
+            { id: 'ingresos',   label: L('📥 Ingresos','📥 Inbound') },
+            { id: 'ventas',     label: L('📤 Egresos','📤 Outbound') },
+            { id: 'productos',  label: L('🗂 Productos','🗂 Products') },
             { id: 'sucursales', label: L('🏪 Sucursales','🏪 Branches') },
-            { id: 'envios',    label: L('🚚 Envíos','🚚 Shipments') },
         ];
 
         // Body scroll lock
-        const anyModal = showSucModal || showProdModal || showIngModal || showVentasModal || showMovManual || showEnvioModal || showCatModal || showDeliveryModal;
+        const anyModal = showSucModal || showProdModal || showIngModal || showVentasModal || showMovManual || showEnvioModal || showCatModal || showDeliveryModal || showMercadoModal || showMercadosConfigModal;
         useEffect(() => {
             if (anyModal) {
                 const sy = window.scrollY;
@@ -25692,6 +25756,90 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 )}
 
                 {/* ── HISTORIAL INGRESOS ── */}
+                {/* ── MERCADOS ── */}
+                {activeTab === 'mercados' && (
+                    <div className="mt-4 space-y-4">
+                        {/* Header */}
+                        <div className="flex justify-between items-center flex-wrap gap-2">
+                            <p className={`text-sm font-semibold ${txt}`}>{L('Próximos mercados','Upcoming markets')}</p>
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowMercadosConfigModal(true)}
+                                    className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>
+                                    ⚙️ {L('Configurar mercados','Configure markets')}
+                                </button>
+                                {canEdit && <button onClick={() => {
+                                    setEditingMercado(null);
+                                    setMercadoForm({ mercadoNombre: listaMercados[0]||'', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: String(sucursales[0]?.id||'') });
+                                    setShowMercadoModal(true);
+                                }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">
+                                    + {L('Próximo mercado','Next market')}
+                                </button>}
+                            </div>
+                        </div>
+                        {/* Lista */}
+                        {mercados.length === 0 ? (
+                            <div className={`rounded-xl border ${card} p-10 text-center`}>
+                                <p className="text-4xl mb-3">🏪</p>
+                                <p className={`font-semibold ${txt}`}>{L('Sin mercados planificados','No markets planned')}</p>
+                                <p className={`text-sm ${sub} mt-1`}>{L('Creá el primero con el botón de arriba','Create the first one above')}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {mercados.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).map(m => {
+                                    const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
+                                    const esPasado = m.fecha && new Date(m.fecha) < new Date();
+                                    return (
+                                        <div key={m.id} className={`rounded-xl border ${card} overflow-hidden ${esPasado?'opacity-60':''}`}>
+                                            <div className={`px-4 py-3 flex items-center justify-between gap-2 flex-wrap ${darkMode?'bg-slate-700/30':'bg-slate-50'}`}>
+                                                <div>
+                                                    <p className={`font-semibold ${txt}`}>🏪 {m.mercadoNombre}</p>
+                                                    <p className={`text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long'}) : '—'} · {prods.length} {L('productos','products')}{m.creadoPor ? (' · 👤 '+m.creadoPor) : ''}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-slate-700 text-slate-400':'bg-slate-100 text-slate-500'}`}>{L('Pasado','Past')}</span>}
+                                                    <button onClick={()=>{
+                                                        const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
+                                                        const { jsPDF } = window.jspdf;
+                                                        const doc = new jsPDF();
+                                                        doc.setFontSize(16); doc.text('🏪 ' + m.mercadoNombre, 20, 20);
+                                                        doc.setFontSize(11); doc.text('Fecha: ' + (m.fecha||''), 20, 30);
+                                                        doc.text('Creado por: ' + (m.creadoPor||'') + ' · ' + (m.creadoAt?new Date(m.creadoAt).toLocaleDateString('es-AR'):''), 20, 38);
+                                                        doc.setFontSize(12); doc.text('Lista de productos:', 20, 50);
+                                                        prods.forEach((p,i)=>{ doc.setFontSize(10); doc.text((i+1)+'. ' + p.nombre + '  —  ' + (p.cantidad||'?') + (p.notas?' ('+p.notas+')':''), 25, 60+i*8); });
+                                                        doc.save('mercado-' + m.mercadoNombre.replace(/\s/g,'-') + '-' + (m.fecha||'') + '.pdf');
+                                                    }} className={`w-7 h-7 flex items-center justify-center rounded-lg text-sm ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>📄</button>
+                                                    {canEdit && <button onClick={() => {
+                                                        setEditingMercado(m);
+                                                        setMercadoForm({...m, productos: productos.map(p=>{ const ex=(m.productos||[]).find(x=>String(x.id)===String(p.id)); return {...p, cantidad:ex?.cantidad||'', notas:ex?.notas||''}; })});
+                                                        setShowMercadoModal(true);
+                                                    }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>}
+                                                    {canEdit && <button onClick={()=>{ if(confirm(L('¿Eliminar este mercado?','Delete this market?'))) saveMercados(mercados.filter(x=>x.id!==m.id)); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-red-900/30 text-red-400':'hover:bg-red-50 text-red-500'}`}>🗑️</button>}
+                                                </div>
+                                            </div>
+                                            {prods.length > 0 && (
+                                                <div className="px-4 py-3">
+                                                    <table className="w-full text-sm">
+                                                        <thead><tr className={darkMode?'':''}><th className={`text-left text-xs ${sub} pb-1`}>{L('PRODUCTO','PRODUCT')}</th><th className={`text-right text-xs ${sub} pb-1`}>{L('CANTIDAD','QTY')}</th><th className={`text-left text-xs ${sub} pb-1 pl-3`}>{L('NOTAS','NOTES')}</th></tr></thead>
+                                                        <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                                            {prods.map(p=>(
+                                                                <tr key={p.id}>
+                                                                    <td className={`py-1.5 font-medium ${txt}`}>{p.nombre}</td>
+                                                                    <td className={`py-1.5 text-right font-mono font-bold text-orange-500`}>{p.cantidad||'—'}</td>
+                                                                    <td className={`py-1.5 text-xs ${sub} pl-3 italic`}>{p.notas||''}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {activeTab === 'ingresos' && (
                     <div className="mt-4 space-y-3">
                         <div className="flex justify-between items-center">
@@ -25841,7 +25989,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </button>
                                 {canEdit && <button onClick={() => {
                                     setEditingEnvio(null);
-                                    setEnvioForm({ desde: String(sucursales[0]?.id||''), hasta: String(sucursales[1]?.id||''), fecha: new Date().toISOString().split('T')[0], hora: '09:00', notas: '', destinatario: '', destinatarioRecibe: '', descontarDe: String(sucursales[0]?.id||''), productos: productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''})) });
+                                    setEnvioForm({ desde: String(sucursales[0]?.id||''), hasta: String(sucursales[1]?.id||''), fecha: new Date().toISOString().split('T')[0], hora: '09:00', notas: '', destinatario: '', destinatarioRecibe: '', descontarDe: String(sucursales[0]?.id||''), estadoBorrador: false, productos: productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''})) });
                                     setShowEnvioModal(true);
                                 }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('🚚 Nuevo envío','🚚 New shipment')}</button>}
                             </div>
@@ -25858,7 +26006,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     const desde = sucursales.find(s => String(s.id) === String(e.desde));
                                     const hasta  = sucursales.find(s => String(s.id) === String(e.hasta));
                                     const prods  = (e.productos||[]).filter(p => parseFloat(p.cantidad) > 0);
-                                    const estadoColor = e.estado === 'entregado' ? 'text-green-500 bg-green-50' : e.estado === 'en_camino' ? 'text-blue-500 bg-blue-50' : 'text-amber-600 bg-amber-50';
+                                    const estadoColor = e.estado === 'entregado' ? 'text-green-500 bg-green-50' : e.estado === 'en_camino' ? 'text-blue-500 bg-blue-50' : e.estado === 'borrador' ? 'text-slate-500 bg-slate-100' : 'text-amber-600 bg-amber-50';
                                     return (
                                         <div key={e.id} className={`rounded-xl border ${card} overflow-hidden`}>
                                             <div className={`px-4 py-3 flex items-center justify-between flex-wrap gap-2 ${darkMode?'bg-slate-700/30':'bg-slate-50'}`}>
@@ -25871,16 +26019,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${estadoColor}`}>
-                                                        {e.estado === 'entregado' ? '✓ Delivered' : e.estado === 'en_camino' ? '🚚 In transit' : '⏳ Pending'}
+                                                        {e.estado === 'entregado' ? L('✓ Entregado','✓ Delivered') : e.estado === 'en_camino' ? L('🚚 En camino','🚚 In transit') : e.estado === 'borrador' ? L('📝 Borrador','📝 Draft') : L('⏳ Pendiente','⏳ Pending')}
                                                     </span>
                                                     {canEdit && e.estado !== 'entregado' && (
-                                                        <button onClick={() => marcarEnvioEstado(e.id, e.estado === 'pendiente' ? 'en_camino' : 'entregado')}
-                                                            className={`text-xs px-2.5 py-1 rounded-lg font-medium ${darkMode?'bg-slate-600 text-slate-200 hover:bg-slate-500':'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                                                            {e.estado === 'pendiente' ? 'Mark in transit →' : 'Mark delivered ✓'}
+                                                        <button onClick={() => marcarEnvioEstado(e.id, e.estado === 'borrador' ? 'pendiente' : e.estado === 'pendiente' ? 'en_camino' : 'entregado')}
+                                                            className={`text-xs px-2.5 py-1 rounded-lg font-medium ${e.estado==='borrador'?'bg-orange-500 text-white hover:bg-orange-600':darkMode?'bg-slate-600 text-slate-200 hover:bg-slate-500':'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
+                                                            {e.estado === 'borrador' ? L('✓ Confirmar envío','✓ Confirm shipment') : e.estado === 'pendiente' ? L('Marcar en camino →','Mark in transit →') : L('Marcar entregado ✓','Mark delivered ✓')}
                                                         </button>
                                                     )}
                                                     {canEdit && <button onClick={() => { if(confirm('Delete shipment?')) eliminarEnvio(e.id); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-red-900/30 text-red-400':'hover:bg-red-50 text-red-500'}`}>🗑️</button>}
-                                                    {canEdit && <button onClick={() => { setEditingEnvio(e); setEnvioForm({...e, descontarDe: e.descontarDe||String(e.desde||''), destinatarioRecibe: e.destinatarioRecibe||'', productos: productos.map(p => { const ex = e.productos?.find(x=>String(x.id)===String(p.id)); return {...p, cantidad: ex?.cantidad||''}; })}); setShowEnvioModal(true); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>}
+                                                    {canEdit && <button onClick={() => { setEditingEnvio(e); setEnvioForm({...e, descontarDe: e.descontarDe||String(e.desde||''), destinatarioRecibe: e.destinatarioRecibe||'', estadoBorrador: e.estado==='borrador', productos: productos.map(p => { const ex = e.productos?.find(x=>String(x.id)===String(p.id)); return {...p, cantidad: ex?.cantidad||''}; })}); setShowEnvioModal(true); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>}
                                                 </div>
                                             </div>
                                             {prods.length > 0 && (
@@ -25903,6 +26051,146 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 )}
 
                 {/* ═══ MODALES ═══ */}
+
+                {/* Modal Nuevo Mercado */}
+                {showMercadoModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <h2 className={`font-bold ${txt}`}>{editingMercado ? L('✏️ Editar mercado','✏️ Edit market') : L('🏪 Próximo mercado','🏪 Next market')}</h2>
+                                <button onClick={()=>{setShowMercadoModal(false);setEditingMercado(null);}} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
+                                {/* Nombre del mercado */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('MERCADO *','MARKET *')}</label>
+                                    <select value={mercadoForm.mercadoNombre} onChange={e=>setMercadoForm(f=>({...f,mercadoNombre:e.target.value}))} className={inp}>
+                                        {listaMercados.map(m=><option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                                {/* Fecha */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('FECHA *','DATE *')}</label>
+                                    <input type="date" value={mercadoForm.fecha} onChange={e=>setMercadoForm(f=>({...f,fecha:e.target.value}))} className={inp} style={{maxWidth:'200px'}}/>
+                                </div>
+                                {/* Sucursal a descontar */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('📦 DESCONTAR STOCK DE','📦 DEDUCT STOCK FROM')}</label>
+                                    <select value={mercadoForm.sucursalDescuento} onChange={e=>setMercadoForm(f=>({...f,sucursalDescuento:e.target.value}))} className={inp}>
+                                        <option value="">{L('No descontar stock','Do not deduct stock')}</option>
+                                        {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+                                    </select>
+                                    {mercadoForm.sucursalDescuento && <p className={`text-xs mt-1 text-amber-500`}>⚡ {L('Se descontará al guardar','Will be deducted on save')}</p>}
+                                </div>
+                                {/* Notificar a */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('🔔 NOTIFICAR A (puede ser más de uno)','🔔 NOTIFY (can select multiple)')}</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(window.__systemUsersPrecargados||[]).filter(u=>u.activo!==false).map(u=>(
+                                            <button key={u.id} type="button"
+                                                onClick={()=>setMercadoForm(f=>({...f,destinatarios:(f.destinatarios||[]).includes(String(u.id))?(f.destinatarios||[]).filter(x=>x!==String(u.id)):[...(f.destinatarios||[]),String(u.id)]}))}
+                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${(mercadoForm.destinatarios||[]).includes(String(u.id))?'bg-orange-500 text-white':'border text-sm ' + (darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700')}`}>
+                                                {u.name||u.username}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                {/* Lista de productos */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>{L('LISTA DE PRODUCTOS','PRODUCT LIST')}</label>
+                                    <div className={`rounded-xl border overflow-hidden ${card}`}>
+                                        <table className="w-full text-sm">
+                                            <thead className={darkMode?'bg-slate-700/50':'bg-slate-50'}>
+                                                <tr>
+                                                    <th className={`px-3 py-2 text-left text-xs ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
+                                                    <th className={`px-3 py-2 text-right text-xs text-orange-500`}>{L('CANT.','QTY.')}</th>
+                                                    <th className={`px-3 py-2 text-left text-xs ${sub}`}>{L('NOTAS','NOTES')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                                {mercadoForm.productos.map((p,i)=>(
+                                                    <tr key={p.id} className={(p.cantidad||p.notas)?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
+                                                        <td className={`px-3 py-2 font-medium ${txt}`}>{p.nombre}</td>
+                                                        <td className="px-3 py-2 text-right">
+                                                            <input type="number" min="0" step="0.01" value={p.cantidad}
+                                                                onChange={e=>setMercadoForm(f=>({...f,productos:f.productos.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}))}
+                                                                placeholder="0"
+                                                                className={`w-20 px-2 py-1 text-right font-mono text-sm border-2 rounded-lg ${p.cantidad?'border-orange-400 text-orange-600':'border-slate-200'} ${darkMode?'bg-slate-700 text-white':'bg-white'}`}/>
+                                                        </td>
+                                                        <td className="px-3 py-2">
+                                                            <input value={p.notas||''} onChange={e=>setMercadoForm(f=>({...f,productos:f.productos.map((x,j)=>j===i?{...x,notas:e.target.value}:x)}))}
+                                                                placeholder={L('Notas...','Notes...')} className={`w-full px-2 py-1 text-xs border rounded-lg ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <button onClick={()=>{setShowMercadoModal(false);setEditingMercado(null);}} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cancelar','Cancel')}</button>
+                                <button onClick={()=>{
+                                    if(!mercadoForm.mercadoNombre||!mercadoForm.fecha) return;
+                                    const isNew = !editingMercado;
+                                    const data = {...mercadoForm, id: editingMercado?.id||Date.now(), creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||''};
+                                    saveMercados(editingMercado ? mercados.map(m=>m.id===editingMercado.id?data:m) : [data,...mercados]);
+                                    // Descontar stock si se eligió sucursal (solo en creación)
+                                    if (mercadoForm.sucursalDescuento && isNew) {
+                                        const newStock = {...stock};
+                                        (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
+                                            const k = stockKey(p.id, mercadoForm.sucursalDescuento);
+                                            newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
+                                        });
+                                        saveStock(newStock);
+                                        const movs = (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:mercadoForm.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado: '+mercadoForm.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
+                                        saveMovimientos([...movs,...movimientos].slice(0,500));
+                                    }
+                                    // Notificar a los seleccionados
+                                    if (isNew) {
+                                        (mercadoForm.destinatarios||[]).forEach(destId=>{
+                                            const notifKey = 'notif_mercadoNotif_'+destId;
+                                            dbGetKey('app_config', notifKey).then(existing=>{
+                                                const arr = Array.isArray(existing)?existing:[];
+                                                const n = {id:Date.now()+Math.random(),mercadoId:data.id,destinatarioId:destId,mercadoNombre:mercadoForm.mercadoNombre,fecha:mercadoForm.fecha,productos:(mercadoForm.productos||[]).filter(p=>p.cantidad||p.notas),creadoPor:currentUser?.name||'',visto:false,creadoAt:new Date().toISOString()};
+                                                dbUpsertOne('app_config', notifKey, [n,...arr].slice(0,20));
+                                            });
+                                        });
+                                    }
+                                    setShowMercadoModal(false); setEditingMercado(null);
+                                }} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('💾 Guardar','💾 Save')}</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Configurar Mercados */}
+                {showMercadosConfigModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-sm max-h-[80vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <h2 className={`font-bold ${txt}`}>⚙️ {L('Configurar mercados','Configure markets')}</h2>
+                                <button onClick={()=>setShowMercadosConfigModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-2">
+                                {listaMercados.map((m,i)=>(
+                                    <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${darkMode?'bg-slate-700':'bg-slate-50'}`}>
+                                        <input value={m} onChange={e=>{const v=[...listaMercados];v[i]=e.target.value;saveListaMercados(v);}} className={`flex-1 text-sm bg-transparent border-none outline-none ${txt}`}/>
+                                        <button onClick={()=>{if(confirm(L('¿Eliminar?','Delete?'))) saveListaMercados(listaMercados.filter((_,j)=>j!==i));}} className="text-red-400 hover:text-red-600 shrink-0">🗑️</button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className={`px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <div className="flex gap-2">
+                                    <input value={newMercadoName} onChange={e=>setNewMercadoName(e.target.value)}
+                                        onKeyDown={e=>{if(e.key==='Enter'&&newMercadoName.trim()){saveListaMercados([...listaMercados,newMercadoName.trim()]);setNewMercadoName('');}}}
+                                        placeholder={L('Nuevo mercado...','New market...')} className={`${inp} flex-1`}/>
+                                    <button onClick={()=>{if(newMercadoName.trim()){saveListaMercados([...listaMercados,newMercadoName.trim()]);setNewMercadoName('');}}} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Modal Delivery */}
                 {showDeliveryModal && (
@@ -26209,16 +26497,20 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <textarea value={envioForm.notas} onChange={e=>setEnvioForm(f=>({...f,notas:e.target.value}))} rows={2} placeholder="Instructions, comments..." className={`${inp} resize-none`}/>
                                 </div>
                             </div>
-                            <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
-                                <div className="flex-1">
-                                    <p className={`text-xs ${sub}`}>{(envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).length} products selected</p>
+                            <div className={`px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                                    <input type="checkbox" checked={!!envioForm.estadoBorrador} onChange={e=>setEnvioForm(f=>({...f,estadoBorrador:e.target.checked}))} className="rounded w-4 h-4 accent-amber-500"/>
+                                    <span className={`text-sm font-medium ${envioForm.estadoBorrador?'text-amber-500':sub}`}>📝 {L('Guardar como borrador','Save as draft')}</span>
+                                </label>
+                                {envioForm.estadoBorrador && <p className={`text-xs text-amber-500 mb-3`}>⚠️ {L('No descuenta stock ni envía notificaciones hasta confirmar','Stock & notifications on hold until confirmed')}</p>}
+                                <div className="flex gap-3">
+                                    <button onClick={() => { setShowEnvioModal(false); setEditingEnvio(null); }} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cancelar','Cancel')}</button>
+                                    <button onClick={guardarEnvio}
+                                        disabled={!envioForm.desde || !envioForm.hasta || !envioForm.fecha || !(envioForm.productos||[]).some(p=>parseFloat(p.cantidad)>0)}
+                                        className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${envioForm.desde && envioForm.hasta && envioForm.fecha && (envioForm.productos||[]).some(p=>parseFloat(p.cantidad)>0) ? (envioForm.estadoBorrador?'bg-amber-500 hover:bg-amber-600 text-white':'bg-orange-500 hover:bg-orange-600 text-white') : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}>
+                                        {envioForm.estadoBorrador ? L('💾 Guardar borrador','💾 Save draft') : ('🚚 ' + (editingEnvio ? L('Guardar','Save') : L('Crear envío','Create shipment')))}
+                                    </button>
                                 </div>
-                                <button onClick={() => { setShowEnvioModal(false); setEditingEnvio(null); }} className={`px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L("Cancelar","Cancel")}</button>
-                                <button onClick={guardarEnvio}
-                                    disabled={!envioForm.desde || !envioForm.hasta || !envioForm.fecha || !(envioForm.productos||[]).some(p=>parseFloat(p.cantidad)>0)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium ${envioForm.desde && envioForm.hasta && envioForm.fecha && (envioForm.productos||[]).some(p=>parseFloat(p.cantidad)>0) ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}>
-                                    🚚 {editingEnvio ? 'Guardar' : 'Crear envío'}
-                                </button>
                             </div>
                         </div>
                     </div>
