@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-21:40 - Cocina: Costos/Planeación/Recetas solo admin, aviso visible -->
+<!-- Version: 2026-05-11-22:05 - Mercado notif: tabla notifications dedicada, Realtime -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1493,6 +1493,7 @@ ${invoice.items.map(item => `
 
             // ── SISTEMA DE NOTIFICACIONES ─────────────────────────────────────
             const [notificaciones, setNotificaciones] = React.useState({});
+            const [notifRows, setNotifRows] = React.useState([]);
 
             const marcarNotifVista = (tipo, filtro) => {
                 setNotificaciones(prev => {
@@ -1511,6 +1512,22 @@ ${invoice.items.map(item => `
                 if (!isUnlocked || !currentUser) return;
                 const cargar = async () => {
                     try {
+                        // Load notifications from dedicated table
+                        try {
+                            if (currentUser?.id) {
+                                const { data: notifRows } = await window._sb
+                                    .from('notifications')
+                                    .select('*')
+                                    .eq('user_id', String(currentUser.id))
+                                    .eq('visto', false)
+                                    .order('created_at', {ascending: false})
+                                    .limit(50);
+                                if (notifRows) {
+                                    window.__notificationsTable = notifRows;
+                                    window.dispatchEvent(new CustomEvent('notificationsTableUpdate', {detail: notifRows}));
+                                }
+                            }
+                        } catch(ne) {}
                         let emps = window.__employeesPrecargados || [];
                         if (!emps.length) {
                             const r = await window._sb?.from('employees').select('data');
@@ -1527,7 +1544,8 @@ ${invoice.items.map(item => `
                         });
                         if (!yo) { console.warn('🔔 no se encontró empleado para', currentUser.name); return; }
                         const empId = yo.id;
-                        const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif','envioNotif','mercadoNotif'];
+                        const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif','envioNotif'];
+                        // mercadoNotif comes from notifications table, handled separately
                         const userId = String(currentUser.id);
                         // solicNotif y solicRespNotif usan userId, el resto usa empId
                         // Buscar por userId Y por empId, mergear ambos
@@ -1613,7 +1631,9 @@ ${invoice.items.map(item => `
                 };
                 const evts = ['supabase-loaded','sueldoNotifUpdate','solicNotifUpdate','calendarioNotifUpdate','prestamoNotifUpdate','notifUpdate'];
                 evts.forEach(e => window.addEventListener(e, onEvt));
-                return () => { clearInterval(t); evts.forEach(e => window.removeEventListener(e, onEvt)); };
+                const onNotifTable = (e) => { if(e.detail) setNotifRows(e.detail); };
+                window.addEventListener('notificationsTableUpdate', onNotifTable);
+                return () => { clearInterval(t); evts.forEach(e => window.removeEventListener(e, onEvt)); window.removeEventListener('notificationsTableUpdate', onNotifTable); };
             }, [isUnlocked, currentUser?.id]);
 
             // ── SUPABASE REALTIME ─────────────────────────────────────────────
@@ -1621,7 +1641,7 @@ ${invoice.items.map(item => `
                 const TABLAS = [
                     'calendar_events', 'cash_transactions', 'payroll_monthly',
                     'payroll_insurance', 'app_config', 'system_users',
-                    'employees', 'credentials'
+                    'employees', 'credentials', 'notifications'
                 ];
                 const EVENTOS_POR_TABLA = {
                     calendar_events:   'calendarioNotifUpdate',
@@ -1632,6 +1652,7 @@ ${invoice.items.map(item => `
                     app_config:        'notifUpdate',
                     system_users:      null,
                     credentials:       null,
+                    notifications:     'notifUpdate',
                 };
                 const channel = window._sb.channel('cerebroma-realtime');
                 TABLAS.forEach(tabla => {
@@ -3278,44 +3299,34 @@ ${invoice.items.map(item => `
                         } catch(err2) { return null; }
                     })()}
 
-                    {/* Banner mercado pendiente — lee directo de stock_mercados en Supabase */}
+
+
+                    {/* Banner mercado — lee de tabla notifications */}
                     {(()=>{
                         if (!currentUser) return null;
                         try {
-                            const myId = String(currentUser.id||'');
-                            const mercadosData = window.__mercadosPrecargados || [];
-                            console.log('[MercadoBanner] myId:', myId, 'type:', typeof myId, 'mercados:', mercadosData.length, mercadosData.map(m=>({id:m.id,dest:m.destinatarios,destTypes:(m.destinatarios||[]).map(d=>typeof d),vistos:m.vistos,estado:m.estado})));
-                            const pendientes = mercadosData.filter(m =>
-                                m.estado !== 'resuelto' &&
-                                (m.destinatarios||[]).some(d=>String(d)===myId) &&
-                                !(m.vistos||[]).some(v=>String(v)===myId)
-                            );
-                            console.log('[MercadoBanner] pendientes:', pendientes.length);
+                            const pendientes = notifRows.filter(n => n.tipo === 'mercado' && !n.visto && String(n.user_id) === String(currentUser.id));
                             if (!pendientes.length) return null;
-                            const m = pendientes[0];
+                            const n = pendientes[0];
                             return (
                                 <div className="flex items-center gap-3 px-4 py-2.5" style={{background:'linear-gradient(90deg,#7c3aed,#6d28d9)',color:'white'}}>
                                     <span className="text-lg shrink-0">🏪</span>
                                     <p className="text-sm font-medium flex-1">
-                                        {L('Lista de mercado: ','Market list: ')}{m.mercadoNombre} · {m.fecha}{pendientes.length>1?' (+'+String(pendientes.length-1)+' más)':''}
+                                        {L('Lista de mercado: ','Market list: ')}{n.data?.mercadoNombre} · {n.data?.fecha}
+                                        {pendientes.length>1?' (+'+String(pendientes.length-1)+' más)':''}
                                     </p>
                                     <button onClick={()=>{setActiveModule('cocina'); window.__cocinaTabInicial='stock'; window.__stockTabInicial='mercados';}}
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
                                     <button onClick={async ()=>{
-                                        // Marcar como visto en Supabase directo
-                                        const key = 'stock_mercados';
-                                        const current = await window._sb.from('app_config').select('data').eq('id',key).maybeSingle();
-                                        const arr = Array.isArray(current?.data?.data) ? current.data.data : [];
-                                        const updated = arr.map(x => x.id===m.id ? {...x, vistos:[...(x.vistos||[]),myId]} : x);
-                                        await window._sb.from('app_config').upsert({id:key, data:updated, updated_at:new Date().toISOString()},{onConflict:'id'});
-                                        window.__mercadosPrecargados = updated;
-                                        window.dispatchEvent(new Event('notifUpdate'));
+                                        const ids = pendientes.map(p=>p.id);
+                                        await window._sb.from('notifications').update({visto:true}).in('id', ids);
+                                        setNotifRows(prev => prev.filter(r => !ids.includes(r.id)));
                                     }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
                             );
-                        } catch(err2) { return null; }
+                        } catch(e) { return null; }
                     })()}
 
                     {/* Banner notas nuevas */}
@@ -26130,7 +26141,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {mercados.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).map(m => {
+                                {mercados.sort((a,b)=>{ const ar=a.estado==='resuelto'?1:0, br=b.estado==='resuelto'?1:0; if(ar!==br) return ar-br; return new Date(a.fecha)-new Date(b.fecha); }).map(m => {
                                     const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
                                     const esPasado = m.fecha && new Date(m.fecha) < new Date();
                                     const esResuelto = m.estado === 'resuelto';
@@ -26144,12 +26155,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         {!esResuelto && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
                                                     </div>
                                                     <p className={`text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long'}) : '—'} · {prods.length} {L('productos','products')}{m.creadoPor ? (' · 👤 '+m.creadoPor) : ''}</p>
-                                                    {(m.destinatarios||[]).length > 0 && (
-                                                        <p className={`text-xs mt-0.5`} style={{color:'#7c3aed'}}>
-                                                            🔔 {(m.destinatarios||[]).map(id=>{const u=(window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(id)); return u?.name||u?.username||id;}).join(', ')}
-                                                            {(m.vistos||[]).length > 0 && <span className={`ml-1 ${sub}`}>· {L('visto por','seen by')} {(m.vistos||[]).map(id=>{const u=(window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(id)); return u?.name||u?.username||id;}).join(', ')}</span>}
-                                                        </p>
-                                                    )}
+
                                                     {esResuelto && m.resueltoPor && <p className={`text-xs text-green-600 mt-0.5`}>✓ {L('Cerrado por','Closed by')} {m.resueltoPor} · {m.resueltAt?new Date(m.resueltAt).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''}</p>}
                                                 </div>
                                                 <div className="flex items-center gap-2">
@@ -26740,14 +26746,15 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </select>
                                     {mercadoForm.sucursalDescuento && <p className={`text-xs mt-1 text-amber-500`}>⚡ {L('Se descontará al guardar','Will be deducted on save')}</p>}
                                 </div>
+
                                 {/* Notificar a */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('🔔 NOTIFICAR A (puede ser más de uno)','🔔 NOTIFY (can select multiple)')}</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('🔔 NOTIFICAR A','🔔 NOTIFY')}</label>
                                     <div className="flex flex-wrap gap-2">
                                         {(window.__systemUsersPrecargados||[]).filter((u,i,arr)=>u.activo!==false&&arr.findIndex(x=>x.id===u.id)===i).map(u=>(
                                             <button key={u.id} type="button"
                                                 onClick={()=>setMercadoForm(f=>({...f,destinatarios:(f.destinatarios||[]).includes(String(u.id))?(f.destinatarios||[]).filter(x=>x!==String(u.id)):[...(f.destinatarios||[]),String(u.id)]}))}
-                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${(mercadoForm.destinatarios||[]).includes(String(u.id))?'bg-orange-500 text-white':'border text-sm ' + (darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700')}`}>
+                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${(mercadoForm.destinatarios||[]).includes(String(u.id))?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700')}`}>
                                                 {u.name||u.username}
                                             </button>
                                         ))}
@@ -26804,7 +26811,22 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         const movs = (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:mercadoForm.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado: '+mercadoForm.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
                                         saveMovimientos([...movs,...movimientos].slice(0,500));
                                     }
-                                    // vistos[] ya incluido en data — se vacía en nuevo mercado
+                                    // Insertar notificaciones en tabla dedicada
+                                    if (isNew && (mercadoForm.destinatarios||[]).length > 0) {
+                                        const notifInserts = (mercadoForm.destinatarios||[]).map(destId => ({
+                                            user_id: String(destId),
+                                            tipo: 'mercado',
+                                            data: {
+                                                mercadoId: data.id,
+                                                mercadoNombre: mercadoForm.mercadoNombre,
+                                                fecha: mercadoForm.fecha,
+                                                productos: (mercadoForm.productos||[]).filter(p=>p.cantidad||p.notas),
+                                                creadoPor: currentUser?.name || ''
+                                            },
+                                            visto: false
+                                        }));
+                                        window._sb.from('notifications').insert(notifInserts);
+                                    }
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('💾 Guardar','💾 Save')}</button>
                             </div>
