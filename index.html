@@ -26825,7 +26825,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             },
                                             visto: false
                                         }));
-                                        window._sb.from('notifications').insert(notifInserts);
+                                        window._sb.from('notifications').insert(notifInserts).then(({data,error}) => {
+                                            console.log('[NotifInsert] data:', data, 'error:', error, 'inserts:', notifInserts);
+                                        });
                                     }
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('💾 Guardar','💾 Save')}</button>
