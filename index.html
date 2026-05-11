@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-14:00 - Google Drive Picker real integrado con OAuth -->
+<!-- Version: 2026-05-11-14:10 - Google Picker: sin filtro MIME, muestra todos los archivos -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -25616,7 +25616,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             window.gapi.load('picker', () => {
                                 const picker = new window.google.picker.PickerBuilder()
                                     .addView(new window.google.picker.DocsView()
-                                        .setMimeTypes('application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv')
+                                        
                                         .setIncludeFolders(true))
                                     .setOAuthToken(token)
                                     .setDeveloperKey(GDRIVE_API_KEY)
