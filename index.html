@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-11:10 - Fix Cobrado Hoy: carga directa a Supabase independiente del cache -->
+<!-- Version: 2026-05-11-11:20 - Cobrado Hoy: carga robusta, fallback empId, directo a Supabase -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -5725,36 +5725,48 @@ ${invoice.items.map(item => `
             const [mesesAbiertos, setMesesAbiertos] = useState({});
             const toggleMes = (mes) => setMesesAbiertos(prev => ({...prev, [mes]: !prev[mes]}));
 
-            // ── Carga inicial independiente de cache ──
+            // ── Carga inicial — va directo a Supabase, sin cache ──
             useEffect(() => {
-                const cargarMiSueldo = async () => {
-                    const [emps, pay, seg] = await Promise.all([
-                        dbGetAll('employees'),
-                        window._sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
-                        window._sb.from('payroll_insurance').select('data').eq('id','main').maybeSingle(),
-                    ]);
-                    setEmpleados(emps || window.__employeesPrecargados || []);
-                    const payData = pay?.data?.data || window.__payrollDataPrecargada || {};
-                    const segData = seg?.data?.data || window.__seguroDataPrecargada || {};
-                    setPayroll(payData);
-                    setSeguros(segData);
-                    window.__payrollDataPrecargada = payData;
-                    window.__seguroDataPrecargada = segData;
+                const cargar = async () => {
+                    try {
+                        const [empsR, payR, segR] = await Promise.all([
+                            window._sb.from('employees').select('data'),
+                            window._sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
+                            window._sb.from('payroll_insurance').select('data').eq('id','main').maybeSingle(),
+                        ]);
+                        const empsData = empsR?.data?.map(r=>r.data) || window.__employeesPrecargados || [];
+                        const payData  = payR?.data?.data  || {};
+                        const segData  = segR?.data?.data  || {};
+                        if (empsData.length) setEmpleados(empsData);
+                        else if (window.__employeesPrecargados?.length) setEmpleados(window.__employeesPrecargados);
+                        setPayroll(payData);
+                        setSeguros(segData);
+                        window.__payrollDataPrecargada = payData;
+                        window.__seguroDataPrecargada  = segData;
+                    } catch(e) {
+                        // Fallback a window cache
+                        if (window.__employeesPrecargados?.length) setEmpleados(window.__employeesPrecargados);
+                        if (window.__payrollDataPrecargada) setPayroll(window.__payrollDataPrecargada);
+                        if (window.__seguroDataPrecargada)  setSeguros(window.__seguroDataPrecargada);
+                    }
                     setLoaded(true);
                 };
-                cargarMiSueldo();
+                cargar();
             }, []);
 
-            // Polling cada 30s para Cobrado Hoy — independiente del sistema de banners
+            // Polling cada 30s — SOLO para Cobrado Hoy, completamente independiente
             useEffect(() => {
-                const interval = setInterval(async () => {
-                    const [pay, seg] = await Promise.all([
-                        window._sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
-                        window._sb.from('payroll_insurance').select('data').eq('id','main').maybeSingle(),
-                    ]);
-                    if (pay?.data?.data) { setPayroll(pay.data.data); window.__payrollDataPrecargada = pay.data.data; }
-                    if (seg?.data?.data) { setSeguros(seg.data.data); window.__seguroDataPrecargada = seg.data.data; }
-                }, 30000);
+                const tick = async () => {
+                    try {
+                        const [payR, segR] = await Promise.all([
+                            window._sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
+                            window._sb.from('payroll_insurance').select('data').eq('id','main').maybeSingle(),
+                        ]);
+                        if (payR?.data?.data) { setPayroll(payR.data.data); window.__payrollDataPrecargada = payR.data.data; }
+                        if (segR?.data?.data) { setSeguros(segR.data.data); window.__seguroDataPrecargada  = segR.data.data; }
+                    } catch(e) {}
+                };
+                const interval = setInterval(tick, 30000);
                 return () => clearInterval(interval);
             }, []);
 
@@ -5812,16 +5824,21 @@ ${invoice.items.map(item => `
             // Cobros de hoy — dinámico
             const hoyISO = new Date().toISOString().split('T')[0];
             const cobrosHoy = useMemo(() => {
-                if (!yoEmp) return [];
-                const empId = String(yoEmp.id);
-                const mesActual = new Date().getMonth();
+                const mesActual  = new Date().getMonth();
                 const yearActual = new Date().getFullYear();
-                const key = `${empId}_${yearActual}_${mesActual}`;
-                const pagos = (payroll[key] || []).filter(p => p.fecha === hoyISO);
-                const segs  = (seguros[key] || []).filter(p => p.fecha === hoyISO)
-                                .map(p => ({...p, concepto: p.concepto || 'Seguro médico', tipo: 'seguro'}));
+                // Buscar por yoEmp primero, luego por currentUser.id como fallback
+                const empIds = [];
+                if (yoEmp) empIds.push(String(yoEmp.id));
+                if (currentUser?.id && !empIds.includes(String(currentUser.id))) empIds.push(String(currentUser.id));
+                if (!empIds.length) return [];
+                const pagos = [], segs = [];
+                empIds.forEach(empId => {
+                    const key = `${empId}_${yearActual}_${mesActual}`;
+                    (payroll[key] || []).filter(p => p.fecha === hoyISO).forEach(p => pagos.push(p));
+                    (seguros[key] || []).filter(p => p.fecha === hoyISO).forEach(p => segs.push({...p, concepto: p.concepto || 'Seguro médico', tipo: 'seguro'}));
+                });
                 return [...pagos, ...segs];
-            }, [yoEmp, payroll, seguros, hoyISO]);
+            }, [yoEmp, payroll, seguros, hoyISO, currentUser]);
 
             const totalHoy = cobrosHoy.reduce((s,p)=>s+(parseFloat(p.monto)||0),0);
 
