@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-13:38 - Cuotas: borrar cualquier cuota del modal y del tab pagadas, sin resumen -->
+<!-- Version: 2026-05-11-14:00 - Google Drive Picker real integrado con OAuth -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -25599,26 +25599,63 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         };
 
         // ── PARSER EXCEL/CSV DE STORYOUS ──
-        // Google Drive Picker — abre la app nativa en mobile, web en desktop
+        // Google Drive Picker — integración real con Google Picker API
+        const GDRIVE_CLIENT_ID = '168921384531-gj9ur48hnfo8fics2dbukeom5aspkvj8.apps.googleusercontent.com';
+        const GDRIVE_API_KEY = 'AIzaSyD-G-0NtZk78mvet-25EO_rKWemJK_NF4M';
+
         const openGoogleDrivePicker = () => {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isAndroid = /Android/.test(navigator.userAgent);
-            const msg = L(
-                'Abrí Google Drive, descargá el archivo Excel de Storyous y luego seleccionalo con el botón de arriba.',
-                'Open Google Drive, download the Storyous Excel file, then select it with the button above.'
-            );
-            if (isIOS) {
-                // Intentar abrir app nativa, fallback a web
-                window.location.href = 'googledrive://';
-                setTimeout(() => { window.open('https://drive.google.com', '_blank'); }, 1500);
-            } else if (isAndroid) {
-                // Intent para abrir la app de Drive en Android
-                window.location.href = 'intent://drive.google.com/#Intent;scheme=https;package=com.google.android.apps.docs;end';
-                setTimeout(() => { window.open('https://drive.google.com', '_blank'); }, 1500);
+            // Cargar gapi si no está cargado
+            const loadAndOpen = () => {
+                window.gapi.load('auth2', () => {
+                    window.gapi.auth2.getAuthInstance()?.signOut().catch(()=>{});
+                    window.gapi.auth2.init({ client_id: GDRIVE_CLIENT_ID }).then(() => {
+                        window.gapi.auth2.getAuthInstance().signIn({
+                            scope: 'https://www.googleapis.com/auth/drive.readonly'
+                        }).then(user => {
+                            const token = user.getAuthResponse().access_token;
+                            window.gapi.load('picker', () => {
+                                const picker = new window.google.picker.PickerBuilder()
+                                    .addView(new window.google.picker.DocsView()
+                                        .setMimeTypes('application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv')
+                                        .setIncludeFolders(true))
+                                    .setOAuthToken(token)
+                                    .setDeveloperKey(GDRIVE_API_KEY)
+                                    .setCallback(async (data) => {
+                                        if (data.action === window.google.picker.Action.PICKED) {
+                                            const file = data.docs[0];
+                                            setVentasError(L('Descargando archivo...','Downloading file...'));
+                                            try {
+                                                const resp = await fetch(
+                                                    `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+                                                    { headers: { Authorization: `Bearer ${token}` } }
+                                                );
+                                                const blob = await resp.blob();
+                                                const f = new File([blob], file.name, { type: blob.type });
+                                                setVentasError('');
+                                                parseStoryous(f);
+                                            } catch(e) {
+                                                setVentasError(L('Error al descargar el archivo','Error downloading file'));
+                                            }
+                                        }
+                                    })
+                                    .build();
+                                picker.setVisible(true);
+                            });
+                        }).catch(e => {
+                            setVentasError(L('Error al autenticar con Google','Google authentication error'));
+                        });
+                    });
+                });
+            };
+
+            if (!window.gapi) {
+                const script = document.createElement('script');
+                script.src = 'https://apis.google.com/js/api.js';
+                script.onload = loadAndOpen;
+                document.head.appendChild(script);
             } else {
-                window.open('https://drive.google.com', '_blank');
+                loadAndOpen();
             }
-            setVentasError(msg);
         };
 
         const parseStoryous = (file) => {
