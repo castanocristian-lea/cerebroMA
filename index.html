@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-21:00 - Mercado notif: dispara evento inmediato + realtime en app_config -->
+<!-- Version: 2026-05-11-21:40 - Cocina: Costos/Planeación/Recetas solo admin, aviso visible -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1603,7 +1603,14 @@ ${invoice.items.map(item => `
                     .then(r => { if (r?.data?.data) { window.__mcTareas=window.__mcTareas||{}; window.__mcTareas[tarKey]=r.data.data; setNotifKey(k=>k+1); }});
                 window._sb?.from('app_config').select('id,data').like('id','miCerebroTareas_%')
                     .then(r => { if (r?.data) { let comp=[]; r.data.forEach(row => { if(row.id===tarKey) return; (row.data||[]).forEach(t=>{ if((t.compartidoCon||[]).includes(uid_mc)) comp.push(t); }); }); window.__mcCompartidas=window.__mcCompartidas||{}; window.__mcCompartidas[uid_mc]=comp; setNotifKey(k=>k+1); }});
-                const onEvt = () => setTimeout(cargar, 300);
+                const onEvt = async () => {
+                    // Reload mercados for banner before cargar
+                    try {
+                        const mr = await window._sb.from('app_config').select('data').eq('id','stock_mercados').maybeSingle();
+                        if(Array.isArray(mr?.data?.data)) window.__mercadosPrecargados = mr.data.data;
+                    } catch(e){}
+                    setTimeout(cargar, 300);
+                };
                 const evts = ['supabase-loaded','sueldoNotifUpdate','solicNotifUpdate','calendarioNotifUpdate','prestamoNotifUpdate','notifUpdate'];
                 evts.forEach(e => window.addEventListener(e, onEvt));
                 return () => { clearInterval(t); evts.forEach(e => window.removeEventListener(e, onEvt)); };
@@ -3271,26 +3278,40 @@ ${invoice.items.map(item => `
                         } catch(err2) { return null; }
                     })()}
 
-                    {/* Banner mercado pendiente */}
+                    {/* Banner mercado pendiente — lee directo de stock_mercados en Supabase */}
                     {(()=>{
                         if (!currentUser) return null;
                         try {
                             const myId = String(currentUser.id||'');
-                            const myEmpId = String((window.__employeesPrecargados||[]).find(e=>{const en=(e.nombre+' '+e.apellido).toLowerCase();const un=(currentUser?.name||'').toLowerCase();return en.includes(un)||un.includes((e.nombre||'').toLowerCase());})?.id||'');
-                            const pendientes = (notificaciones.mercadoNotif||[]).filter(n=>!n.visto && (String(n.destinatarioId||'')===myId || (myEmpId && String(n.destinatarioId||'')===myEmpId)));
+                            const mercadosData = window.__mercadosPrecargados || [];
+                            console.log('[MercadoBanner] myId:', myId, 'type:', typeof myId, 'mercados:', mercadosData.length, mercadosData.map(m=>({id:m.id,dest:m.destinatarios,destTypes:(m.destinatarios||[]).map(d=>typeof d),vistos:m.vistos,estado:m.estado})));
+                            const pendientes = mercadosData.filter(m =>
+                                m.estado !== 'resuelto' &&
+                                (m.destinatarios||[]).some(d=>String(d)===myId) &&
+                                !(m.vistos||[]).some(v=>String(v)===myId)
+                            );
+                            console.log('[MercadoBanner] pendientes:', pendientes.length);
                             if (!pendientes.length) return null;
-                            const notif = pendientes[0];
+                            const m = pendientes[0];
                             return (
                                 <div className="flex items-center gap-3 px-4 py-2.5" style={{background:'linear-gradient(90deg,#7c3aed,#6d28d9)',color:'white'}}>
                                     <span className="text-lg shrink-0">🏪</span>
                                     <p className="text-sm font-medium flex-1">
-                                        {L('Lista de mercado: ','Market list: ')}{notif.mercadoNombre} · {notif.fecha}{pendientes.length>1?' (+'+String(pendientes.length-1)+' más)':''}
+                                        {L('Lista de mercado: ','Market list: ')}{m.mercadoNombre} · {m.fecha}{pendientes.length>1?' (+'+String(pendientes.length-1)+' más)':''}
                                     </p>
                                     <button onClick={()=>{setActiveModule('cocina'); window.__cocinaTabInicial='stock'; window.__stockTabInicial='mercados';}}
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
-                                    <button onClick={()=>marcarNotifVista('mercadoNotif',n=>String(n.destinatarioId)===myId||String(n.destinatarioId)===myEmpId)}
-                                        className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
+                                    <button onClick={async ()=>{
+                                        // Marcar como visto en Supabase directo
+                                        const key = 'stock_mercados';
+                                        const current = await window._sb.from('app_config').select('data').eq('id',key).maybeSingle();
+                                        const arr = Array.isArray(current?.data?.data) ? current.data.data : [];
+                                        const updated = arr.map(x => x.id===m.id ? {...x, vistos:[...(x.vistos||[]),myId]} : x);
+                                        await window._sb.from('app_config').upsert({id:key, data:updated, updated_at:new Date().toISOString()},{onConflict:'id'});
+                                        window.__mercadosPrecargados = updated;
+                                        window.dispatchEvent(new Event('notifUpdate'));
+                                    }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
                             );
@@ -25213,9 +25234,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const TABS = [
             { id: 'stock',    label: '📦 Stock',   badge: null },
             { id: 'compras',  label: L('🛒 Compras', '🛒 Purchases'), badge: null, soon: true },
-            { id: 'costos',      label: L('💸 Costos',     '💸 Costs'),     badge: null, soon: true },
-            { id: 'planeacion',  label: L('📅 Planeación','📅 Planning'),   badge: null, soon: true },
-            { id: 'recetas',  label: L('📋 Recetas', '📋 Recipes'),  badge: recetas.length },
+            ...(isAdmin ? [{ id: 'costos', label: L('💸 Costos','💸 Costs'), badge: null, soon: true },{ id: 'planeacion', label: L('📅 Planeación','📅 Planning'), badge: null, soon: true },{ id: 'recetas', label: L('📋 Recetas','📋 Recipes'), badge: recetas.length }] : []),
         ];
 
         return (
@@ -25248,6 +25267,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {/* ── RECETAS ── */}
                 {activeTab === 'recetas' && (
                     <div className="p-4 max-w-5xl mx-auto">
+                        {!isAdmin ? (
+                            <div className="flex flex-col items-center justify-center min-h-[60vh]"><span className="text-5xl mb-4">🔒</span><p className={`text-lg font-bold ${txt} mb-1`}>{L('Acceso restringido','Restricted access')}</p><p className={`text-sm ${sub}`}>{L('Solo para Administradores y Super Administradores','Admin and Super Admin only')}</p></div>
+                        ) : (<React.Fragment>
+                        <div className={`mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border ${darkMode?'bg-slate-700/40 border-slate-600':'bg-amber-50 border-amber-200'}`}>
+                            <span className="text-xl">🔒</span>
+                            <p className={`text-sm font-medium ${darkMode?'text-amber-300':'text-amber-800'}`}>{L('Solo visible para Administradores y Super Administradores','Only visible to Administrators and Super Administrators')}</p>
+                        </div>
                         {/* Toolbar */}
                         <div className="flex flex-wrap gap-3 mb-4 items-center">
                             <input value={recetaSearch} onChange={e=>setRecetaSearch(e.target.value)} placeholder={L('🔍 Buscar recetas...','🔍 Search recipes...')} className={`${inp} flex-1 min-w-[180px]`}/>
@@ -25317,6 +25343,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 ))}
                             </div>
                         )}
+                    </React.Fragment>)}
                     </div>
                 )}
 
@@ -25334,25 +25361,45 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {/* ── PLANEACIÓN (en construcción) ── */}
                 {activeTab === 'planeacion' && (
-                    <div className="p-4 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
-                        <div className="text-center">
-                            <p className="text-6xl mb-4">📅</p>
-                            <p className={`text-xl font-bold ${txt} mb-2`}>{L('Planeación','Planning')}</p>
-                            <p className={`text-sm ${sub}`}>{L('Próximamente','Coming soon')}</p>
-                            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border" style={{borderColor:'#f97316',color:'#f97316'}}>🚧 {L('En construcción','Under construction')}</div>
+                    <div className="p-4 max-w-5xl mx-auto">
+                        {!isAdmin ? (
+                            <div className="flex flex-col items-center justify-center min-h-[60vh]"><span className="text-5xl mb-4">🔒</span><p className={`text-lg font-bold ${txt} mb-1`}>{L('Acceso restringido','Restricted access')}</p><p className={`text-sm ${sub}`}>{L('Solo para Administradores y Super Administradores','Admin and Super Admin only')}</p></div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                        <div className={`mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border ${darkMode?'bg-slate-700/40 border-slate-600':'bg-amber-50 border-amber-200'}`}>
+                            <span className="text-xl">🔒</span>
+                            <p className={`text-sm font-medium ${darkMode?'text-amber-300':'text-amber-800'}`}>{L('Solo visible para Administradores y Super Administradores','Only visible to Administrators and Super Administrators')}</p>
                         </div>
+                                <div className="text-center">
+                                    <p className="text-6xl mb-4">📅</p>
+                                    <p className={`text-xl font-bold ${txt} mb-2`}>{L('Planeación','Planning')}</p>
+                                    <p className={`text-sm ${sub}`}>{L('Próximamente','Coming soon')}</p>
+                                    <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border" style={{borderColor:'#f97316',color:'#f97316'}}>🚧 {L('En construcción','Under construction')}</div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* ── COSTOS (en construcción) ── */}
                 {activeTab === 'costos' && (
-                    <div className="p-4 max-w-5xl mx-auto flex items-center justify-center min-h-[60vh]">
-                        <div className="text-center">
-                            <p className="text-6xl mb-4">💸</p>
-                            <p className={`text-xl font-bold ${txt} mb-2`}>{L('Costos','Costs')}</p>
-                            <p className={`text-sm ${sub}`}>{L('Próximamente','Coming soon')}</p>
-                            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border" style={{borderColor:'#f97316',color:'#f97316'}}>🚧 {L('En construcción','Under construction')}</div>
+                    <div className="p-4 max-w-5xl mx-auto">
+                        {!isAdmin ? (
+                            <div className="flex flex-col items-center justify-center min-h-[60vh]"><span className="text-5xl mb-4">🔒</span><p className={`text-lg font-bold ${txt} mb-1`}>{L('Acceso restringido','Restricted access')}</p><p className={`text-sm ${sub}`}>{L('Solo para Administradores y Super Administradores','Admin and Super Admin only')}</p></div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                        <div className={`mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border ${darkMode?'bg-slate-700/40 border-slate-600':'bg-amber-50 border-amber-200'}`}>
+                            <span className="text-xl">🔒</span>
+                            <p className={`text-sm font-medium ${darkMode?'text-amber-300':'text-amber-800'}`}>{L('Solo visible para Administradores y Super Administradores','Only visible to Administrators and Super Administrators')}</p>
                         </div>
+                                <div className="text-center">
+                                    <p className="text-6xl mb-4">💸</p>
+                                    <p className={`text-xl font-bold ${txt} mb-2`}>{L('Costos','Costs')}</p>
+                                    <p className={`text-sm ${sub}`}>{L('Próximamente','Coming soon')}</p>
+                                    <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border" style={{borderColor:'#f97316',color:'#f97316'}}>🚧 {L('En construcción','Under construction')}</div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -25569,7 +25616,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveMovimientos = (v) => { setMovimientos(v); save('stock_movimientos', v); };
         const saveEnvios = (v) => { setEnvios(v); save('stock_envios', v); };
         const saveCategoriasProd = (v) => { setCategoriasProd(v); save('stock_categorias', v); };
-        const saveMercados = (v) => { setMercados(v); save('stock_mercados', v); };
+        const saveMercados = (v) => { setMercados(v); window.__mercadosPrecargados = v; save('stock_mercados', v); setTimeout(()=>window.dispatchEvent(new Event('notifUpdate')),500); };
         const saveListaMercados = (v) => { setListaMercados(v); save('stock_lista_mercados', v); };
 
         const stockKey = (pId, sId) => `${pId}_${sId}`;
@@ -26097,6 +26144,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         {!esResuelto && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
                                                     </div>
                                                     <p className={`text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long'}) : '—'} · {prods.length} {L('productos','products')}{m.creadoPor ? (' · 👤 '+m.creadoPor) : ''}</p>
+                                                    {(m.destinatarios||[]).length > 0 && (
+                                                        <p className={`text-xs mt-0.5`} style={{color:'#7c3aed'}}>
+                                                            🔔 {(m.destinatarios||[]).map(id=>{const u=(window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(id)); return u?.name||u?.username||id;}).join(', ')}
+                                                            {(m.vistos||[]).length > 0 && <span className={`ml-1 ${sub}`}>· {L('visto por','seen by')} {(m.vistos||[]).map(id=>{const u=(window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(id)); return u?.name||u?.username||id;}).join(', ')}</span>}
+                                                        </p>
+                                                    )}
                                                     {esResuelto && m.resueltoPor && <p className={`text-xs text-green-600 mt-0.5`}>✓ {L('Cerrado por','Closed by')} {m.resueltoPor} · {m.resueltAt?new Date(m.resueltAt).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''}</p>}
                                                 </div>
                                                 <div className="flex items-center gap-2">
@@ -26738,7 +26791,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <button onClick={()=>{
                                     if(!mercadoForm.mercadoNombre||!mercadoForm.fecha) return;
                                     const isNew = !editingMercado;
-                                    const data = {...mercadoForm, id: editingMercado?.id||Date.now(), creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||''};
+                                    const data = {...mercadoForm, id: editingMercado?.id||Date.now(), creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
                                     saveMercados(editingMercado ? mercados.map(m=>m.id===editingMercado.id?data:m) : [data,...mercados]);
                                     // Descontar stock si se eligió sucursal (solo en creación)
                                     if (mercadoForm.sucursalDescuento && isNew) {
@@ -26751,38 +26804,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         const movs = (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:mercadoForm.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado: '+mercadoForm.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
                                         saveMovimientos([...movs,...movimientos].slice(0,500));
                                     }
-                                    // Notificar a los seleccionados
-                                    if (isNew) {
-                                        (mercadoForm.destinatarios||[]).forEach(destId=>{
-                                            const n = {id:Date.now()+Math.random(),mercadoId:data.id,destinatarioId:String(destId),mercadoNombre:mercadoForm.mercadoNombre,fecha:mercadoForm.fecha,productos:(mercadoForm.productos||[]).filter(p=>p.cantidad||p.notas),creadoPor:currentUser?.name||'',visto:false,creadoAt:new Date().toISOString()};
-                                            // Guardar en key userId
-                                            const notifKey = 'notif_mercadoNotif_'+destId;
-                                            dbGetKey('app_config', notifKey).then(existing=>{
-                                                const arr = Array.isArray(existing)?existing:[];
-                                                dbUpsertOne('app_config', notifKey, [n,...arr].slice(0,20));
-                                                // Forzar recarga inmediata igual que sueldoNotif
-                                                window.__lastNotifFetch = 0;
-                                                window.dispatchEvent(new Event('notifUpdate'));
-                                            });
-                                            // También guardar en key empId si el usuario tiene empleado asociado
-                                            const userObj = (window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(destId));
-                                            if (userObj) {
-                                                const emps = window.__employeesPrecargados||[];
-                                                const emp = emps.find(e=>{
-                                                    const en=(e.nombre+' '+e.apellido).toLowerCase();
-                                                    const un=(userObj.name||userObj.username||'').toLowerCase();
-                                                    return en.includes(un)||un.includes((e.nombre||'').toLowerCase());
-                                                });
-                                                if (emp && String(emp.id)!==String(destId)) {
-                                                    const empKey = 'notif_mercadoNotif_'+emp.id;
-                                                    dbGetKey('app_config', empKey).then(existing=>{
-                                                        const arr = Array.isArray(existing)?existing:[];
-                                                        dbUpsertOne('app_config', empKey, [{...n,destinatarioId:String(emp.id)},...arr].slice(0,20));
-                                                    });
-                                                }
-                                            }
-                                        });
-                                    }
+                                    // vistos[] ya incluido en data — se vacía en nuevo mercado
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('💾 Guardar','💾 Save')}</button>
                             </div>
