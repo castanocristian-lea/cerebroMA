@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-07-15:45 - Mercados: notificaciones multi-usuario, descuento stock, PDF, banner, registro usuario -->
+<!-- Version: 2026-05-11-10:30 - Optimización egress: cache 30s, polling 60s, batch load, movimientos limitados -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -36,9 +36,23 @@
             return data.map(r => r.data);
         }
         async function dbGetKey(table, key) {
+            // Check window cache first (valid for 30s)
+            const cacheKey = `__dbcache_${table}_${key}`;
+            const cached = window[cacheKey];
+            if (cached && cached.ts && (Date.now()-cached.ts) < 30000) return cached.val;
             const { data, error } = await _sb.from(table).select('data').eq('id', key).maybeSingle();
             if (error) return null;
-            return data?.data ?? null;
+            const val = data?.data ?? null;
+            window[cacheKey] = {val, ts: Date.now()};
+            return val;
+        }
+        async function dbGetKeyBatch(table, keys) {
+            // Load multiple keys in ONE Supabase request
+            const { data, error } = await _sb.from(table).select('id,data').in('id', keys);
+            if (error) return {};
+            const result = {};
+            keys.forEach(k => { const row = data?.find(r=>r.id===k); result[k] = row?.data ?? null; window[`__dbcache_${table}_${k}`] = {val:result[k],ts:Date.now()}; });
+            return result;
         }
         async function dbSetArray(table, arr, idField = 'id') {
             // Borrar los que ya no existen
@@ -56,6 +70,8 @@
         async function dbUpsertOne(table, id, item) {
             const { error } = await _sb.from(table).upsert({ id, data: item, updated_at: new Date().toISOString() }, { onConflict: 'id' });
             if (error) console.error('dbUpsertOne', table, error);
+            // Invalidate cache
+            delete window[`__dbcache_${table}_${id}`];
         }
         async function dbDeleteOne(table, id) {
             const { error } = await _sb.from(table).delete().eq('id', id);
@@ -1499,6 +1515,10 @@ ${invoice.items.map(item => `
                 if (!isUnlocked || !currentUser) return;
                 const cargar = async () => {
                     try {
+                        // Cache: skip if fetched in last 45s
+                        const ahora = Date.now();
+                        if (window.__lastNotifFetch && (ahora - window.__lastNotifFetch) < 45000) return;
+                        window.__lastNotifFetch = ahora;
                         let emps = window.__employeesPrecargados || [];
                         if (!emps.length) {
                             const r = await window._sb?.from('employees').select('data');
@@ -1553,7 +1573,7 @@ ${invoice.items.map(item => `
                     } catch(e) { console.warn('cargar notifs error:', e); }
                 };
                 cargar();
-                const t = setInterval(cargar, 15000);
+                const t = setInterval(cargar, 60000); // 60s en vez de 15s — reduce egress ~75%
                 // Backup automático semanal
                 if (currentUser?.role === 'superadmin' || currentUser?.role === 'admin') {
                     dbGetKey('app_config', 'backupSettings').then(async settings => {
@@ -25290,6 +25310,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [showDeliveryModal, setShowDeliveryModal] = useState(false);
         const [mercados, setMercados] = useState([]);
         const [showMercadoModal, setShowMercadoModal] = useState(false);
+        const [showVuelvenModal, setShowVuelvenModal] = useState(false);
+        const [vuelvenMercado, setVuelvenMercado] = useState(null);
+        const [vuelvenForm, setVuelvenForm] = useState({ sucursal: '', productos: [] });
         const [showMercadosConfigModal, setShowMercadosConfigModal] = useState(false);
         const [editingMercado, setEditingMercado] = useState(null);
         const [mercadoForm, setMercadoForm] = useState({ mercadoNombre: '', fecha: '', productos: [], destinatarios: [], sucursalDescuento: '', notasGral: '' });
@@ -25318,14 +25341,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         // ── CARGA ──
         useEffect(() => {
-            Promise.all([
-                dbGetKey('app_config', 'stock_sucursales'),
-                dbGetKey('app_config', 'stock_productos'),
-                dbGetKey('app_config', 'stock_niveles'),
-                dbGetKey('app_config', 'stock_movimientos'),
-                dbGetKey('app_config', 'stock_envios'),
-                dbGetKey('app_config', 'stock_categorias'),
-            ]).then(([sucs, prods, niveles, movs, envs, cats]) => {
+            dbGetKeyBatch('app_config', ['stock_sucursales','stock_productos','stock_niveles','stock_movimientos','stock_envios','stock_categorias']).then(batch => {
+                const sucs = batch['stock_sucursales'];
+                const prods = batch['stock_productos'];
+                const niveles = batch['stock_niveles'];
+                const movs = batch['stock_movimientos'];
+                const envs = batch['stock_envios'];
+                const cats = batch['stock_categorias'];
                 const sucList = sucs || [{ id: 1, nombre: 'Vinohrady' }, { id: 2, nombre: 'Malá Strana' }];
                 setSucursales(sucList);
                 setProductos(prods || []);
@@ -25333,9 +25355,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 setMovimientos(movs || []);
                 setEnvios(envs || []);
                 setCategoriasProd(Array.isArray(cats) && cats.length ? cats : CATEGORIAS_PROD_DEFAULT);
-                dbGetKey('app_config', 'stock_delivery').then(d => { if(d) setDeliveryData(d); setDeliveryLoaded(true); });
-                dbGetKey('app_config', 'stock_mercados').then(d => { if(Array.isArray(d)) setMercados(d); });
-                dbGetKey('app_config', 'stock_lista_mercados').then(d => { setListaMercados(Array.isArray(d) && d.length ? d : ['Mercado Central','Makro','Metro']); });
+                // Load delivery + mercados in one batch request
+                dbGetKeyBatch('app_config', ['stock_delivery','stock_mercados','stock_lista_mercados']).then(b => {
+                    if(b['stock_delivery']) setDeliveryData(b['stock_delivery']);
+                    setDeliveryLoaded(true);
+                    if(Array.isArray(b['stock_mercados'])) setMercados(b['stock_mercados']);
+                    setListaMercados(Array.isArray(b['stock_lista_mercados']) && b['stock_lista_mercados'].length ? b['stock_lista_mercados'] : ['Mercado Central','Makro','Metro']);
+                });
                 if (sucList.length) setSucursalSel(String(sucList[0].id));
                 setLoaded(true);
             });
@@ -25387,7 +25413,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const newStock = { ...stock, [k]: (getStock(ingForm.productoId, ingForm.sucursalId) + parseFloat(ingForm.cantidad)) };
             saveStock(newStock);
             const mov = { id: Date.now(), tipo: 'ingreso', productoId: ingForm.productoId, branchId: ingForm.sucursalId, cantidad: parseFloat(ingForm.cantidad), notas: ingForm.notas, fecha: new Date().toISOString(), user: currentUser?.name || '' };
-            saveMovimientos([mov, ...movimientos].slice(0, 500));
+            saveMovimientos([mov, ...movimientos].slice(0, 200));
             setIngForm({ productoId: '', branchId: '', cantidad: '', notas: '' });
             setShowIngModal(false);
         };
@@ -25540,7 +25566,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     notas:`Envío a ${sucursales.find(s=>String(s.id)===String(envioForm.hasta))?.nombre||envioForm.hasta}`,
                     fecha: new Date().toISOString(), user: currentUser?.name||''
                 }));
-                saveMovimientos([...movDescuento, ...movimientos].slice(0,500));
+                saveMovimientos([...movDescuento, ...movimientos].slice(0,200));
             }
 
             // Notificar solo si NO es borrador
@@ -25631,7 +25657,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         ];
 
         // Body scroll lock
-        const anyModal = showSucModal || showProdModal || showIngModal || showVentasModal || showMovManual || showEnvioModal || showCatModal || showDeliveryModal || showMercadoModal || showMercadosConfigModal;
+        const anyModal = showSucModal || showProdModal || showIngModal || showVentasModal || showMovManual || showEnvioModal || showCatModal || showDeliveryModal || showMercadoModal || showMercadosConfigModal || showVuelvenModal;
         useEffect(() => {
             if (anyModal) {
                 const sy = window.scrollY;
@@ -25730,7 +25756,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 const newStock = { ...stock, [k]: val };
                                                                 saveStock(newStock);
                                                                 const mov = { id: Date.now(), tipo: diff > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, cantidad: Math.abs(diff), notas: 'Edición manual', fecha: new Date().toISOString(), user: currentUser?.name || '' };
-                                                                saveMovimientos([mov, ...movimientos].slice(0, 500));
+                                                                saveMovimientos([mov, ...movimientos].slice(0, 200));
                                                             }}
                                                             className={`w-24 px-2 py-1.5 text-right font-mono font-bold text-base border-2 rounded-lg ${p.alerta ? 'text-red-500 border-red-300' : 'text-green-600 border-green-300'} ${darkMode ? 'bg-slate-700' : 'bg-white'}`}
                                                         />
@@ -25788,15 +25814,24 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {mercados.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).map(m => {
                                     const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
                                     const esPasado = m.fecha && new Date(m.fecha) < new Date();
+                                    const esResuelto = m.estado === 'resuelto';
                                     return (
-                                        <div key={m.id} className={`rounded-xl border ${card} overflow-hidden ${esPasado?'opacity-60':''}`}>
+                                        <div key={m.id} className={`rounded-xl border ${card} overflow-hidden ${esResuelto?'opacity-50':''}`}>
                                             <div className={`px-4 py-3 flex items-center justify-between gap-2 flex-wrap ${darkMode?'bg-slate-700/30':'bg-slate-50'}`}>
                                                 <div>
-                                                    <p className={`font-semibold ${txt}`}>🏪 {m.mercadoNombre}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className={`font-semibold ${txt}`}>🏪 {m.mercadoNombre}</p>
+                                                        {esResuelto && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">✓ {L('Resuelto','Done')}</span>}
+                                                        {!esResuelto && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
+                                                    </div>
                                                     <p className={`text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long'}) : '—'} · {prods.length} {L('productos','products')}{m.creadoPor ? (' · 👤 '+m.creadoPor) : ''}</p>
+                                                    {esResuelto && m.resueltoPor && <p className={`text-xs text-green-600 mt-0.5`}>✓ {L('Cerrado por','Closed by')} {m.resueltoPor} · {m.resueltAt?new Date(m.resueltAt).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''}</p>}
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    {esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-slate-700 text-slate-400':'bg-slate-100 text-slate-500'}`}>{L('Pasado','Past')}</span>}
+                                                    {!esResuelto && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
+                                                        className="px-2.5 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-medium">↩️ {L('Vuelven','Returns')}</button>}
+                                                    {!esResuelto && canEdit && <button onClick={()=>{ if(!confirm(L('¿Marcar como resuelto? Esto cerrará la lista.','Mark as done? This will close the list.'))) return; saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'resuelto',resueltoPor:currentUser?.name||currentUser?.username||'',resueltAt:new Date().toISOString()}:x)); }}
+                                                        className="px-2.5 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium">✓ {L('Resuelto','Done')}</button>}
                                                     <button onClick={()=>{
                                                         const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
                                                         const { jsPDF } = window.jspdf;
@@ -25897,7 +25932,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                         {movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo))
                                             .sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))
-                                            .slice(0,200).map(m => (
+                                            .slice(0,100).map(m => (
                                                 <tr key={m.id}>
                                                     <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
                                                     <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
@@ -26159,6 +26194,83 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     }
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('💾 Guardar','💾 Save')}</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Vuelven */}
+                {showVuelvenModal && vuelvenMercado && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <div>
+                                    <h2 className={`font-bold ${txt}`}>↩️ {L('Lo que vuelve','What returns')}</h2>
+                                    <p className={`text-xs ${sub} mt-0.5`}>🏪 {vuelvenMercado.mercadoNombre} · {vuelvenMercado.fecha}</p>
+                                </div>
+                                <button onClick={()=>setShowVuelvenModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
+                                {/* Sucursal destino */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('SUMAR STOCK A SUCURSAL *','ADD STOCK TO BRANCH *')}</label>
+                                    <select value={vuelvenForm.sucursal} onChange={e=>setVuelvenForm(f=>({...f,sucursal:e.target.value}))} className={inp}>
+                                        {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+                                    </select>
+                                </div>
+                                {/* Lista de productos que vuelven */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-2 ${sub}`}>{L('CANTIDADES QUE VUELVEN','QUANTITIES RETURNING')}</label>
+                                    <div className={`rounded-xl border overflow-hidden ${card}`}>
+                                        <table className="w-full text-sm">
+                                            <thead className={darkMode?'bg-slate-700/50':'bg-slate-50'}>
+                                                <tr>
+                                                    <th className={`px-3 py-2 text-left text-xs ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
+                                                    <th className={`px-3 py-2 text-right text-xs ${sub}`}>{L('FUE','SENT')}</th>
+                                                    <th className={`px-3 py-2 text-right text-xs text-teal-500`}>{L('↩️ VUELVE','↩️ RETURNS')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                                {vuelvenForm.productos.map((p,i)=>(
+                                                    <tr key={p.id} className={parseFloat(p.cantVuelve)>0?(darkMode?'bg-teal-900/20':'bg-teal-50/60'):''}>
+                                                        <td className={`px-3 py-2.5 font-medium ${txt}`}>{p.nombre}</td>
+                                                        <td className={`px-3 py-2.5 text-right font-mono text-sm ${sub}`}>{p.cantidad||'—'}</td>
+                                                        <td className="px-3 py-2.5 text-right">
+                                                            <input type="number" min="0" step="0.01"
+                                                                value={p.cantVuelve||''}
+                                                                onChange={e=>setVuelvenForm(f=>({...f,productos:f.productos.map((x,j)=>j===i?{...x,cantVuelve:e.target.value}:x)}))}
+                                                                placeholder="0"
+                                                                className={`w-20 px-2 py-1 text-right font-mono text-sm border-2 rounded-lg ${parseFloat(p.cantVuelve)>0?'border-teal-400 text-teal-600':'border-slate-200'} ${darkMode?'bg-slate-700 text-white':'bg-white'}`}/>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <button onClick={()=>setShowVuelvenModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cancelar','Cancel')}</button>
+                                <button onClick={()=>{
+                                    if(!vuelvenForm.sucursal) return;
+                                    const newStock = {...stock};
+                                    const newMovs = [];
+                                    vuelvenForm.productos.forEach(p=>{
+                                        const cant = parseFloat(p.cantVuelve);
+                                        if(!cant||cant<=0) return;
+                                        const k = stockKey(p.id, vuelvenForm.sucursal);
+                                        newStock[k] = (parseFloat(newStock[k]||0)) + cant;
+                                        newMovs.push({id:Date.now()+Math.random(),tipo:'ingreso',productoId:p.id,sucursalId:vuelvenForm.sucursal,cantidad:cant,notas:'Vuelta de mercado: '+vuelvenMercado.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''});
+                                    });
+                                    saveStock(newStock);
+                                    saveMovimientos([...newMovs,...movimientos].slice(0,200));
+                                    // Registrar vuelven en el mercado
+                                    saveMercados(mercados.map(x=>x.id===vuelvenMercado.id?{...x,vuelven:vuelvenForm.productos.filter(p=>parseFloat(p.cantVuelve)>0),vuelvenSucursal:vuelvenForm.sucursal,vuelvenPor:currentUser?.name||currentUser?.username||'',vuelvenAt:new Date().toISOString()}:x));
+                                    setShowVuelvenModal(false);
+                                }} disabled={!vuelvenForm.sucursal||vuelvenForm.productos.every(p=>!parseFloat(p.cantVuelve))}
+                                    className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${vuelvenForm.sucursal&&vuelvenForm.productos.some(p=>parseFloat(p.cantVuelve)>0)?'bg-teal-600 hover:bg-teal-700 text-white':'bg-slate-300 text-slate-500 cursor-not-allowed'}`}>
+                                    ↩️ {L('Confirmar vuelta','Confirm return')}
+                                </button>
                             </div>
                         </div>
                     </div>
