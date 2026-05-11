@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-11:20 - Cobrado Hoy: carga robusta, fallback empId, directo a Supabase -->
+<!-- Version: 2026-05-11-11:35 - Fix payroll: guardar directo en savePayment sin race condition -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -13608,11 +13608,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     setPayrollDataLoaded(true);
                 });
             }, []);
+            // useEffect de backup — solo como seguridad adicional
             useEffect(() => {
-                if (!payrollDataLoaded || Object.keys(payrollData).length === 0) return;
+                if (!payrollDataLoaded) return;
                 window.__payrollPrecargado = payrollData;
                 window.__payrollDataPrecargada = payrollData;
-                dbUpsertOne('payroll_monthly', 'main', payrollData);
             }, [payrollData]);
 
             const now = new Date();
@@ -13991,7 +13991,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     updated = [...existing, entry];
                 }
                 updated.sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
-                setPayrollData({ ...payrollData, [key]: updated });
+                const newPayrollData = { ...payrollData, [key]: updated };
+                setPayrollData(newPayrollData);
+                // Guardar directo a Supabase sin depender del useEffect
+                window.__payrollPrecargado = newPayrollData;
+                window.__payrollDataPrecargada = newPayrollData;
+                dbUpsertOne('payroll_monthly', 'main', newPayrollData);
                 // Notificar al empleado que cobró
                 if (editingPayIdx === null) {
                     try {
