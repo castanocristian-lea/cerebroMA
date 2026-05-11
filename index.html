@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-11:35 - Fix payroll: guardar directo en savePayment sin race condition -->
+<!-- Version: 2026-05-11-13:38 - Cuotas: borrar cualquier cuota del modal y del tab pagadas, sin resumen -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -18700,7 +18700,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
     <script type="text/babel">
         // Componente separado para la lista de facturas de un proveedor (evita IIFEs anidados en JSX/Babel)
 
-        const SupplierInvoiceList = ({ supplier, supplierInvoices, supplierSubTabs, supplierInvoiceSearch, selectedInvoices, setSelectedInvoices, invoices, setInvoices, canEdit, darkMode, getDaysUntilDue, getAlertLevel, abrirPagoModal, deshacerPago, setEditingId, setPreviewInvoice, setShowPreviewModal, setQrModalImage, setShowQrModal }) => {
+        const SupplierInvoiceList = ({ supplier, supplierInvoices, supplierSubTabs, supplierInvoiceSearch, selectedInvoices, setSelectedInvoices, invoices, setInvoices, canEdit, darkMode, getDaysUntilDue, getAlertLevel, abrirPagoModal, abrirPagoModalCuota, deshacerPago, setEditingId, setPreviewInvoice, setShowPreviewModal, setQrModalImage, setShowQrModal, setVencModalInvoice, setVencForm, setShowVencModal }) => {
             const [showPagoMasivoModal, setShowPagoMasivoModal] = React.useState(false);
             const [pagoMasivoOrigen, setPagoMasivoOrigen] = React.useState('BANK');
 
@@ -18757,19 +18757,59 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             const activeSubTab = supplierSubTabs[supplier] || 'pending';
             const q = (supplierInvoiceSearch[supplier] || '').toLowerCase().trim();
-            const facturasFiltradas = supplierInvoices.filter(inv => {
-                const matchTab = activeSubTab === 'pending' ? inv.status === 'pending' : inv.status === 'paid';
-                if (!matchTab) return false;
-                if (!q) return true;
-                return (
-                    (inv.number || '').toLowerCase().includes(q) ||
-                    (inv.amount?.toString() || '').includes(q) ||
-                    (inv.issueDate || '').includes(q) ||
-                    (inv.dueDate || '').includes(q) ||
-                    (inv.notes || '').toLowerCase().includes(q) ||
-                    (inv.currency || '').toLowerCase().includes(q)
-                );
+
+            // Para facturas con cuotas, generar registros virtuales por cuota pagada
+            const cuotasPagadasVirtuales = [];
+            const cuotaVirtualIds = new Set();
+            supplierInvoices.forEach(inv => {
+                if (inv.vencimientos?.length > 0) {
+                    inv.vencimientos.filter(v=>v.pagado).forEach(v => {
+                        const vKey = `${inv.id}_cuota_${v.id}`;
+                        if (cuotaVirtualIds.has(vKey)) return; // dedup
+                        cuotaVirtualIds.add(vKey);
+                        cuotasPagadasVirtuales.push({
+                            ...inv,
+                            id: vKey,
+                            _isCuotaVirtual: true,
+                            _cuotaOrig: v,
+                            amount: v.monto,
+                            status: 'paid',
+                            paymentDate: v.fechaPago || inv.paymentDate,
+                            notes: `Cuota ${new Date(v.fecha+'T12:00').toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'})} de factura ${inv.number||''}`,
+                        });
+                    });
+                }
             });
+
+            const matchesSearch = (inv) => {
+                if (!q) return true;
+                return (inv.number||'').toLowerCase().includes(q) ||
+                    (inv.amount?.toString()||'').includes(q) ||
+                    (inv.issueDate||'').includes(q) ||
+                    (inv.dueDate||'').includes(q) ||
+                    (inv.notes||'').toLowerCase().includes(q) ||
+                    (inv.currency||'').toLowerCase().includes(q);
+            };
+
+            const facturasFiltradas = [
+                ...supplierInvoices.filter(inv => {
+                    // En Pendientes: mostrar facturas pending (con cuotas aún pendientes o sin cuotas)
+                    // En Pagadas: mostrar facturas completamente pagadas
+                    if (activeSubTab === 'pending') {
+                        if (inv.status !== 'pending') return false;
+                        // Si tiene cuotas y todas están pagas, no mostrar en pendientes
+                        if (inv.vencimientos?.length > 0 && inv.vencimientos.every(v=>v.pagado)) return false;
+                        return matchesSearch(inv);
+                    } else {
+                        if (inv.status !== 'paid') return false;
+                        // Si tiene cuotas, no mostrar la factura base (se muestran como virtuales)
+                        if (inv.vencimientos?.length > 0) return false;
+                        return matchesSearch(inv);
+                    }
+                }),
+                // En Pagadas: agregar cuotas pagadas como registros virtuales
+                ...(activeSubTab === 'paid' ? cuotasPagadasVirtuales.filter(matchesSearch) : []),
+            ];
             const idsVisibles = facturasFiltradas.map(i => i.id);
             const seleccionadas = idsVisibles.filter(id => selectedInvoices[id]);
             const todasSeleccionadas = idsVisibles.length > 0 && seleccionadas.length === idsVisibles.length;
@@ -19091,15 +19131,30 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         className="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs font-medium">QR</button>
                                                 )}
                                                 {invoice.status === 'pending' ? (
-                                                    canEdit && <button onClick={() => abrirPagoModal(invoice)}
-                                                        className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">✓ Pagado</button>
+                                                    invoice.vencimientos?.filter(v=>!v.pagado).length > 0 ? (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {invoice.vencimientos.filter(v=>!v.pagado).map(v => (
+                                                                <button key={v.id} onClick={() => abrirPagoModalCuota(invoice, v)}
+                                                                    className="px-2 py-0.5 bg-green-600 text-white rounded text-xs font-medium whitespace-nowrap">
+                                                                    💰 {new Date(v.fecha+'T12:00').toLocaleDateString('es-AR',{day:'2-digit',month:'short'})} {Math.round(v.monto).toLocaleString()}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        canEdit && <button onClick={() => abrirPagoModal(invoice)}
+                                                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">✓ Pagado</button>
+                                                    )
                                                 ) : (
                                                     canEdit && <button onClick={() => deshacerPago(invoice)}
                                                         className="px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 text-xs font-medium">↺ Restablecer</button>
                                                 )}
                                                 {canEdit && <button onClick={() => { setEditingId(invoice.id); setPreviewInvoice(invoice); setShowPreviewModal(true); }}
                                                     className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-medium">✏️ Editar</button>}
-                                                {canEdit && <button onClick={() => { if(confirm('¿Eliminar esta factura?')) setInvoices(invoices.filter(i => i.id !== invoice.id)); }}
+                                                {canEdit && invoice.status === 'pending' && <button onClick={() => { setVencModalInvoice(invoice); setVencForm(invoice.vencimientos || []); setShowVencModal(true); }}
+                                                    className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs font-medium">📅 Cuotas</button>}
+                                                {canEdit && !invoice._isCuotaVirtual && <button onClick={() => { if(confirm('¿Eliminar esta factura?')) setInvoices(invoices.filter(i => i.id !== invoice.id)); }}
+                                                    className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs font-medium">🗑️</button>}
+                                                {canEdit && invoice._isCuotaVirtual && <button onClick={() => { if(confirm('¿Eliminar este registro de cuota?')) { setInvoices(prev => prev.map(inv => { if(inv.id !== invoice._invoiceOrigId || !inv.vencimientos) return inv; return {...inv, vencimientos: inv.vencimientos.filter(v=>String(v.id)!==String(invoice._cuotaOrig?.id))}; })); }}}
                                                     className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs font-medium">🗑️</button>}
                                             </div>
                                         </div>
@@ -20054,11 +20109,30 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // ── MODAL DE PAGO → CAJA DIARIA ──────────────────────────────
             const [showPagoModal, setShowPagoModal] = useState(false);
             const [pagoModalInvoice, setPagoModalInvoice] = useState(null);
+            const [showVencModal, setShowVencModal] = useState(false);
+            const [vencModalInvoice, setVencModalInvoice] = useState(null);
+            const [vencForm, setVencForm] = useState([]);
             const [pagoOrigen, setPagoOrigen] = useState('BANK');
             const [pagoCZK, setPagoCZK] = useState('');
             const [pagoParcial, setPagoParcial] = useState(false);
             const [montoParcial, setMontoParcial] = useState('');
             const CAJA_KEY = 'cashTransactionsMultiYear';
+
+            const saveVencimientos = (invoiceId, vencimientos, newDueDate) => {
+                setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, vencimientos, ...(newDueDate ? {dueDate: newDueDate} : {}) } : inv));
+            };
+
+            const abrirPagoModalCuota = (invoice, cuota) => {
+                // Crear una factura virtual con el monto de la cuota
+                const invoiceVirtual = {
+                    ...invoice,
+                    _cuotaId: cuota.id,
+                    _invoiceOrigId: invoice.id,
+                    amount: cuota.monto,
+                    notes: `Cuota ${new Date(cuota.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'})} - ${invoice.number || ''}`,
+                };
+                abrirPagoModal(invoiceVirtual);
+            };
 
             const abrirPagoModal = (invoice) => {
                 setPagoModalInvoice(invoice);
@@ -20175,11 +20249,23 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 // Pago total: marcar como pagada normalmente
                 if (!esParcial) {
-                    setInvoices(prev => prev.map(inv =>
-                        inv.id === invoice.id
-                            ? { ...inv, pagado: montoTotal, status: 'paid', cajaTransId: `prov_${invoice.id}`, paymentDate: fechaHoy }
-                            : inv
-                    ));
+                    setInvoices(prev => prev.map(inv => {
+                        if (inv.id === invoice._invoiceOrigId) {
+                            // Cuota parcial — marcar esa cuota como pagada y restar del monto
+                            const cuotaMonto = parseFloat(invoice.amount)||0;
+                            const vencAct = (inv.vencimientos||[]).map(v => v.id === invoice._cuotaId ? {...v, pagado: true, fechaPago: fechaHoy} : v);
+                            const todasPagas = vencAct.every(v => v.pagado);
+                            const nuevoMonto = Math.max(0, (parseFloat(inv.amount)||0) - cuotaMonto);
+                            // Actualizar dueDate a la próxima cuota sin pagar
+                            const proxima = vencAct.filter(v=>!v.pagado).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha))[0];
+                            const nuevaDueDate = proxima ? proxima.fecha : inv.dueDate;
+                            return { ...inv, vencimientos: vencAct, amount: nuevoMonto, dueDate: nuevaDueDate, ...(todasPagas ? {status:'paid', paymentDate: fechaHoy} : {}) };
+                        }
+                        if (inv.id === invoice.id) {
+                            return { ...inv, pagado: montoTotal, status: 'paid', cajaTransId: `prov_${invoice.id}`, paymentDate: fechaHoy };
+                        }
+                        return inv;
+                    }));
                 }
 
                 alert(esParcial
@@ -21874,19 +21960,35 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const curr = stats[category].byCurrency[inv.currency];
                         
                         if (inv.status === 'pending') {
-                            stats[category].totalDebt += inv.amount;
-                            curr.totalDebt += inv.amount;
-                            
-                            // Verificar si está vencida
-                            const today = new Date();
-                            const dueDate = new Date(inv.dueDate);
-                            if (dueDate < today) {
-                                stats[category].overdueDebt += inv.amount;
-                                curr.overdueDebt += inv.amount;
+                            // Con cuotas: usar solo cuotas pendientes
+                            const today2 = new Date();
+                            if (inv.vencimientos?.length > 0) {
+                                const pendientes = inv.vencimientos.filter(v=>!v.pagado);
+                                const pendMonto = pendientes.reduce((s,v)=>s+(parseFloat(v.monto)||0),0);
+                                stats[category].totalDebt += pendMonto;
+                                curr.totalDebt += pendMonto;
+                                // Vencidas: solo cuotas pendientes cuya fecha pasó
+                                const vencMonto = pendientes.filter(v=>new Date(v.fecha+'T12:00') < today2).reduce((s,v)=>s+(parseFloat(v.monto)||0),0);
+                                stats[category].overdueDebt += vencMonto;
+                                curr.overdueDebt += vencMonto;
+                                // Pagadas: cuotas pagadas
+                                const pagMonto = inv.vencimientos.filter(v=>v.pagado).reduce((s,v)=>s+(parseFloat(v.monto)||0),0);
+                                stats[category].totalPaid += pagMonto;
+                                curr.totalPaid += pagMonto;
+                            } else {
+                                stats[category].totalDebt += inv.amount;
+                                curr.totalDebt += inv.amount;
+                                const dueDate = new Date(inv.dueDate);
+                                if (dueDate < today2) {
+                                    stats[category].overdueDebt += inv.amount;
+                                    curr.overdueDebt += inv.amount;
+                                }
                             }
                         } else if (inv.status === 'paid') {
-                            stats[category].totalPaid += inv.amount;
-                            curr.totalPaid += inv.amount;
+                            if (!(inv.vencimientos?.length > 0)) { // evitar doble conteo con cuotas
+                                stats[category].totalPaid += inv.amount;
+                                curr.totalPaid += inv.amount;
+                            }
                         }
                     });
                 });
@@ -22273,7 +22375,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             color: 'border-red-200 bg-red-50',
                                             labelColor: 'text-red-700',
                                             countColor: 'text-red-700',
-                                            count: (() => { const hoy = new Date(); return invoices.filter(inv => inv.status === 'pending' && new Date(inv.dueDate) < hoy).length; })(),
+                                            count: (() => { const hoy = new Date(); return invoices.filter(inv => { if(inv.status!=='pending') return false; if(inv.vencimientos?.length>0) return inv.vencimientos.some(v=>!v.pagado&&new Date(v.fecha+'T12:00')<hoy); return new Date(inv.dueDate)<hoy; }).length; })(),
                                             amounts: (() => {
                                                 const t = {};
                                                 Object.values(categoryStats).forEach(s => Object.entries(s.byCurrency).forEach(([c, a]) => { if (a.overdueDebt > 0) t[c] = (t[c]||0) + a.overdueDebt; }));
@@ -22796,25 +22898,36 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     // Calcular total general de TODAS las facturas
                                     const totalGeneralAmount = invoices.reduce((sum, inv) => sum + inv.amount, 0);
                                     
-                                    // Calcular resumen del proveedor (TODAS las facturas)
-                                    const totalPending = supplierInvoices
-                                        .filter(inv => inv.status === 'pending')
-                                        .reduce((sum, inv) => sum + inv.amount, 0);
-                                    const totalPaid = supplierInvoices
-                                        .filter(inv => inv.status === 'paid')
-                                        .reduce((sum, inv) => sum + inv.amount, 0);
-                                    
-                                    // Calcular total vencido
+                                    // Calcular resumen del proveedor — respeta cuotas parciales
                                     const today = new Date();
-                                    const overdueInvoices = supplierInvoices.filter(inv => {
-                                        if (inv.status === 'pending') {
-                                            const dueDate = new Date(inv.dueDate);
-                                            return dueDate < today;
+                                    const getEffectivePending = (inv) => {
+                                        if (inv.status !== 'pending') return 0;
+                                        if (inv.vencimientos?.length > 0) {
+                                            // Solo cuotas no pagadas
+                                            return inv.vencimientos.filter(v=>!v.pagado).reduce((s,v)=>s+(parseFloat(v.monto)||0),0);
                                         }
-                                        return false;
-                                    });
-                                    const overdueCount = overdueInvoices.length;
-                                    const totalOverdue = overdueInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+                                        return Math.abs(parseFloat(inv.amount)||0);
+                                    };
+                                    const getEffectiveOverdue = (inv) => {
+                                        if (inv.status !== 'pending') return 0;
+                                        if (inv.vencimientos?.length > 0) {
+                                            // Solo cuotas no pagadas cuya fecha ya pasó
+                                            return inv.vencimientos.filter(v=>!v.pagado && new Date(v.fecha+'T12:00') < today).reduce((s,v)=>s+(parseFloat(v.monto)||0),0);
+                                        }
+                                        const dueDate = new Date(inv.dueDate);
+                                        return (dueDate < today) ? Math.abs(parseFloat(inv.amount)||0) : 0;
+                                    };
+                                    const totalPending = supplierInvoices.reduce((sum,inv) => sum + getEffectivePending(inv), 0);
+                                    const totalPaid = supplierInvoices.reduce((sum,inv) => {
+                                        if (inv.status === 'paid') return sum + Math.abs(parseFloat(inv.amount)||0);
+                                        // Cuotas pagadas de facturas aún pendientes
+                                        if (inv.vencimientos?.length > 0) {
+                                            return sum + inv.vencimientos.filter(v=>v.pagado).reduce((s,v)=>s+(parseFloat(v.monto)||0),0);
+                                        }
+                                        return sum;
+                                    }, 0);
+                                    const totalOverdue = supplierInvoices.reduce((sum,inv) => sum + getEffectiveOverdue(inv), 0);
+                                    const overdueCount = supplierInvoices.filter(inv => getEffectiveOverdue(inv) > 0).length;
                                     
                                     const totalSupplier = totalPending + totalPaid;
                                     const percentageOfTotal = totalGeneralAmount > 0 ? (totalSupplier / totalGeneralAmount) * 100 : 0;
@@ -22955,7 +23068,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                     ? 'bg-white bg-opacity-30 text-white'
                                                                     : 'bg-slate-300 text-slate-700'
                                                             }`}>
-                                                                {supplierInvoices.filter(inv => inv.status === 'pending').length}
+                                                                {supplierInvoices.filter(inv => inv.status === 'pending' && !(inv.vencimientos?.length > 0 && inv.vencimientos.every(v=>v.pagado))).length}
                                                             </span>
                                                         </button>
                                                         <button
@@ -22971,7 +23084,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                     ? 'bg-green-500'
                                                                     : 'bg-slate-300 text-slate-700'
                                                             }`}>
-                                                                {supplierInvoices.filter(inv => inv.status === 'paid').length}
+                                                                {supplierInvoices.filter(inv => inv.status === 'paid' && !(inv.vencimientos?.length > 0)).length + supplierInvoices.reduce((s,inv)=>s+(inv.vencimientos||[]).filter(v=>v.pagado).length,0)}
                                                             </span>
                                                         </button>
                                                     </div>
@@ -22991,6 +23104,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         getDaysUntilDue={getDaysUntilDue}
                                                         getAlertLevel={getAlertLevel}
                                                         abrirPagoModal={abrirPagoModal}
+                                                        abrirPagoModalCuota={abrirPagoModalCuota}
+                                                        setVencModalInvoice={setVencModalInvoice}
+                                                        setVencForm={setVencForm}
+                                                        setShowVencModal={setShowVencModal}
                                                         deshacerPago={deshacerPago}
                                                         setEditingId={setEditingId}
                                                         setPreviewInvoice={setPreviewInvoice}
@@ -24098,6 +24215,50 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     </div>
                 )}
                 
+                {/* Modal de Vencimientos/Cuotas */}
+                {showVencModal && vencModalInvoice && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className={`flex items-center justify-between px-5 py-4 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <div>
+                                    <h2 className={`font-bold text-base ${darkMode?'text-white':'text-slate-900'}`}>📅 Cuotas — {vencModalInvoice.number || vencModalInvoice.supplier}</h2>
+                                    <p className={`text-xs mt-0.5 ${darkMode?'text-slate-400':'text-slate-500'}`}>Total factura: {Math.abs(parseFloat(vencModalInvoice.amount)||0).toLocaleString()} {vencModalInvoice.currency||'CZK'}</p>
+                                </div>
+                                <button onClick={()=>setShowVencModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-3">
+                                {vencForm.length === 0 && (
+                                    <p className={`text-sm text-center py-6 ${darkMode?'text-slate-400':'text-slate-400'}`}>Sin cuotas. Agregá la primera abajo.</p>
+                                )}
+                                {vencForm.map((v,i) => (
+                                    <div key={v.id} className={`flex items-center gap-3 p-3 rounded-xl ${v.pagado?(darkMode?'bg-green-900/20 border border-green-800':'bg-green-50 border border-green-200'):(darkMode?'bg-slate-700':'bg-slate-50')}`}>
+                                        <span className="text-lg">{v.pagado?'✅':'⏳'}</span>
+                                        <div className="flex-1 grid grid-cols-2 gap-2">
+                                            <input type="date" value={v.fecha} disabled={v.pagado}
+                                                onChange={e=>setVencForm(f=>f.map((x,j)=>j===i?{...x,fecha:e.target.value}:x))}
+                                                className={`text-sm px-2 py-1.5 border rounded-lg ${darkMode?'bg-slate-600 border-slate-500 text-white':'bg-white border-slate-200'} ${v.pagado?'opacity-50':''}`}/>
+                                            <input type="number" value={v.monto} disabled={v.pagado} placeholder="Monto"
+                                                onChange={e=>setVencForm(f=>f.map((x,j)=>j===i?{...x,monto:parseFloat(e.target.value)||0}:x))}
+                                                className={`text-sm px-2 py-1.5 border rounded-lg font-mono ${darkMode?'bg-slate-600 border-slate-500 text-white':'bg-white border-slate-200'} ${v.pagado?'opacity-50':''}`}/>
+                                        </div>
+                                        <button onClick={()=>setVencForm(f=>f.filter((_,j)=>j!==i))} className="text-red-400 hover:text-red-600 text-lg flex-shrink-0">×</button>
+                                    </div>
+                                ))}
+
+                                <button onClick={()=>setVencForm(f=>[...f,{id:Date.now(),fecha:new Date().toISOString().split('T')[0],monto:0,pagado:false}])}
+                                    className={`w-full py-2 text-sm font-medium border-2 border-dashed rounded-xl ${darkMode?'border-slate-600 text-slate-400 hover:border-purple-500':'border-slate-300 text-slate-400 hover:border-purple-400'}`}>
+                                    + Agregar cuota
+                                </button>
+                            </div>
+                            <div className={`flex gap-3 px-5 py-3 border-t ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <button onClick={()=>setShowVencModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>Cancelar</button>
+                                <button onClick={()=>{ const pendientes = vencForm.filter(v=>!v.pagado).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)); const nextDue = pendientes[0]?.fecha || vencModalInvoice.dueDate; const updatedInv = {...vencModalInvoice, vencimientos: vencForm, dueDate: nextDue}; saveVencimientos(vencModalInvoice.id, vencForm, nextDue); setShowVencModal(false); }}
+                                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium">💾 Guardar cuotas</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Modal de QR */}
                 {showPagoModal && pagoModalInvoice && (() => {
                     const supplier = pagoModalInvoice.category || pagoModalInvoice.supplier || '';
