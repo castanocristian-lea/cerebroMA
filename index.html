@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-14:10 - Google Picker: sin filtro MIME, muestra todos los archivos -->
+<!-- Version: 2026-05-11-14:20 - Google Drive: OAuth + lista archivos nativa, funciona en mobile -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -25603,58 +25603,75 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const GDRIVE_CLIENT_ID = '168921384531-gj9ur48hnfo8fics2dbukeom5aspkvj8.apps.googleusercontent.com';
         const GDRIVE_API_KEY = 'AIzaSyD-G-0NtZk78mvet-25EO_rKWemJK_NF4M';
 
-        const openGoogleDrivePicker = () => {
-            // Cargar gapi si no está cargado
-            const loadAndOpen = () => {
-                window.gapi.load('auth2', () => {
-                    window.gapi.auth2.getAuthInstance()?.signOut().catch(()=>{});
-                    window.gapi.auth2.init({ client_id: GDRIVE_CLIENT_ID }).then(() => {
-                        window.gapi.auth2.getAuthInstance().signIn({
-                            scope: 'https://www.googleapis.com/auth/drive.readonly'
-                        }).then(user => {
-                            const token = user.getAuthResponse().access_token;
-                            window.gapi.load('picker', () => {
-                                const picker = new window.google.picker.PickerBuilder()
-                                    .addView(new window.google.picker.DocsView()
-                                        
-                                        .setIncludeFolders(true))
-                                    .setOAuthToken(token)
-                                    .setDeveloperKey(GDRIVE_API_KEY)
-                                    .setCallback(async (data) => {
-                                        if (data.action === window.google.picker.Action.PICKED) {
-                                            const file = data.docs[0];
-                                            setVentasError(L('Descargando archivo...','Downloading file...'));
-                                            try {
-                                                const resp = await fetch(
-                                                    `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
-                                                    { headers: { Authorization: `Bearer ${token}` } }
-                                                );
-                                                const blob = await resp.blob();
-                                                const f = new File([blob], file.name, { type: blob.type });
-                                                setVentasError('');
-                                                parseStoryous(f);
-                                            } catch(e) {
-                                                setVentasError(L('Error al descargar el archivo','Error downloading file'));
-                                            }
-                                        }
-                                    })
-                                    .build();
-                                picker.setVisible(true);
-                            });
-                        }).catch(e => {
-                            setVentasError(L('Error al autenticar con Google','Google authentication error'));
-                        });
-                    });
-                });
-            };
+        // ── Google Drive OAuth + API (funciona en mobile y desktop) ──
+        const [gdriveToken,      setGdriveToken]      = React.useState(null);
+        const [gdriveFiles,      setGdriveFiles]      = React.useState([]);
+        const [showDriveModal,   setShowDriveModal]   = React.useState(false);
+        const [driveLoading,     setDriveLoading]     = React.useState(false);
+        const [driveSearchQ,     setDriveSearchQ]     = React.useState('');
 
-            if (!window.gapi) {
-                const script = document.createElement('script');
-                script.src = 'https://apis.google.com/js/api.js';
-                script.onload = loadAndOpen;
-                document.head.appendChild(script);
+        const loadGDriveFiles = async (token) => {
+            setDriveLoading(true);
+            try {
+                const q = encodeURIComponent("(mimeType='application/vnd.ms-excel' or mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='text/csv' or name contains '.xls' or name contains '.csv') and trashed=false");
+                const resp = await fetch(
+                    `https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime desc&pageSize=50&fields=files(id,name,modifiedTime,size)`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                const data = await resp.json();
+                setGdriveFiles(data.files || []);
+            } catch(e) {
+                setVentasError(L('Error al cargar archivos de Drive','Error loading Drive files'));
+            }
+            setDriveLoading(false);
+        };
+
+        const downloadDriveFile = async (file) => {
+            setDriveLoading(true);
+            setVentasError(L('Descargando...','Downloading...'));
+            try {
+                const resp = await fetch(
+                    `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+                    { headers: { Authorization: `Bearer ${gdriveToken}` } }
+                );
+                const blob = await resp.blob();
+                const f = new File([blob], file.name, { type: blob.type });
+                setVentasError('');
+                setShowDriveModal(false);
+                parseStoryous(f);
+            } catch(e) {
+                setVentasError(L('Error al descargar','Error downloading'));
+            }
+            setDriveLoading(false);
+        };
+
+        const openGoogleDrivePicker = () => {
+            // Usar Google Identity Services (funciona en mobile)
+            const doAuth = () => {
+                if (window.google?.accounts?.oauth2) {
+                    const client = window.google.accounts.oauth2.initTokenClient({
+                        client_id: GDRIVE_CLIENT_ID,
+                        scope: 'https://www.googleapis.com/auth/drive.readonly',
+                        callback: (resp) => {
+                            if (resp.access_token) {
+                                setGdriveToken(resp.access_token);
+                                setShowDriveModal(true);
+                                loadGDriveFiles(resp.access_token);
+                            }
+                        },
+                    });
+                    client.requestAccessToken();
+                } else {
+                    setVentasError(L('Cargando Google...','Loading Google...'));
+                }
+            };
+            if (!window.google?.accounts?.oauth2) {
+                const s = document.createElement('script');
+                s.src = 'https://accounts.google.com/gsi/client';
+                s.onload = doAuth;
+                document.head.appendChild(s);
             } else {
-                loadAndOpen();
+                doAuth();
             }
         };
 
@@ -25874,7 +25891,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         ];
 
         // Body scroll lock
-        const anyModal = showSucModal || showProdModal || showIngModal || showVentasModal || showMovManual || showEnvioModal || showCatModal || showDeliveryModal || showMercadoModal || showMercadosConfigModal || showVuelvenModal;
+        const anyModal = showSucModal || showProdModal || showIngModal || showVentasModal || showMovManual || showEnvioModal || showCatModal || showDeliveryModal || showMercadoModal || showMercadosConfigModal || showVuelvenModal || showDriveModal;
         useEffect(() => {
             if (anyModal) {
                 const sy = window.scrollY;
@@ -26918,6 +26935,62 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         💾 Confirmar {movManualTipo === 'ingreso' ? 'ingreso' : 'ventas'}
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Google Drive Files */}
+                {showDriveModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <div>
+                                    <h2 className={`font-bold ${txt}`}>
+                                        <svg className="inline w-5 h-5 mr-1.5" viewBox="0 0 24 24" fill="none"><path d="M4.5 21L9 13.5H21L16.5 21H4.5Z" fill="#0066DA"/><path d="M9 13.5L4.5 21L0 13.5L7.5 3H13.5L9 13.5Z" fill="#00AC47"/><path d="M13.5 3L21 13.5H9L13.5 3Z" fill="#EA4335"/></svg>
+                                        {L('Archivos de Google Drive','Google Drive Files')}
+                                    </h2>
+                                    <p className={`text-xs mt-0.5 ${sub}`}>{L('Excel y CSV de Storyous','Storyous Excel and CSV files')}</p>
+                                </div>
+                                <button onClick={()=>setShowDriveModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
+                            </div>
+                            <div className={`px-4 py-2 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <input value={driveSearchQ} onChange={e=>setDriveSearchQ(e.target.value)}
+                                    placeholder={L('Buscar archivo...','Search file...')}
+                                    className={`w-full px-3 py-1.5 text-sm rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            </div>
+                            <div className="flex-1 overflow-y-auto overscroll-contain">
+                                {driveLoading ? (
+                                    <div className={`text-center py-12 ${sub}`}>
+                                        <p className="text-2xl mb-2">⏳</p>
+                                        <p className="text-sm">{L('Cargando...','Loading...')}</p>
+                                    </div>
+                                ) : gdriveFiles.length === 0 ? (
+                                    <div className={`text-center py-12 ${sub}`}>
+                                        <p className="text-2xl mb-2">📂</p>
+                                        <p className="text-sm">{L('No se encontraron archivos Excel o CSV','No Excel or CSV files found')}</p>
+                                    </div>
+                                ) : (
+                                    <div className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                        {gdriveFiles.filter(f=>!driveSearchQ||f.name.toLowerCase().includes(driveSearchQ.toLowerCase())).map(f => (
+                                            <button key={f.id} onClick={()=>downloadDriveFile(f)}
+                                                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${darkMode?'hover:bg-slate-700':'hover:bg-slate-50'}`}>
+                                                <span className="text-2xl shrink-0">{f.name.endsWith('.csv')?'📄':'📊'}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-sm font-medium truncate ${txt}`}>{f.name}</p>
+                                                    <p className={`text-xs ${sub}`}>{f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'}) : ''}</p>
+                                                </div>
+                                                <span className="text-blue-500 text-sm shrink-0">↓</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className={`px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <button onClick={()=>loadGDriveFiles(gdriveToken)}
+                                    className={`w-full py-2 text-sm rounded-lg ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>
+                                    🔄 {L('Recargar lista','Reload list')}
+                                </button>
                             </div>
                         </div>
                     </div>
