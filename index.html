@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-10:40 - Fix cache: excluir payroll de cache para que Cobrado Hoy funcione -->
+<!-- Version: 2026-05-11-10:58 - Optimizar carga inicial: requests paralelos, menos rondas secuenciales -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -36,7 +36,7 @@
             return data.map(r => r.data);
         }
         // Tablas que NO deben cachearse (necesitan datos frescos)
-        const DB_NO_CACHE = new Set(['payroll_monthly','payroll_insurance','system_users','employees']);
+        const DB_NO_CACHE = new Set(['payroll_monthly','payroll_insurance','system_users','employees','app_config']);
         async function dbGetKey(table, key) {
             // Check window cache first (valid for 30s) — skip for realtime tables
             if (!DB_NO_CACHE.has(table)) {
@@ -210,6 +210,7 @@
         // ── Precargar TODO desde Supabase (SIEMPRE sobreescribe localStorage) ─
         async function precargarDesdeSupabase() {
             try {
+                // Ronda 1: datos críticos para home + módulos frecuentes — todos en paralelo
                 const [emp, payN, cashN, cashTx, calEv, calH, calCfg, creds, sysU,
                        payM, payP, payH, payIns, cashPlan, payNotasMes, paySalOv,
                        suppMain, suppCats, suppInv, suppInvN, suppTax, suppSI, suppSP,
@@ -217,7 +218,7 @@
                     _sb.from('employees').select('data'),
                     _sb.from('payroll_notes').select('data'),
                     _sb.from('cash_notes').select('data'),
-                    _sb.from('cash_transactions').select('*'),
+                    _sb.from('cash_transactions').select('id').limit(1), // solo verificar existencia, multiyear se carga en ronda 2
                     _sb.from('calendar_events').select('data'),
                     _sb.from('calendar_hours').select('data'),
                     _sb.from('calendar_config').select('*'),
@@ -310,14 +311,9 @@
                 // Préstamos
                 const _prest = prestamos.data?.data || []; set('prestamosData', _prest); window.__prestamosDataPrecargada = _prest;
 
-                // Caja Diaria — pre-cargar para que esté disponible inmediatamente
-                const cajaR = await _sb.from('cash_transactions').select('data').eq('id','multiyear').maybeSingle();
-                if (cajaR.data?.data && Object.keys(cajaR.data.data).length > 0) {
-                    window.__cajaPrecargada = cajaR.data.data;
-                }
-
-                // Proveedores y planificación — precargar todo en paralelo
-                const [invR2, catR2, supR2, spR2, gpR2, fpR2, suR2, acGR2, acFR2, acSR2] = await Promise.all([
+                // Segunda ronda — todo en UN solo Promise.all paralelo
+                const [cajaR, invR2, catR2, supR2, spR2, gpR2, fpR2, suR2, acGR2, acFR2, acSR2, metaR, payR, mc] = await Promise.all([
+                    _sb.from('cash_transactions').select('data').eq('id','multiyear').maybeSingle(),
                     _sb.from('invoices_data').select('data').eq('id','main').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','categories').maybeSingle(),
                     _sb.from('suppliers').select('data').eq('id','main').maybeSingle(),
@@ -328,23 +324,12 @@
                     _sb.from('cash_planning').select('data').eq('id','gastosAcred').maybeSingle(),
                     _sb.from('cash_planning').select('data').eq('id','facturasAcred').maybeSingle(),
                     _sb.from('cash_planning').select('data').eq('id','sueldosAcred').maybeSingle(),
+                    _sb.from('invoices_data').select('data').eq('id','meta').maybeSingle(),
+                    _sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
+                    _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle(),
                 ]);
-                // Siempre priorizar chunks (más nuevos) sobre main (viejo)
-                try {
-                    const metaR = await _sb.from('invoices_data').select('data').eq('id','meta').maybeSingle();
-                    if (metaR.data?.data?.chunks > 0) {
-                        const chunkPs = Array.from({length: metaR.data.data.chunks}, (_,i) =>
-                            _sb.from('invoices_data').select('data').eq('id',`chunk_${i}`).maybeSingle()
-                        );
-                        const chunkRs = await Promise.all(chunkPs);
-                        const all = chunkRs.flatMap(r => r.data?.data || []);
-                        if (all.length > 0) window.__invoicesPrecargadas = all;
-                    }
-                } catch(e) {}
-                // Fallback a main solo si no hay chunks
-                if (!window.__invoicesPrecargadas?.length && invR2.data?.data?.length > 0) {
-                    window.__invoicesPrecargadas = invR2.data.data;
-                }
+                if (cajaR.data?.data && Object.keys(cajaR.data.data).length > 0) window.__cajaPrecargada = cajaR.data.data;
+                if (!window.__invoicesPrecargadas?.length && invR2.data?.data?.length > 0) window.__invoicesPrecargadas = invR2.data.data;
                 if (catR2.data?.data?.length > 0) window.__categoriesPrecargadas = catR2.data.data;
                 if (supR2.data?.data) window.__suppliersInfoPrecargada = supR2.data.data;
                 if (spR2.data?.data?.length > 0) window.__sueldosPendientesPrecargados = spR2.data.data;
@@ -354,13 +339,18 @@
                 if (acGR2.data?.data?.length > 0) window.__gastosAcredPrecargados = acGR2.data.data;
                 if (acFR2.data?.data?.length > 0) window.__facturasAcredPrecargadas = acFR2.data.data;
                 if (acSR2.data?.data?.length > 0) window.__sueldosAcredPrecargados = acSR2.data.data;
-                // Sueldos payroll
-                const payR = await _sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle();
                 if (payR.data?.data && Object.keys(payR.data.data).length > 0) window.__payrollPrecargado = payR.data.data;
-
-                // markedCategories
-                const mc = await _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle();
-                if (mc.data?.data) { window.__markedCategoriesPrecargadas = new Set(mc.data.data); }
+                if (mc.data?.data) window.__markedCategoriesPrecargadas = new Set(mc.data.data);
+                // Invoice chunks (si existen)
+                try {
+                    if (metaR.data?.data?.chunks > 0) {
+                        const chunkRs = await Promise.all(Array.from({length: metaR.data.data.chunks}, (_,i) =>
+                            _sb.from('invoices_data').select('data').eq('id',`chunk_${i}`).maybeSingle()
+                        ));
+                        const all = chunkRs.flatMap(r => r.data?.data || []);
+                        if (all.length > 0) window.__invoicesPrecargadas = all;
+                    }
+                } catch(e) {}
             } catch(e) {
                 console.error('❌ Error cargando desde Supabase:', e);
             }
@@ -1521,10 +1511,6 @@ ${invoice.items.map(item => `
                 if (!isUnlocked || !currentUser) return;
                 const cargar = async () => {
                     try {
-                        // Cache: skip if fetched in last 45s
-                        const ahora = Date.now();
-                        if (window.__lastNotifFetch && (ahora - window.__lastNotifFetch) < 45000) return;
-                        window.__lastNotifFetch = ahora;
                         let emps = window.__employeesPrecargados || [];
                         if (!emps.length) {
                             const r = await window._sb?.from('employees').select('data');
