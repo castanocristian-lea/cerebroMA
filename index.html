@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-19:20 - Mercados: PDF abre en explorador, compartir separado -->
+<!-- Version: 2026-05-11-21:00 - Mercado notif: dispara evento inmediato + realtime en app_config -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1622,7 +1622,7 @@ ${invoice.items.map(item => `
                     payroll_monthly:   'sueldoNotifUpdate',
                     payroll_insurance: 'sueldoNotifUpdate',
                     employees:         'sueldoNotifUpdate',
-                    app_config:        null,
+                    app_config:        'notifUpdate',
                     system_users:      null,
                     credentials:       null,
                 };
@@ -3276,7 +3276,8 @@ ${invoice.items.map(item => `
                         if (!currentUser) return null;
                         try {
                             const myId = String(currentUser.id||'');
-                            const pendientes = (notificaciones.mercadoNotif||[]).filter(n=>!n.visto && String(n.destinatarioId||'')===myId);
+                            const myEmpId = String((window.__employeesPrecargados||[]).find(e=>{const en=(e.nombre+' '+e.apellido).toLowerCase();const un=(currentUser?.name||'').toLowerCase();return en.includes(un)||un.includes((e.nombre||'').toLowerCase());})?.id||'');
+                            const pendientes = (notificaciones.mercadoNotif||[]).filter(n=>!n.visto && (String(n.destinatarioId||'')===myId || (myEmpId && String(n.destinatarioId||'')===myEmpId)));
                             if (!pendientes.length) return null;
                             const notif = pendientes[0];
                             return (
@@ -3288,7 +3289,7 @@ ${invoice.items.map(item => `
                                     <button onClick={()=>{setActiveModule('cocina'); window.__cocinaTabInicial='stock'; window.__stockTabInicial='mercados';}}
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
-                                    <button onClick={()=>marcarNotifVista('mercadoNotif',n=>String(n.destinatarioId)===myId)}
+                                    <button onClick={()=>marcarNotifVista('mercadoNotif',n=>String(n.destinatarioId)===myId||String(n.destinatarioId)===myEmpId)}
                                         className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
                                         style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
                                 </div>
@@ -25475,7 +25476,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         // ── ESTADO ──
         const [sucursales, setSucursales]   = useState([]);
         const [categoriasProd, setCategoriasProd] = useState([]);
-        const [catFilter, setCatFilter] = useState(''); // '' = todas
+        const [catFilter, setCatFilter] = useState('');
+        const [controlSuc, setControlSuc] = useState('');
+        const [controlCat, setControlCat] = useState('');
+        const [controlData, setControlData] = useState({}); // {productoId: cantidadFisica}
+        const [showControlInforme, setShowControlInforme] = useState(false);
+        const [controlHistorial, setControlHistorial] = useState([]);
+        const [showControlHistorial, setShowControlHistorial] = useState(false); // '' = todas
         const [productos,  setProductos]    = useState([]);
         const [stock,      setStock]        = useState({}); // { productoId_sucursalId: cantidad }
         const [movimientos,setMovimientos]  = useState([]);
@@ -25542,6 +25549,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 setEnvios(envs || []);
                 setCategoriasProd(Array.isArray(cats) && cats.length ? cats : CATEGORIAS_PROD_DEFAULT);
                 // Load delivery + mercados in one batch request
+                dbGetKey('app_config', 'stock_control_historial').then(d => { if(Array.isArray(d)) setControlHistorial(d); });
                 dbGetKeyBatch('app_config', ['stock_delivery','stock_mercados','stock_lista_mercados']).then(b => {
                     if(b['stock_delivery']) setDeliveryData(b['stock_delivery']);
                     setDeliveryLoaded(true);
@@ -25905,6 +25913,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             { id: 'stock',      label: '📦 Stock' },
             { id: 'envios',     label: L('🚚 Envíos','🚚 Shipments') },
             { id: 'mercados',   label: L('🏪 Mercados','🏪 Markets') },
+            { id: 'control',    label: L('🔍 Control','🔍 Stock Check') },
             { id: 'ingresos',   label: L('📥 Ingresos','📥 Inbound') },
             { id: 'ventas',     label: L('📤 Egresos','📤 Outbound') },
             { id: 'productos',  label: L('🗂 Productos','🗂 Products') },
@@ -25956,13 +25965,20 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     🗺 Todas
                                 </button>
                             </div>
-                            {categoriasProd.length > 0 && (
-                                <select value={catFilter} onChange={e=>setCatFilter(e.target.value)}
-                                    className={`px-3 py-2 rounded-lg text-sm border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200 text-slate-700'}`}>
-                                    <option value="">{L('🏷 Todas las categorías','🏷 All categories')}</option>
-                                    {categoriasProd.map(c=><option key={c} value={c}>{c}</option>)}
-                                </select>
-                            )}
+                            {(categoriasProd.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 items-center">
+                                        <button onClick={()=>setCatFilter('')}
+                                            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===''?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
+                                            {L('Todas','All')}
+                                        </button>
+                                        {categoriasProd.map(c=>(
+                                            <button key={c} onClick={()=>setCatFilter(catFilter===c?'':c)}
+                                                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===c?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
+                                                {c}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ))}
                         </div>
 
                         {/* Tabla de stock */}
@@ -25979,8 +25995,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
                                             <th className={`px-4 py-4 text-left text-sm font-semibold ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
                                             <th className={`px-4 py-4 text-left text-sm font-semibold ${sub}`}>{L('CATEGORÍA','CATEGORY')}</th>
-                                            <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>STOCK</th>
-                                            <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{L('MÍNIMO','MINIMUM')}</th>
+                                            <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{sucursalSel==='todas'?L('STOCK POR SUCURSAL','STOCK BY BRANCH'):'STOCK'}</th>
+                                            {sucursalSel==='todas' && <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{L('STOCK TOTAL','TOTAL STOCK')}</th>}
                                             <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{L('ESTADO','STATUS')}</th>
                                         </tr>
                                     </thead>
@@ -25990,22 +26006,38 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <td className={`px-4 py-4 font-semibold text-base ${txt}`}>{p.nombre}</td>
                                                 <td className={`px-4 py-4 text-sm ${sub}`}>{p.categoria || '—'}</td>
                                                 <td className="px-4 py-4 text-right">
-                                                    {(() => {
-                                                        const curSuc = sucursalSel === 'todas' ? null : sucursalSel;
-                                                        const lastMov = movimientos.filter(m=>String(m.productoId)===String(p.id)&&(!curSuc||String(m.sucursalId)===curSuc)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
-                                                        return lastMov ? <p className={`text-xs ${sub} mb-1`}>Last edit: {lastMov.user||'—'} · {new Date(lastMov.fecha).toLocaleDateString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</p> : null;
-                                                    })()}
+
                                                     {p.bySuc && (
-                                                        <div className="flex flex-col items-end gap-0.5 mb-1">
+                                                        <div className="flex flex-col items-end gap-0.5">
                                                             {p.bySuc.map(s => (
                                                                 <span key={s.nombre} className={`text-xs ${sub}`}>{s.nombre}: <span className="font-mono font-semibold">{s.cantidad}</span></span>
                                                             ))}
                                                         </div>
                                                     )}
-                                                    <span className={`font-mono font-bold text-base ${p.cantidad < 0 ? 'text-red-600 font-extrabold' : p.alerta ? 'text-red-500' : 'text-green-600'}`}>{p.cantidad < 0 ? '⚠️ ' : ''}{p.cantidad}</span>
-                                                    <span className={`text-sm ml-1 ${sub}`}>{p.unidad}</span>
+                                                    {canEdit && sucursalSel !== 'todas' ? (
+                                                        <input key={`${p.id}_${sucursalSel}`} type="number" min="0" step="0.01"
+                                                            defaultValue={p.cantidad}
+                                                            onBlur={e => {
+                                                                const val = parseFloat(e.target.value);
+                                                                if (isNaN(val)) return;
+                                                                const k = stockKey(p.id, sucursalSel);
+                                                                const prev = parseFloat(stock[k] || 0);
+                                                                if (val === prev) return;
+                                                                const diff = val - prev;
+                                                                const newStock = { ...stock, [k]: val };
+                                                                saveStock(newStock);
+                                                                const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
+                                                                const mov = { id: Date.now(), tipo: diff > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(diff), notas: 'Edición en Stock · ' + sNombre + (diff > 0 ? ' · anterior: '+prev : ' · anterior: '+prev), fecha: new Date().toISOString(), user: currentUser?.name || '' };
+                                                                saveMovimientos([mov, ...movimientos].slice(0, 200));
+                                                            }}
+                                                            className={`w-24 px-2 py-1.5 text-right font-mono font-bold text-base border-2 rounded-lg ${p.alerta ? 'text-red-500 border-red-300' : 'text-green-600 border-green-300'} ${darkMode ? 'bg-slate-700' : 'bg-white'}`}
+                                                        />
+                                                    ) : (
+                                                        sucursalSel !== 'todas' && <span className={`font-mono font-bold text-base ${p.cantidad < 0 ? 'text-red-600 font-extrabold' : p.alerta ? 'text-red-500' : 'text-green-600'}`}>{p.cantidad < 0 ? '⚠️ ' : ''}{p.cantidad}</span>
+                                                    )}
+                                                    {sucursalSel !== 'todas' && <span className={`text-sm ml-1 ${sub}`}>{p.unidad}</span>}
                                                 </td>
-                                                <td className={`px-4 py-4 text-right font-mono text-sm ${sub}`}>{p.minimo || '—'}</td>
+                                                {sucursalSel==='todas' && <td className={`px-4 py-4 text-right font-mono font-bold text-sm ${txt}`}>{p.cantidad}</td>}
                                                 <td className="px-4 py-4 text-right">
                                                     {p.alerta
                                                         ? <span className="text-sm px-2.5 py-1 rounded-full bg-red-100 text-red-700 font-semibold">⚠️ Low</span>
@@ -26101,7 +26133,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         doc.setDrawColor(200,200,200); doc.rect(14,44,182,y-44);
                                                         // Abrir en el explorador (nueva pestaña)
                                                         const blob = doc.output('blob');
-                                                        const url = URL.createObjectURL(blob);
+                                                        const url = URL.createObjectURL(new File([blob], 'Prox Mer ' + m.mercadoNombre + ' ' + (m.fecha||'') + '.pdf', {type:'application/pdf'}));
                                                         window.open(url, '_blank');
                                                     }} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium ${darkMode?'bg-slate-700 text-slate-300 hover:bg-slate-600':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>📄 PDF</button>
                                                     <button onClick={async ()=>{
@@ -26130,7 +26162,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                             doc.setFontSize(10); doc.setTextColor(40,40,40);
                                                             y2 += 9;
                                                         });
-                                                        const filename = 'mercado-' + m.mercadoNombre.replace(/\s/g,'-') + '-' + (m.fecha||'') + '.pdf';
+                                                        const filename = 'Prox Mer ' + m.mercadoNombre + ' ' + (m.fecha||'') + '.pdf';
                                                         const pdfBlob = doc.output('blob');
                                                         const file = new File([pdfBlob], filename, {type:'application/pdf'});
                                                         if (navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
@@ -26171,18 +26203,219 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     </div>
                 )}
 
+                {/* ── CONTROL DE STOCK ── */}
+                {activeTab === 'control' && (
+                    <div className="mt-4 space-y-4">
+                        <div className="flex justify-between items-center flex-wrap gap-2">
+                            <p className={`text-sm font-semibold ${txt}`}>🔍 {L('Control de Stock','Stock Check')}</p>
+                            <div className='flex gap-2'>
+                            {showControlInforme && <button onClick={()=>setShowControlInforme(false)} className={`px-3 py-1.5 text-xs rounded-lg ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>← {L('Volver','Back')}</button>}
+                            <button onClick={()=>setShowControlHistorial(v=>!v)} className={`px-3 py-1.5 text-xs rounded-lg ${showControlHistorial?(darkMode?'bg-orange-600 text-white':'bg-orange-500 text-white'):(darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600')}`}>📋 {L('Historial','History')}{controlHistorial.length>0?' ('+controlHistorial.length+')':''}</button>
+                        </div>
+                        </div>
+                        {showControlHistorial ? (
+                            <div className='space-y-3'>
+                                {controlHistorial.length === 0 ? (
+                                    <p className={`text-sm text-center py-8 ${sub}`}>{L('Sin controles registrados','No stock checks recorded')}</p>
+                                ) : controlHistorial.map(h => (
+                                    <div key={h.id} className={`rounded-xl border ${card} overflow-hidden`}>
+                                        <div className={`px-4 py-2.5 flex items-center justify-between ${darkMode?'bg-slate-700/40':'bg-slate-50'}`}>
+                                            <div>
+                                                <span className={`font-semibold text-sm ${txt}`}>{h.sucursal}</span>
+                                                {h.categoria && h.categoria!=='Todas' && <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-slate-600 text-slate-300':'bg-slate-200 text-slate-600'}`}>{h.categoria}</span>}
+                                            </div>
+                                            <div className='text-right'>
+                                                <p className={`text-xs ${sub}`}>{h.fecha?new Date(h.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}</p>
+                                                <p className={`text-xs ${sub}`}>👤 {h.user} · {h.total} {L('correcciones','corrections')}</p>
+                                            </div>
+                                        </div>
+                                        <table className='w-full text-xs'>
+                                            <thead className={darkMode?'bg-slate-700/20':'bg-slate-50/50'}><tr>
+                                                {[L('PRODUCTO','PRODUCT'),L('ANTERIOR','BEFORE'),L('NUEVO','NEW'),L('DIFERENCIA','DIFF')].map(c=><th key={c} className={`px-3 py-1.5 text-left font-semibold ${sub}`}>{c}</th>)}
+                                            </tr></thead>
+                                            <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                                {(h.diferencias||[]).map((d,i)=>(
+                                                    <tr key={i}>
+                                                        <td className={`px-3 py-1.5 ${txt}`}>{d.nombre}</td>
+                                                        <td className={`px-3 py-1.5 font-mono ${sub}`}>{d.anterior}</td>
+                                                        <td className={`px-3 py-1.5 font-mono font-bold ${txt}`}>{d.nuevo}</td>
+                                                        <td className={`px-3 py-1.5 font-mono font-bold text-sm ${d.diff>0?'text-green-500':d.diff<0?'text-red-600 font-extrabold':' text-slate-400'}`}>{d.diff<0?'⚠️ ':d.diff>0?'✓ ':''}{d.diff>0?'+':''}{d.diff}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : !showControlInforme ? (
+                            <div className="space-y-3">
+                                {/* Filtros */}
+                                <div className="flex gap-3 flex-wrap">
+                                    <div>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('SUCURSAL *','BRANCH *')}</label>
+                                        <select value={controlSuc} onChange={e=>{setControlSuc(e.target.value);setControlData({});}} className={`px-3 py-2 rounded-lg text-sm border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                            <option value="">{L('Seleccionar...','Select...')}</option>
+                                            {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('CATEGORÍA','CATEGORY')}</label>
+                                        <select value={controlCat} onChange={e=>{setControlCat(e.target.value);setControlData({});}} className={`px-3 py-2 rounded-lg text-sm border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                            <option value="">{L('Todas','All')}</option>
+                                            {categoriasProd.map(c=><option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                {controlSuc && (()=>{
+                                    const prodsFiltrados = controlCat ? productos.filter(p=>p.categoria===controlCat) : productos;
+                                    return (
+                                        <div className={`rounded-xl border ${card} overflow-hidden`}>
+                                            <table className="w-full text-sm">
+                                                <thead className={darkMode?'bg-slate-700/50':'bg-slate-50'}>
+                                                    <tr>
+                                                        <th className={`px-4 py-2.5 text-left text-xs font-semibold ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
+                                                        <th className={`px-4 py-2.5 text-right text-xs font-semibold ${sub}`}>{L('SISTEMA','SYSTEM')}</th>
+                                                        <th className={`px-4 py-2.5 text-right text-xs text-orange-500 font-semibold`}>{L('FÍSICO','ACTUAL')}</th>
+                                                        <th className={`px-4 py-2.5 text-right text-xs font-semibold ${sub}`}>{L('DIFERENCIA','DIFF')}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                                    {prodsFiltrados.map(p => {
+                                                        const sistema = getStock(p.id, controlSuc);
+                                                        const fisico = controlData[p.id] !== undefined ? controlData[p.id] : '';
+                                                        // fisico always starts blank for physical count
+                                                        const diff = fisico !== '' ? parseFloat(fisico) - sistema : null;
+                                                        return (
+                                                            <tr key={p.id} className={diff !== null && diff !== 0 ? (darkMode?'bg-red-900/20':'bg-red-50') : ''}>
+                                                                <td className={`px-4 py-2.5 font-medium ${txt}`}>{p.nombre}</td>
+                                                                <td className={`px-4 py-2.5 text-right font-mono ${sub}`}>{sistema}</td>
+                                                                <td className="px-4 py-2.5 text-right">
+                                                                    <input type="number" min="0" step="0.01"
+                                                                        value={fisico}
+                                                                        onChange={e=>setControlData(d=>({...d,[p.id]:e.target.value}))}
+                                                                        placeholder="—"
+                                                                        className={`w-24 px-2 py-1 text-right font-mono font-bold border-2 rounded-lg text-sm ${fisico!==''&&diff!==0?'border-red-400 text-red-600':fisico!==''&&diff===0?'border-green-400 text-green-600':'border-slate-200'} ${darkMode?'bg-slate-700 text-white':'bg-white'}`}/>
+                                                                </td>
+                                                            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${diff===null?sub:diff>0?'text-green-600':diff<0?'text-red-700 font-extrabold bg-red-50':'text-slate-400'}`}>
+                                                                {diff===null?'—':diff<0?('⚠️ '+diff.toFixed(2)):((diff>0?'+':'')+diff.toFixed(2))}
+                                                            </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()}
+                                {controlSuc && Object.keys(controlData).length > 0 && (
+                                    <div className="flex gap-3">
+                                        <button onClick={()=>setShowControlInforme(true)}
+                                            className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border-2 ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>
+                                            📋 {L('Ver informe','View report')}
+                                        </button>
+                                        {canEdit && <button onClick={()=>{
+                                            if(!confirm(L('¿Aplicar correcciones al stock?','Apply stock corrections?'))) return;
+                                            const newStock = {...stock};
+                                            const newMovs = [];
+                                            const prodsFiltrados = controlCat ? productos.filter(p=>p.categoria===controlCat) : productos;
+                                            prodsFiltrados.forEach(p=>{
+                                                if(controlData[p.id]===undefined||controlData[p.id]==='') return;
+                                                const fisico = parseFloat(controlData[p.id]);
+                                                const sistema = getStock(p.id, controlSuc);
+                                                if(Math.abs(fisico-sistema)<0.001) return;
+                                                const k = stockKey(p.id, controlSuc);
+                                                newStock[k] = fisico;
+                                                newMovs.push({id:Date.now()+Math.random(),tipo:'ajuste',productoId:p.id,branchId:controlSuc,cantidad:Math.abs(fisico-sistema),notas:'Control de stock: '+(fisico>sistema?'+':'')+(fisico-sistema).toFixed(2),fecha:new Date().toISOString(),user:currentUser?.name||''});
+                                            });
+                                            saveStock(newStock);
+                                            saveMovimientos([...newMovs,...movimientos].slice(0,200));
+                                            // Guardar historial
+                                            const sucNombre = sucursales.find(s=>String(s.id)===controlSuc)?.nombre||controlSuc;
+                                            const prodsFiltradosSnap = controlCat ? productos.filter(p=>p.categoria===controlCat) : productos;
+                                            const diffsParaHistorial = prodsFiltradosSnap.filter(p=>controlData[p.id]!==undefined&&controlData[p.id]!=='').map(p=>{ const ant=getStock(p.id,controlSuc); const fis=parseFloat(controlData[p.id]); const dif=fis-ant; return {productoId:p.id,nombre:p.nombre,anterior:ant,nuevo:fis,diff:dif}; });
+                                            const entrada = {id:Date.now(),fecha:new Date().toISOString(),sucursal:sucNombre,categoria:controlCat||'Todas',user:currentUser?.name||'',diferencias:diffsParaHistorial,total:diffsParaHistorial.filter(d=>d.diff!==0).length};
+                                            const newHist = [entrada,...controlHistorial].slice(0,50);
+                                            setControlHistorial(newHist);
+                                            save('stock_control_historial', newHist);
+                                            setControlData({});
+                                            alert(L('Stock actualizado. '+newMovs.length+' productos corregidos.','Stock updated. '+newMovs.length+' products corrected.'));
+                                        }} className="flex-1 px-4 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium">
+                                            ✓ {L('Aplicar correcciones','Apply corrections')}
+                                        </button>}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            // Informe de diferencias
+                            <div className="space-y-3">
+                                <p className={`text-sm font-semibold ${txt}`}>{L('Informe de diferencias','Differences Report')} — {sucursales.find(s=>String(s.id)===controlSuc)?.nombre}</p>
+                                <div className={`rounded-xl border ${card} overflow-hidden`}>
+                                    <table className="w-full text-sm">
+                                        <thead className={darkMode?'bg-slate-700/50':'bg-slate-50'}>
+                                            <tr>
+                                                {[L('PRODUCTO','PRODUCT'),L('SISTEMA','SYSTEM'),L('FÍSICO','ACTUAL'),L('DIFERENCIA','DIFF')].map(h=>(
+                                                    <th key={h} className={`px-4 py-2.5 text-xs font-semibold ${sub} text-right first:text-left`}>{h}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                            {(controlCat ? productos.filter(p=>p.categoria===controlCat) : productos)
+                                                .filter(p=>controlData[p.id]!==undefined&&controlData[p.id]!=='')
+                                                .map(p=>{
+                                                    const sistema = getStock(p.id, controlSuc);
+                                                    const fisico = parseFloat(controlData[p.id]);
+                                                    const diff = fisico - sistema;
+                                                    return (
+                                                        <tr key={p.id} className={diff!==0?(darkMode?'bg-red-900/20':'bg-red-50'):''}>
+                                                            <td className={`px-4 py-2.5 font-medium ${txt}`}>{p.nombre}</td>
+                                                            <td className={`px-4 py-2.5 text-right font-mono ${sub}`}>{sistema}</td>
+                                                            <td className={`px-4 py-2.5 text-right font-mono font-bold ${diff>0?'text-green-600':diff<0?'text-red-600':'text-slate-500'}`}>{fisico}</td>
+                                                            <td className={`px-4 py-2.5 text-right font-mono font-bold ${diff>0?'text-green-600':diff<0?'text-red-600':'text-slate-400'}`}>{diff>0?'+':''}{diff.toFixed(2)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {activeTab === 'ingresos' && (
                     <div className="mt-4 space-y-3">
+                        {/* Edicion directa de stock */}
+                        <div className={`rounded-xl border ${card} p-3`}>
+                            <p className={`text-xs font-semibold mb-2 ${sub}`}>{L('✏️ MODIFICAR STOCK DIRECTAMENTE','✏️ EDIT STOCK DIRECTLY')}</p>
+                            <div className="flex gap-2 flex-wrap items-center">
+                                <select value={sucursalSel==='todas'?String(sucursales[0]?.id||''):sucursalSel} onChange={e=>setSucursalSel(e.target.value)}
+                                    className={`px-3 py-1.5 rounded-lg text-sm border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                    {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+                                </select>
+                                <p className={`text-xs ${sub}`}>{L('Seleccioná una sucursal en Stock para editar cantidades directamente','Select a branch in Stock tab to edit quantities directly')}</p>
+                                <button onClick={()=>{ if(sucursalSel==='todas') setSucursalSel(String(sucursales[0]?.id||'')); setActiveTab('stock'); }}
+                                    className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium">
+                                    → {L('Ir a Stock','Go to Stock')}
+                                </button>
+                            </div>
+                        </div>
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <p className={`text-sm font-semibold ${txt}`}>{L("Historial de ingresos","Inbound history")}</p>
-                                {categoriasProd.length > 0 && (
-                                    <select value={catFilter} onChange={e=>setCatFilter(e.target.value)}
-                                        className={`px-2 py-1 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
-                                        <option value="">{L('Todas las categorías','All categories')}</option>
-                                        {categoriasProd.map(c=><option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                )}
+                                {(categoriasProd.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 items-center">
+                                        <button onClick={()=>setCatFilter('')}
+                                            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===''?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
+                                            {L('Todas','All')}
+                                        </button>
+                                        {categoriasProd.map(c=>(
+                                            <button key={c} onClick={()=>setCatFilter(catFilter===c?'':c)}
+                                                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===c?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
+                                                {c}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ))}
                             </div>
                             <div className="flex gap-2 flex-wrap">
                                 {canEdit && <button onClick={() => { setIngForm({ productoId: '', branchId: sucursalSel || String(sucursales[0]?.id||''), cantidad: '', notas: '' }); setShowIngModal(true); }} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">{L('📥 1 producto','📥 1 product')}</button>}
@@ -26194,12 +26427,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 ? <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>
                                 : <table className="w-full text-sm">
                                     <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                        {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QUANTITY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                        {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QUANTITY'),L('USUARIO','USER'),L('ORIGEN','ORIGIN')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                     </tr></thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                         {movimientos.filter(m => m.tipo === 'ingreso' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter))).slice(0,50).map(m => {
                                             const prod = productos.find(p => String(p.id) === String(m.productoId));
-                                            const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId));
+                                            const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
                                             return (
                                                 <tr key={m.id}>
                                                     <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
@@ -26207,6 +26440,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
                                                     <td className={`px-4 py-2.5 font-mono font-bold text-green-500`}>+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
                                                     <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
+                                                    <td className={`px-4 py-2.5 text-xs ${sub} italic`}>{m.notas || '—'}</td>
                                                 </tr>
                                             );
                                         })}
@@ -26223,13 +26457,20 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <p className={`text-sm font-semibold ${txt}`}>{L('Historial de egresos','Outbound history')}</p>
-                                {categoriasProd.length > 0 && (
-                                    <select value={catFilter} onChange={e=>setCatFilter(e.target.value)}
-                                        className={`px-2 py-1 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
-                                        <option value="">{L('Todas las categorías','All categories')}</option>
-                                        {categoriasProd.map(c=><option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                )}
+                                {(categoriasProd.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 items-center">
+                                        <button onClick={()=>setCatFilter('')}
+                                            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===''?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
+                                            {L('Todas','All')}
+                                        </button>
+                                        {categoriasProd.map(c=>(
+                                            <button key={c} onClick={()=>setCatFilter(catFilter===c?'':c)}
+                                                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===c?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
+                                                {c}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ))}
                             </div>
                             {canEdit && <div className="flex gap-2">
                                 <button onClick={() => { setMovManualTipo('venta'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('📋 Carga manual','📋 Manual entry')}</button>
@@ -26241,7 +26482,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 ? <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>
                                 : <table className="w-full text-sm">
                                     <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                        {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                        {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER'),L('ORIGEN','ORIGIN')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                     </tr></thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                         {movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)))
@@ -26251,9 +26492,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
                                                     <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
                                                     <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{(productos.find(p=>String(p.id)===String(m.productoId)))?.nombre || '—'}</td>
-                                                    <td className={`px-3 py-2.5 text-xs ${sub}`}>{(sucursales.find(s=>String(s.id)===String(m.sucursalId)))?.nombre || m.notas || '—'}</td>
+                                                    <td className={`px-3 py-2.5 text-xs ${sub}`}>{(sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId)))?.nombre || '—'}</td>
                                                     <td className={`px-3 py-2.5 font-mono font-bold text-red-400 text-sm`}>-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{(productos.find(p=>String(p.id)===String(m.productoId)))?.unidad||''}</span></td>
                                                     <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
+                                                    <td className={`px-3 py-2.5 text-xs ${sub} italic`}>{m.notas || '—'}</td>
                                                 </tr>
                                             ))}
                                     </tbody>
@@ -26423,9 +26665,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Nombre del mercado */}
                                 <div>
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('MERCADO *','MARKET *')}</label>
-                                    <select value={mercadoForm.mercadoNombre} onChange={e=>setMercadoForm(f=>({...f,mercadoNombre:e.target.value}))} className={inp}>
-                                        {listaMercados.map(m=><option key={m} value={m}>{m}</option>)}
-                                    </select>
+                                    <div className="flex gap-2">
+                                        <select value={mercadoForm.mercadoNombre} onChange={e=>setMercadoForm(f=>({...f,mercadoNombre:e.target.value}))} className={`${inp} flex-1`}>
+                                            {listaMercados.map(m=><option key={m} value={m}>{m}</option>)}
+                                        </select>
+                                        <input value={mercadoForm.mercadoNombreCustom||''} onChange={e=>setMercadoForm(f=>({...f,mercadoNombreCustom:e.target.value,mercadoNombre:e.target.value||f.mercadoNombre}))}
+                                            placeholder={L('O escribir nombre...','Or type name...')} className={`${inp} flex-1 text-sm`}/>
+                                    </div>
                                 </div>
                                 {/* Fecha */}
                                 <div>
@@ -26445,7 +26691,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <div>
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('🔔 NOTIFICAR A (puede ser más de uno)','🔔 NOTIFY (can select multiple)')}</label>
                                     <div className="flex flex-wrap gap-2">
-                                        {(window.__systemUsersPrecargados||[]).filter(u=>u.activo!==false).map(u=>(
+                                        {(window.__systemUsersPrecargados||[]).filter((u,i,arr)=>u.activo!==false&&arr.findIndex(x=>x.id===u.id)===i).map(u=>(
                                             <button key={u.id} type="button"
                                                 onClick={()=>setMercadoForm(f=>({...f,destinatarios:(f.destinatarios||[]).includes(String(u.id))?(f.destinatarios||[]).filter(x=>x!==String(u.id)):[...(f.destinatarios||[]),String(u.id)]}))}
                                                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${(mercadoForm.destinatarios||[]).includes(String(u.id))?'bg-orange-500 text-white':'border text-sm ' + (darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700')}`}>
@@ -26514,6 +26760,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             dbGetKey('app_config', notifKey).then(existing=>{
                                                 const arr = Array.isArray(existing)?existing:[];
                                                 dbUpsertOne('app_config', notifKey, [n,...arr].slice(0,20));
+                                                // Forzar recarga inmediata igual que sueldoNotif
+                                                window.__lastNotifFetch = 0;
+                                                window.dispatchEvent(new Event('notifUpdate'));
                                             });
                                             // También guardar en key empId si el usuario tiene empleado asociado
                                             const userObj = (window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(destId));
@@ -26628,9 +26877,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-2">
                                 {listaMercados.map((m,i)=>(
-                                    <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${darkMode?'bg-slate-700':'bg-slate-50'}`}>
-                                        <input value={m} onChange={e=>{const v=[...listaMercados];v[i]=e.target.value;saveListaMercados(v);}} className={`flex-1 text-sm bg-transparent border-none outline-none ${txt}`}/>
-                                        <button onClick={()=>{if(confirm(L('¿Eliminar?','Delete?'))) saveListaMercados(listaMercados.filter((_,j)=>j!==i));}} className="text-red-400 hover:text-red-600 shrink-0">🗑️</button>
+                                    <div key={i} className={`flex items-center gap-2 rounded-lg`}>
+                                        <input value={m} onChange={e=>{const v=[...listaMercados];v[i]=e.target.value;saveListaMercados(v);}}
+                                            className={`flex-1 text-sm px-3 py-2 rounded-lg border-2 font-medium transition-colors focus:border-orange-400 outline-none ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200 text-slate-800'}`}/>
+                                        <button onClick={()=>{if(confirm(L('¿Eliminar?','Delete?'))) saveListaMercados(listaMercados.filter((_,j)=>j!==i));}} className="text-red-400 hover:text-red-600 shrink-0 text-lg px-1">🗑️</button>
                                     </div>
                                 ))}
                             </div>
