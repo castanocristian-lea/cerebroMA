@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-10:58 - Optimizar carga inicial: requests paralelos, menos rondas secuenciales -->
+<!-- Version: 2026-05-11-11:10 - Fix Cobrado Hoy: carga directa a Supabase independiente del cache -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -5725,30 +5725,35 @@ ${invoice.items.map(item => `
             const [mesesAbiertos, setMesesAbiertos] = useState({});
             const toggleMes = (mes) => setMesesAbiertos(prev => ({...prev, [mes]: !prev[mes]}));
 
+            // ── Carga inicial independiente de cache ──
             useEffect(() => {
-                Promise.all([
-                    dbGetAll('employees'),
-                    dbGetKey('payroll_monthly', 'main'),
-                    dbGetKey('payroll_insurance', 'main'),
-                ]).then(([emps, pay, seg]) => {
-                    const empsList = emps || [];
-                    setEmpleados(empsList);
-                    setPayroll(pay || window.__payrollDataPrecargada || {});
-                    setSeguros(seg || window.__seguroDataPrecargada || {});
+                const cargarMiSueldo = async () => {
+                    const [emps, pay, seg] = await Promise.all([
+                        dbGetAll('employees'),
+                        window._sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
+                        window._sb.from('payroll_insurance').select('data').eq('id','main').maybeSingle(),
+                    ]);
+                    setEmpleados(emps || window.__employeesPrecargados || []);
+                    const payData = pay?.data?.data || window.__payrollDataPrecargada || {};
+                    const segData = seg?.data?.data || window.__seguroDataPrecargada || {};
+                    setPayroll(payData);
+                    setSeguros(segData);
+                    window.__payrollDataPrecargada = payData;
+                    window.__seguroDataPrecargada = segData;
                     setLoaded(true);
-                });
+                };
+                cargarMiSueldo();
             }, []);
 
-            // Polling cada 30s para actualizar cobros del día
+            // Polling cada 30s para Cobrado Hoy — independiente del sistema de banners
             useEffect(() => {
-                const interval = setInterval(() => {
-                    Promise.all([
-                        dbGetKey('payroll_monthly', 'main'),
-                        dbGetKey('payroll_insurance', 'main'),
-                    ]).then(([pay, seg]) => {
-                        if (pay) { setPayroll(pay); window.__payrollDataPrecargada = pay; }
-                        if (seg) setSeguros(seg);
-                    });
+                const interval = setInterval(async () => {
+                    const [pay, seg] = await Promise.all([
+                        window._sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
+                        window._sb.from('payroll_insurance').select('data').eq('id','main').maybeSingle(),
+                    ]);
+                    if (pay?.data?.data) { setPayroll(pay.data.data); window.__payrollDataPrecargada = pay.data.data; }
+                    if (seg?.data?.data) { setSeguros(seg.data.data); window.__seguroDataPrecargada = seg.data.data; }
                 }, 30000);
                 return () => clearInterval(interval);
             }, []);
