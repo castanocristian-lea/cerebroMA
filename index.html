@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-10:30 - Optimización egress: cache 30s, polling 60s, batch load, movimientos limitados -->
+<!-- Version: 2026-05-11-10:40 - Fix cache: excluir payroll de cache para que Cobrado Hoy funcione -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -35,15 +35,21 @@
             if (error) { console.error('dbGetAll', table, error); return []; }
             return data.map(r => r.data);
         }
+        // Tablas que NO deben cachearse (necesitan datos frescos)
+        const DB_NO_CACHE = new Set(['payroll_monthly','payroll_insurance','system_users','employees']);
         async function dbGetKey(table, key) {
-            // Check window cache first (valid for 30s)
-            const cacheKey = `__dbcache_${table}_${key}`;
-            const cached = window[cacheKey];
-            if (cached && cached.ts && (Date.now()-cached.ts) < 30000) return cached.val;
+            // Check window cache first (valid for 30s) — skip for realtime tables
+            if (!DB_NO_CACHE.has(table)) {
+                const cacheKey = `__dbcache_${table}_${key}`;
+                const cached = window[cacheKey];
+                if (cached && cached.ts && (Date.now()-cached.ts) < 30000) return cached.val;
+            }
             const { data, error } = await _sb.from(table).select('data').eq('id', key).maybeSingle();
             if (error) return null;
             const val = data?.data ?? null;
-            window[cacheKey] = {val, ts: Date.now()};
+            if (!DB_NO_CACHE.has(table)) {
+                window[`__dbcache_${table}_${key}`] = {val, ts: Date.now()};
+            }
             return val;
         }
         async function dbGetKeyBatch(table, keys) {
