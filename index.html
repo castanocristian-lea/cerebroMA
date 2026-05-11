@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-18:10 - Cocina: rm drive btn, cat filter stock/ing/egr, CSV modelo ingresos -->
+<!-- Version: 2026-05-11-19:20 - Mercados: PDF abre en explorador, compartir separado -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -2552,7 +2552,8 @@ ${invoice.items.map(item => `
                 if (new1 === current) { setChangePinError('El nuevo PIN no puede ser igual al actual.'); return; }
                 const systemUsers = (window.__systemUsersPrecargados || []);
                 const updatedUsers = systemUsers.map(u => u.id === currentUser.id ? { ...u, pin: new1 } : u);
-                
+                window.__systemUsersPrecargados = updatedUsers;
+                window.__systemCredsPrecargadas = updatedUsers;
                 dbSetArray('system_users', updatedUsers);
                 setCurrentUser({ ...currentUser, pin: new1 });
                 setChangePinSuccess(true);
@@ -25730,6 +25731,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             const qty  = parseFloat(row['Quantity sold'] || row['Množství'] || row['Qty'] || Object.values(row)[2]) || 0;
                             return { producto: String(prod||'').trim(), cantidad: qty };
                         }).filter(r => r.producto && r.cantidad > 0 && !/variable|tip|bolsa|taška/i.test(r.producto));
+                        const canonicalize = (name) => {
+                            const lc = name.toLowerCase().trim();
+                            const match = productos.find(p => p.nombre.toLowerCase().trim()===lc || (p.aliases||[]).some(a=>a.toLowerCase().trim()===lc));
+                            return match ? match.nombre : name;
+                        };
+                        const merged = {};
+                        rows.forEach(r => { const canon = canonicalize(r.producto); merged[canon] = (merged[canon]||0) + r.cantidad; });
+                        const mergedRows = Object.entries(merged).map(([producto,cantidad])=>({producto,cantidad}));
                         setVentasPreview(mergedRows);
                     } catch(e) { setVentasError('Error al leer el archivo: ' + e.message); }
                 };
@@ -25993,28 +26002,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                             ))}
                                                         </div>
                                                     )}
-                                                    {canEdit && sucursalSel !== 'todas' ? (
-                                                        <input
-                                                            key={`${p.id}_${sucursalSel}`}
-                                                            type="number" min="0" step="0.01"
-                                                            defaultValue={p.cantidad}
-                                                            onBlur={e => {
-                                                                const val = parseFloat(e.target.value);
-                                                                if (isNaN(val)) return;
-                                                                const k = stockKey(p.id, sucursalSel);
-                                                                const prev = parseFloat(stock[k] || 0);
-                                                                if (val === prev) return;
-                                                                const diff = val - prev;
-                                                                const newStock = { ...stock, [k]: val };
-                                                                saveStock(newStock);
-                                                                const mov = { id: Date.now(), tipo: diff > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, cantidad: Math.abs(diff), notas: 'Edición manual', fecha: new Date().toISOString(), user: currentUser?.name || '' };
-                                                                saveMovimientos([mov, ...movimientos].slice(0, 200));
-                                                            }}
-                                                            className={`w-24 px-2 py-1.5 text-right font-mono font-bold text-base border-2 rounded-lg ${p.alerta ? 'text-red-500 border-red-300' : 'text-green-600 border-green-300'} ${darkMode ? 'bg-slate-700' : 'bg-white'}`}
-                                                        />
-                                                    ) : (
-                                                        <span className={`font-mono font-bold text-base ${p.cantidad < 0 ? 'text-red-600 font-extrabold' : p.alerta ? 'text-red-500' : 'text-green-600'}`}>{p.cantidad < 0 ? '⚠️ ' : ''}{p.cantidad}</span>
-                                                    ) }
+                                                    <span className={`font-mono font-bold text-base ${p.cantidad < 0 ? 'text-red-600 font-extrabold' : p.alerta ? 'text-red-500' : 'text-green-600'}`}>{p.cantidad < 0 ? '⚠️ ' : ''}{p.cantidad}</span>
                                                     <span className={`text-sm ml-1 ${sub}`}>{p.unidad}</span>
                                                 </td>
                                                 <td className={`px-4 py-4 text-right font-mono text-sm ${sub}`}>{p.minimo || '—'}</td>
@@ -26087,14 +26075,70 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <button onClick={()=>{
                                                         const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
                                                         const { jsPDF } = window.jspdf;
-                                                        const doc = new jsPDF();
-                                                        doc.setFontSize(16); doc.text('🏪 ' + m.mercadoNombre, 20, 20);
-                                                        doc.setFontSize(11); doc.text('Fecha: ' + (m.fecha||''), 20, 30);
-                                                        doc.text('Creado por: ' + (m.creadoPor||'') + ' · ' + (m.creadoAt?new Date(m.creadoAt).toLocaleDateString('es-AR'):''), 20, 38);
-                                                        doc.setFontSize(12); doc.text('Lista de productos:', 20, 50);
-                                                        prods.forEach((p,i)=>{ doc.setFontSize(10); doc.text((i+1)+'. ' + p.nombre + '  —  ' + (p.cantidad||'?') + (p.notas?' ('+p.notas+')':''), 25, 60+i*8); });
-                                                        doc.save('mercado-' + m.mercadoNombre.replace(/\s/g,'-') + '-' + (m.fecha||'') + '.pdf');
-                                                    }} className={`w-7 h-7 flex items-center justify-center rounded-lg text-sm ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>📄</button>
+                                                        const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+                                                        doc.setFillColor(249,115,22); doc.rect(0,0,210,22,'F');
+                                                        doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont('helvetica','bold');
+                                                        doc.text(m.mercadoNombre, 14, 14);
+                                                        doc.setTextColor(40,40,40); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+                                                        const fechaFmt = m.fecha ? new Date(m.fecha+'T12:00').toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : '';
+                                                        doc.text('Fecha: ' + fechaFmt, 14, 30);
+                                                        doc.text('Creado por: ' + (m.creadoPor||''), 14, 37);
+                                                        doc.setFillColor(243,244,246); doc.rect(14,44,182,8,'F');
+                                                        doc.setFont('helvetica','bold'); doc.setFontSize(9);
+                                                        doc.text('PRODUCTO', 18, 50); doc.text('CANTIDAD', 130, 50); doc.text('NOTAS', 158, 50);
+                                                        doc.setFont('helvetica','normal'); doc.setFontSize(10);
+                                                        let y = 58;
+                                                        prods.forEach((p,i)=>{
+                                                            if(i%2===0){ doc.setFillColor(250,250,250); doc.rect(14,y-5,182,9,'F'); }
+                                                            doc.setTextColor(40,40,40); doc.text(String(p.nombre||''), 18, y);
+                                                            doc.setFont('helvetica','bold'); doc.setTextColor(249,115,22);
+                                                            doc.text(String(p.cantidad||'-'), 130, y);
+                                                            doc.setFont('helvetica','normal'); doc.setTextColor(100,100,100); doc.setFontSize(9);
+                                                            doc.text(String(p.notas||''), 158, y);
+                                                            doc.setFontSize(10); doc.setTextColor(40,40,40);
+                                                            y += 9;
+                                                        });
+                                                        doc.setDrawColor(200,200,200); doc.rect(14,44,182,y-44);
+                                                        // Abrir en el explorador (nueva pestaña)
+                                                        const blob = doc.output('blob');
+                                                        const url = URL.createObjectURL(blob);
+                                                        window.open(url, '_blank');
+                                                    }} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium ${darkMode?'bg-slate-700 text-slate-300 hover:bg-slate-600':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>📄 PDF</button>
+                                                    <button onClick={async ()=>{
+                                                        const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
+                                                        const { jsPDF } = window.jspdf;
+                                                        const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+                                                        doc.setFillColor(249,115,22); doc.rect(0,0,210,22,'F');
+                                                        doc.setTextColor(255,255,255); doc.setFontSize(16); doc.setFont('helvetica','bold');
+                                                        doc.text(m.mercadoNombre, 14, 14);
+                                                        doc.setTextColor(40,40,40); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+                                                        const fechaFmt2 = m.fecha ? new Date(m.fecha+'T12:00').toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : '';
+                                                        doc.text('Fecha: ' + fechaFmt2, 14, 30);
+                                                        doc.text('Creado por: ' + (m.creadoPor||''), 14, 37);
+                                                        doc.setFillColor(243,244,246); doc.rect(14,44,182,8,'F');
+                                                        doc.setFont('helvetica','bold'); doc.setFontSize(9);
+                                                        doc.text('PRODUCTO', 18, 50); doc.text('CANTIDAD', 130, 50); doc.text('NOTAS', 158, 50);
+                                                        doc.setFont('helvetica','normal'); doc.setFontSize(10);
+                                                        let y2 = 58;
+                                                        prods.forEach((p,i)=>{
+                                                            if(i%2===0){ doc.setFillColor(250,250,250); doc.rect(14,y2-5,182,9,'F'); }
+                                                            doc.setTextColor(40,40,40); doc.text(String(p.nombre||''), 18, y2);
+                                                            doc.setFont('helvetica','bold'); doc.setTextColor(249,115,22);
+                                                            doc.text(String(p.cantidad||'-'), 130, y2);
+                                                            doc.setFont('helvetica','normal'); doc.setTextColor(100,100,100); doc.setFontSize(9);
+                                                            doc.text(String(p.notas||''), 158, y2);
+                                                            doc.setFontSize(10); doc.setTextColor(40,40,40);
+                                                            y2 += 9;
+                                                        });
+                                                        const filename = 'mercado-' + m.mercadoNombre.replace(/\s/g,'-') + '-' + (m.fecha||'') + '.pdf';
+                                                        const pdfBlob = doc.output('blob');
+                                                        const file = new File([pdfBlob], filename, {type:'application/pdf'});
+                                                        if (navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
+                                                            try { await navigator.share({files:[file], title: m.mercadoNombre}); return; } catch(e) {}
+                                                        }
+                                                        // Fallback desktop: download
+                                                        doc.save(filename);
+                                                    }} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium ${darkMode?'bg-slate-700 text-slate-300 hover:bg-slate-600':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>📤 {L('Compartir','Share')}</button>
                                                     {canEdit && <button onClick={() => {
                                                         setEditingMercado(m);
                                                         setMercadoForm({...m, productos: productos.map(p=>{ const ex=(m.productos||[]).find(x=>String(x.id)===String(p.id)); return {...p, cantidad:ex?.cantidad||'', notas:ex?.notas||''}; })});
@@ -26141,15 +26185,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 )}
                             </div>
                             <div className="flex gap-2 flex-wrap">
-                                <button onClick={()=>{
-                                    const rows = [['nombre','categoria','unidad','minimo','alias1','alias2','alias3'],...productos.map(p=>[p.nombre,p.categoria||'',p.unidad||'unidad',p.minimo||'',...(p.aliases||[])])];
-                                    const csv = rows.map(r=>r.join(',')).join('
-');
-                                    const a = document.createElement('a');
-                                    a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-                                    a.download = 'modelo_ingreso_masivo.csv';
-                                    a.click();
-                                }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>⬇️ {L('Modelo CSV','CSV Template')}</button>
                                 {canEdit && <button onClick={() => { setIngForm({ productoId: '', branchId: sucursalSel || String(sucursales[0]?.id||''), cantidad: '', notas: '' }); setShowIngModal(true); }} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">{L('📥 1 producto','📥 1 product')}</button>}
                                 {canEdit && <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">{L('📋 Lista completa','📋 Full list')}</button>}
                             </div>
@@ -26235,6 +26270,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <p className={`text-sm font-semibold ${txt}`}>{productos.length} producto{productos.length!==1?'s':''}</p>
                             <div className="flex gap-2">
                                 {canEdit && <button onClick={()=>setShowCatModal(true)} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>🏷️ {L('Categorías','Categories')}</button>}
+                                <button onClick={()=>{
+                                    const XLSX = window.XLSX;
+                                    const data = [['nombre','categoria','unidad','minimo','alias1','alias2','alias3'],...productos.map(p=>[p.nombre,p.categoria||'',p.unidad||'unidad',p.minimo||'',...(p.aliases||[]),'','',''].slice(0,7))];
+                                    const ws = XLSX.utils.aoa_to_sheet(data);
+                                    ws['!cols'] = [{wch:30},{wch:15},{wch:10},{wch:8},{wch:20},{wch:20},{wch:20}];
+                                    const wb = XLSX.utils.book_new();
+                                    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+                                    XLSX.writeFile(wb, 'productos.xlsx');
+                                }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>⬇️ Excel</button>
+                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; rows.forEach(row=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const existe=productos.find(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(existe){ setProductos(prev=>prev.map(p=>p.id===existe.id?{...p,categoria:String(row.categoria||p.categoria||''),unidad:String(row.unidad||p.unidad||'unidad'),minimo:String(row.minimo||p.minimo||''),aliases:[...new Set([...(p.aliases||[]),...aliases])]}:p)); actualizados++; } else { setProductos(prev=>[...prev,{id:Date.now()+Math.random(),nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}]); creados++; } }); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
                                 {canEdit && <button onClick={() => { setEditingProd(null); setProdForm({ nombre: '', categoria: '', unidad: 'unidad', minimo: '', aliases: [] }); setShowProdModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nuevo producto','+ New product')}</button>}
                             </div>
                         </div>
@@ -26463,12 +26508,30 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     // Notificar a los seleccionados
                                     if (isNew) {
                                         (mercadoForm.destinatarios||[]).forEach(destId=>{
+                                            const n = {id:Date.now()+Math.random(),mercadoId:data.id,destinatarioId:String(destId),mercadoNombre:mercadoForm.mercadoNombre,fecha:mercadoForm.fecha,productos:(mercadoForm.productos||[]).filter(p=>p.cantidad||p.notas),creadoPor:currentUser?.name||'',visto:false,creadoAt:new Date().toISOString()};
+                                            // Guardar en key userId
                                             const notifKey = 'notif_mercadoNotif_'+destId;
                                             dbGetKey('app_config', notifKey).then(existing=>{
                                                 const arr = Array.isArray(existing)?existing:[];
-                                                const n = {id:Date.now()+Math.random(),mercadoId:data.id,destinatarioId:destId,mercadoNombre:mercadoForm.mercadoNombre,fecha:mercadoForm.fecha,productos:(mercadoForm.productos||[]).filter(p=>p.cantidad||p.notas),creadoPor:currentUser?.name||'',visto:false,creadoAt:new Date().toISOString()};
                                                 dbUpsertOne('app_config', notifKey, [n,...arr].slice(0,20));
                                             });
+                                            // También guardar en key empId si el usuario tiene empleado asociado
+                                            const userObj = (window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(destId));
+                                            if (userObj) {
+                                                const emps = window.__employeesPrecargados||[];
+                                                const emp = emps.find(e=>{
+                                                    const en=(e.nombre+' '+e.apellido).toLowerCase();
+                                                    const un=(userObj.name||userObj.username||'').toLowerCase();
+                                                    return en.includes(un)||un.includes((e.nombre||'').toLowerCase());
+                                                });
+                                                if (emp && String(emp.id)!==String(destId)) {
+                                                    const empKey = 'notif_mercadoNotif_'+emp.id;
+                                                    dbGetKey('app_config', empKey).then(existing=>{
+                                                        const arr = Array.isArray(existing)?existing:[];
+                                                        dbUpsertOne('app_config', empKey, [{...n,destinatarioId:String(emp.id)},...arr].slice(0,20));
+                                                    });
+                                                }
+                                            }
                                         });
                                     }
                                     setShowMercadoModal(false); setEditingMercado(null);
