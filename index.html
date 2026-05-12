@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-16:45 - Fix bioCred + helpPrefs: cargar desde Supabase al login -->
+<!-- Version: 2026-05-12-17:15 - Fix syntax: brace balance verificado con parser, todos los scripts OK -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -14410,12 +14410,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     Object.keys(allTx).forEach(yr => {
                         allTx[yr] = (allTx[yr] || []).filter(t => t.id !== pago.cajaId);
                     });
-                    
                     window.__cajaPrecargada = allTx;
                     dbUpsertOne('cash_transactions', 'multiyear', allTx);
                     window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
-
-
+                }
             };
 
             // Solo los pagos de concepto 'sueldo' descuentan del sueldo adeudado
@@ -16848,6 +16846,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 </div>
             );
         };
+
 
 
         
