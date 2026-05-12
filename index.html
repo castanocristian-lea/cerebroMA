@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-18:20 - Fix helpPrefs+bioCred: setear window.__currentUserId al login -->
+<!-- Version: 2026-05-12-18:30 - Fix helpPrefs/bioCred: cargar prefs también en login biométrico -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1912,7 +1912,22 @@ ${invoice.items.map(item => `
                     const user = users.find(u => String(u.id) === String(storedCred.userId));
                     if (user) {
                         setCurrentUser(user);
-                        
+                        window.__currentUserId = user.id;
+                        if (user.language) { setCurrentLanguage(user.language); window.__userLanguage = user.language; }
+                        // Cargar prefs antes de desbloquear
+                        try {
+                            const [dm, autoLogout, bioCred, helpPrefs] = await Promise.all([
+                                dbGetKey('app_config', `darkMode_${user.id}`),
+                                dbGetKey('app_config', `autoLogout_${user.id}`),
+                                window._sb?.from('app_config').select('data').eq('id','bioCred_'+user.id).maybeSingle(),
+                                window._sb?.from('app_config').select('data').eq('id','helpPrefs_'+user.id).maybeSingle(),
+                            ]);
+                            if (dm != null) { setDarkMode(!!dm); window.__userDarkMode = !!dm; }
+                            const logoutVal = autoLogout != null ? parseInt(autoLogout) : (user.autoLogoutMinutes != null ? parseInt(user.autoLogoutMinutes) : 5);
+                            setAutoLogoutMinutes(logoutVal);
+                            if (bioCred?.data?.data) window.__bioCred = JSON.stringify(bioCred.data.data);
+                            if (helpPrefs?.data?.data) window.__userHelpPrefs = helpPrefs.data.data;
+                        } catch(e) {}
                         setIsUnlocked(true);
                     } else {
                         setBioError('Usuario no encontrado. Usá el PIN.');
