@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-14:30 - Fix caja vacía: mover carga a ronda 1, cash_transactions sin cache, fix parser maybeSingle -->
+<!-- Version: 2026-05-12-16:00 - localStorage ERRADICADO: darkMode/language/moduleOrder/helpPrefs/webhookUrl/bio/logs → Supabase+window.__ -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -263,7 +263,6 @@
 
                 // cash_transactions multiyear
                 const _cashTx = cashTx.data?.data || {}; 
-                console.log('💰 cashTx raw:', cashTx, 'parsed:', _cashTx, 'keys:', Object.keys(_cashTx));
                 if (Object.keys(_cashTx).length > 0) { window.__cashTxPrecargadas = _cashTx; window.__cajaPrecargada = _cashTx; }
 
                 // calendar_config
@@ -456,7 +455,7 @@
         (function() {
             const PAYROLL_KEY = 'payrollMonthlyData';
             const MARKER = '__horasHistoricas2026v2__';
-            if (localStorage.getItem(MARKER)) return; // ya se ejecutó
+            if (window.__horasHistoricas2026v2) return; window.__horasHistoricas2026v2 = true;
 
             const employees = (window.__employeesPrecargados || []);
             const payrollData = window.__payrollDataPrecargada || {};
@@ -550,32 +549,32 @@
             });
 
             window.__payrollDataPrecargada = payrollData;
-            try { localStorage.setItem(MARKER, '1'); } catch(e) {}
+            
         })();
 
         // ── AJUSTE PUNTUAL: Santiago marzo 2026 = 33.3 hs (único pago banco 10.000/300) ──
         (() => {
             const FIX_MARKER = '__santiagoBancoFix2026v1__';
-            if (localStorage.getItem(FIX_MARKER)) return;
+            if (window.__santiagoBancoFix2026v1) return; window.__santiagoBancoFix2026v1 = true;
             const employees = (window.__employeesPrecargados || []);
             const santiago = employees.find(e =>
                 (e.apellido || '').toLowerCase().includes('perez') &&
                 (e.nombre || '').toLowerCase().includes('santiago')
             );
-            if (!santiago) { try { localStorage.setItem(FIX_MARKER, '1'); } catch(e) {} return; }
+            if (!santiago) return;
             const ajusteKey = santiago.id + '_2026_2'; // marzo = mes 2
             const ajustes = window.__horasAjustesPrecargados || {};
             ajustes[ajusteKey] = 33.3;
             window.__horasAjustesPrecargados = ajustes;
             dbUpsertOne('payroll_hours','main',ajustes);
-            try { localStorage.setItem(FIX_MARKER, '1'); } catch(e) {}
+            
             console.log('Fix Santiago marzo 2026: 33.3 hs guardado en horasAjustesData');
         })();
 
         // ── LIMPIEZA: eliminar entradas del script histórico v1 que quedaron con fecha incorrecta ──
         (() => {
             const CLEAN_MARKER = '__horasClean2026v2__';
-            if (localStorage.getItem(CLEAN_MARKER)) return;
+            if (window.__horasClean2026v2) return; window.__horasClean2026v2 = true;
 
             const PAYROLL_KEY = 'payrollMonthlyData';
             const payrollData = window.__payrollDataPrecargada || {};
@@ -622,7 +621,7 @@
                 window.__payrollDataPrecargada = payrollData;
                 console.log('Limpieza completada — recargando...');
             }
-            try { localStorage.setItem(CLEAN_MARKER, '1'); } catch(e) {}
+            
         })();
     </script>
     <style>
@@ -1785,7 +1784,7 @@ ${invoice.items.map(item => `
 
 
             const [bioAvailable, setBioAvailable] = useState(!!window.PublicKeyCredential);
-            const [bioRegistered, setBioRegistered] = useState(!!localStorage.getItem('cerebroma_bio_cred')); // updated async below
+            const [bioRegistered, setBioRegistered] = useState(!!window.__bioCred); // updated async below
             const [bioLoading, setBioLoading] = useState(false);
             const [bioError, setBioError] = useState('');
 
@@ -1795,7 +1794,7 @@ ${invoice.items.map(item => `
                     setBioAvailable(true); // forzar true si API existe (iOS Safari puede dar false incorrectamente)
                 }
                 // Verificar si ya hay credencial en localStorage
-                const cred = localStorage.getItem('cerebroma_bio_cred');
+                const cred = window.__bioCred;
                 if (cred) { setBioRegistered(true); return; }
                 // Precargar credenciales bio de todos los usuarios desde Supabase
                 (async () => {
@@ -1808,7 +1807,7 @@ ${invoice.items.map(item => `
                         results.forEach((r, i) => {
                             if (r?.data?.data) {
                                 // Guardar con clave estándar para que loginConBiometria la encuentre
-                                localStorage.setItem('cerebroma_bio_cred', JSON.stringify(r.data.data));
+                                window.__bioCred = JSON.stringify(r.data.data);
                                 setBioRegistered(true);
                             }
                         });
@@ -1819,13 +1818,13 @@ ${invoice.items.map(item => `
             // Restaurar credencial desde Supabase al loguearse
             useEffect(() => {
                 if (!currentUser) return;
-                const cred = localStorage.getItem('cerebroma_bio_cred');
+                const cred = window.__bioCred;
                 if (cred) { setBioRegistered(true); return; }
                 // Buscar en Supabase
                 window._sb?.from('app_config').select('data').eq('id', 'bioCred_'+currentUser.id).maybeSingle()
                     .then(r => {
                         if (r?.data?.data) {
-                            localStorage.setItem('cerebroma_bio_cred', JSON.stringify(r.data.data));
+                            window.__bioCred = JSON.stringify(r.data.data);
                             setBioRegistered(true);
                         }
                     }).catch(() => {});
@@ -1862,7 +1861,7 @@ ${invoice.items.map(item => `
                         userId: user.id,
                         userName: user.name
                     };
-                    localStorage.setItem('cerebroma_bio_cred', JSON.stringify(credData));
+                    window.__bioCred = JSON.stringify(credData);
                     // También guardar en Supabase para persistir entre sesiones
                     try {
                         await window._sb?.from('app_config').upsert({ id: 'bioCred_'+user.id, data: credData });
@@ -1882,7 +1881,7 @@ ${invoice.items.map(item => `
                 setBioLoading(true);
                 setBioError('');
                 try {
-                    let storedCred = JSON.parse(localStorage.getItem('cerebroma_bio_cred') || 'null');
+                    let storedCred = JSON.parse(window.__bioCred || 'null');
                     // Si no hay en localStorage, intentar cargar de Supabase
                     if (!storedCred) {
                         try {
@@ -1890,7 +1889,7 @@ ${invoice.items.map(item => `
                             for (const u of users) {
                                 const r = await window._sb?.from('app_config').select('data').eq('id','bioCred_'+u.id).maybeSingle();
                                 if (r?.data?.data) {
-                                    localStorage.setItem('cerebroma_bio_cred', JSON.stringify(r.data.data));
+                                    window.__bioCred = JSON.stringify(r.data.data);
                                     storedCred = r.data.data;
                                     break;
                                 }
@@ -1915,7 +1914,7 @@ ${invoice.items.map(item => `
                     const user = users.find(u => String(u.id) === String(storedCred.userId));
                     if (user) {
                         setCurrentUser(user);
-                        localStorage.setItem('malagestion_current_user', JSON.stringify(user));
+                        
                         setIsUnlocked(true);
                     } else {
                         setBioError('Usuario no encontrado. Usá el PIN.');
@@ -1961,7 +1960,7 @@ ${invoice.items.map(item => `
                 // Persistir preferencia por usuario
                 const systemUsers = (window.__systemUsersPrecargados || []);
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, autoLogoutMinutes } : u);
-                try { localStorage.setItem(`userPref_autoLogout_${currentUser.id}`, String(autoLogoutMinutes)); } catch(e) {}
+                
                 // Guardar en app_config como clave separada (más confiable)
                 dbUpsertOne('app_config', `autoLogout_${currentUser.id}`, autoLogoutMinutes);
                 // También en system_users
@@ -2006,21 +2005,17 @@ ${invoice.items.map(item => `
 
             const [moduleOrder, setModuleOrder] = React.useState(() => {
                 if (!currentUser) return DEFAULT_MODULE_ORDER;
-                const saved = localStorage.getItem(getModuleOrderKey(currentUser));
-                return mergeModuleOrder(saved ? JSON.parse(saved) : null);
+                return mergeModuleOrder(window.__moduleOrder || null);
             });
             
-            // Actualizar orden cuando cambia el usuario
             const currentUserId = currentUser ? currentUser.id : null;
             React.useEffect(() => {
                 if (currentUser) {
-                    const saved = localStorage.getItem(getModuleOrderKey(currentUser));
-                    setModuleOrder(mergeModuleOrder(saved ? JSON.parse(saved) : null));
-                    // Cargar desde Supabase
+                    setModuleOrder(mergeModuleOrder(window.__moduleOrder || null));
                     dbGetKey('app_config', 'moduleOrder_'+currentUser.id).then(d => {
                         if (d && d.length > 0) {
+                            window.__moduleOrder = d;
                             setModuleOrder(mergeModuleOrder(d));
-                            localStorage.setItem(getModuleOrderKey(currentUser), JSON.stringify(d));
                         }
                     });
                 }
@@ -2029,7 +2024,7 @@ ${invoice.items.map(item => `
             const saveModuleOrder = (newOrder) => {
                 setModuleOrder(newOrder);
                 if (currentUser) {
-                    localStorage.setItem(getModuleOrderKey(currentUser), JSON.stringify(newOrder));
+                    window.__moduleOrder = newOrder;
                     dbUpsertOne('app_config', 'moduleOrder_'+currentUser.id, newOrder);
                 }
             };
@@ -2046,31 +2041,12 @@ ${invoice.items.map(item => `
             };
             const moveModuleRow = (index, dir) => moveModule(index, dir);
             
-            // Sistema de auditoría
             const logAccess = (moduleName) => {
                 if (!currentUser) return;
-                
-                const accessLog = {
-                    userId: currentUser.id,
-                    userName: currentUser.name,
-                    module: moduleName,
-                    timestamp: new Date().toISOString(),
-                    date: new Date().toLocaleString('es-ES')
-                };
-                
-                // Obtener logs existentes
-                const existingLogs = JSON.parse(localStorage.getItem('accessLogs') || '[]');
-                
-                // Agregar nuevo log
-                existingLogs.push(accessLog);
-                
-                // Mantener solo los últimos 100 registros
-                if (existingLogs.length > 100) {
-                    existingLogs.splice(0, existingLogs.length - 100);
-                }
-                
-                // Guardar
-                try { localStorage.setItem('accessLogs', JSON.stringify(existingLogs)); } catch(e) {}
+                const accessLog = { userId: currentUser.id, userName: currentUser.name, module: moduleName, timestamp: new Date().toISOString(), date: new Date().toLocaleString('es-ES') };
+                window.__accessLogs = window.__accessLogs || [];
+                window.__accessLogs.push(accessLog);
+                if (window.__accessLogs.length > 100) window.__accessLogs = window.__accessLogs.slice(-100);
             };
             
             // Wrapper para setActiveModule que registra el acceso
@@ -2080,8 +2056,8 @@ ${invoice.items.map(item => `
                     logAccess(moduleName);
                 }
             };
-            const [currentLanguage, setCurrentLanguage] = useState(localStorage.getItem('malagestion_language') || 'es');
-            const [darkMode, setDarkMode] = useState(localStorage.getItem('malagestion_darkMode') === 'true');
+            const [currentLanguage, setCurrentLanguage] = useState(window.__userLanguage || 'es');
+            const [darkMode, setDarkMode] = useState(window.__userDarkMode || false);
             
             // Traducciones completas
             const translations = {
@@ -2253,11 +2229,11 @@ ${invoice.items.map(item => `
             
             const changeLanguage = (lang) => {
                 setCurrentLanguage(lang);
-                try { localStorage.setItem('malagestion_language', lang); } catch(e) {}
+                window.__userLanguage = lang;
                 if (!currentUser) return;
                 const systemUsers = (window.__systemUsersPrecargados || []);
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, language: lang } : u);
-                
+                window.__systemUsersPrecargados = updated;
                 dbSetArray('system_users', updated);
             };
             
@@ -2290,7 +2266,8 @@ ${invoice.items.map(item => `
             const toggleDarkMode = () => {
                 const newMode = !darkMode;
                 setDarkMode(newMode);
-                localStorage.setItem('malagestion_darkMode', newMode.toString());
+                window.__userDarkMode = newMode;
+                if (currentUser) dbUpsertOne('app_config', `darkMode_${currentUser.id}`, newMode);
             };
             
             
@@ -2457,30 +2434,22 @@ ${invoice.items.map(item => `
                 if (user.pin === pinInput) {
                     const userConTs = {...user, loginTs: Date.now()};
                     setCurrentUser(userConTs);
-                    // Resetear intentos fallidos al loguearse bien
                     setIntentosFallidos(prev => { const n={...prev}; delete n[String(user.id)]; return n; });
-                    localStorage.setItem('malagestion_current_user', JSON.stringify(userConTs));
-                    // Migrar tareas viejas a clave por usuario si es necesario
-                    const tareasViejas = null; // legacy key removed
-                    const claveNueva = `miCerebroTareas_${user.id}`;
-                    if (tareasViejas && !localStorage.getItem(claveNueva)) {
-                        try { localStorage.setItem(claveNueva, tareasViejas); } catch(e) {}
-                    }
                     setIsUnlocked(true);
                     setPinError(false);
                     setUserInput('');
                     setPinInput('');
                     // Cargar preferencias del usuario
-                    if (user.language) setCurrentLanguage(user.language);
-                    // Leer preferencia desde key persistente (más confiable que systemUsers)
-                    // Cargar desde app_config (más confiable), luego localStorage, luego system_users
+                    if (user.language) { setCurrentLanguage(user.language); window.__userLanguage = user.language; }
                     autoLogoutLoadedRef.current = false;
                     (async () => {
                         if (window.__dataReadyPromise) await window.__dataReadyPromise;
+                        // darkMode
+                        const dm = await dbGetKey('app_config', `darkMode_${user.id}`);
+                        if (dm != null) { setDarkMode(!!dm); window.__userDarkMode = !!dm; }
+                        // autoLogout
                         dbGetKey('app_config', `autoLogout_${user.id}`).then(val => {
-                            const v = val != null ? val : (user.autoLogoutMinutes != null ? user.autoLogoutMinutes : null);
-                            const fromLS = localStorage.getItem(`userPref_autoLogout_${user.id}`);
-                            const logoutVal = v != null ? parseInt(v) : (fromLS != null ? parseInt(fromLS) : 5);
+                            const logoutVal = val != null ? parseInt(val) : (user.autoLogoutMinutes != null ? parseInt(user.autoLogoutMinutes) : 5);
                             setAutoLogoutMinutes(logoutVal);
                             setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500);
                         });
@@ -4233,7 +4202,7 @@ ${invoice.items.map(item => `
             const [showModal,   setShowModal]   = useState(false);
             const [showConfig,  setShowConfig]  = useState(false);
             const [showHelp, setShowHelp] = useState(() => {
-                try { const prefs = window.__userHelpPrefs||{}; return prefs['calendario_hideHelp'] !== '1' && localStorage.getItem('calendario_hideHelp') !== '1'; } catch(e) { return true; }
+                try { const prefs = window.__userHelpPrefs||{}; return prefs['calendario_hideHelp'] !== '1'; } catch(e) { return true; }
             });
             const [helpNoShow, setHelpNoShow] = useState(false);
             const [showMisEvs,  setShowMisEvs]  = useState(false);
@@ -5475,7 +5444,7 @@ ${invoice.items.map(item => `
                                     <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-blue-500"/>
                                     <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                 </label>
-                                <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('calendario_hideHelp','1');}catch(e){} const prefs={...window.__userHelpPrefs||{},calendario_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
+                                <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},calendario_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
                                     className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium">
                                     Entendido / Got it / Rozumím
                                 </button>
@@ -5809,7 +5778,7 @@ ${invoice.items.map(item => `
             const [loaded,     setLoaded]     = useState(false);
             const [yearSel,    setYearSel]    = useState(new Date().getFullYear());
             const [showHelp, setShowHelp] = useState(() => {
-                try { const prefs = window.__userHelpPrefs||{}; return prefs['miSueldo_hideHelp'] !== '1' && localStorage.getItem('miSueldo_hideHelp') !== '1'; } catch(e) { return true; }
+                try { const prefs = window.__userHelpPrefs||{}; return prefs['miSueldo_hideHelp'] !== '1'; } catch(e) { return true; }
             });
             const [helpNoShow, setHelpNoShow] = useState(false);
             const [mesesAbiertos, setMesesAbiertos] = useState({});
@@ -6019,7 +5988,7 @@ ${invoice.items.map(item => `
                                             {currentUser?.language==='en' ? "Don't show again" : currentUser?.language==='cs' ? 'Znovu nezobrazovat' : 'No volver a mostrar'}
                                         </span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('miSueldo_hideHelp','1');}catch(e){} const prefs={...window.__userHelpPrefs||{},miSueldo_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},miSueldo_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium">
                                         {currentUser?.language==='en' ? 'Got it' : currentUser?.language==='cs' ? 'Rozumím' : 'Entendido'}
                                     </button>
@@ -7084,11 +7053,11 @@ ${invoice.items.map(item => `
             const CAJA_KEY = 'cashTransactionsMultiYear'; // legacy key name
 
             const [prestamos, setPrestamos] = React.useState(() => {
-                try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e) { return []; }
+                return window.__prestamosDataPrecargada || [];
             });
             React.useEffect(() => {
                 dbGetKey('app_config', 'prestamos').then(d => {
-                    if (d && d.length > 0) { setPrestamos(d); localStorage.setItem(STORE_KEY, JSON.stringify(d)); }
+                    if (d && d.length > 0) { setPrestamos(d); window.__prestamosDataPrecargada = d; }
                 });
             }, []);
             const [view, setView] = React.useState('list');
@@ -7130,7 +7099,7 @@ ${invoice.items.map(item => `
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
             };
             const syncPagoToCaja = (prestamo, pago, cajaId, isDelete = false) => {
-                const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                const allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                 Object.keys(allTx).forEach(yr => { allTx[yr] = (allTx[yr] || []).filter(t => t.id !== cajaId); });
                 if (!isDelete) {
                     const fd = new Date(pago.fecha + 'T12:00:00');
@@ -8848,7 +8817,7 @@ ${invoice.items.map(item => `
             const [showGastoAcredModal, setShowGastoAcredModal] = React.useState(false);
             const [editingGastoAcred, setEditingGastoAcred] = React.useState(null);
             const [gastoAcredForm, setGastoAcredForm] = React.useState({concepto:'',monto:'',moneda:'CZK',fecha:new Date().toISOString().split('T')[0],metodoPago:'BANK'});
-            const [asignaciones, setAsignaciones] = React.useState(() => { try { return JSON.parse(localStorage.getItem('cajaAsignaciones') || '{}'); } catch(e) { return {}; } }); // factura esperando método de pago
+            const [asignaciones, setAsignaciones] = React.useState(() => { window.__cajaAsignacionesPrecargadas ? JSON.parse(JSON.stringify(window.__cajaAsignacionesPrecargadas)) : {} }); // factura esperando método de pago
             const [showGastoModal, setShowGastoModal] = React.useState(false);
             const [editingGasto, setEditingGasto] = React.useState(null);
             const [gastoForm, setGastoForm] = React.useState({ nombre: '', monto: '', moneda: 'CZK', notas: '', metodoPago: '' });
@@ -14024,7 +13993,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 setSeguroData({ ...seguroData, [key]: updated });
 
                 // Sincronizar con caja diaria
-                const allTx = JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL) || '{}');
+                const allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                 // Borrar transacción anterior si existía
                 Object.keys(allTx).forEach(yr => {
                     allTx[yr] = (allTx[yr] || []).filter(t => t.id !== cajaId);
@@ -14051,7 +14020,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     fechaCreacion: new Date().toISOString(),
                     year: yr
                 });
-                localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
+                
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
 
@@ -14076,11 +14045,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 setSeguroData({ ...seguroData, [key]: updated });
                 // Borrar de caja si tiene cajaId
                 if (pago?.cajaId) {
-                    const allTx = JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL) || '{}');
+                    const allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                     Object.keys(allTx).forEach(yr => {
                         allTx[yr] = (allTx[yr] || []).filter(t => t.id !== pago.cajaId);
                     });
-                    localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
+                    
                     window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
                 }
             };
@@ -14124,7 +14093,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada));
                 } else {
                     try { const d = await dbGetKey('cash_transactions','multiyear'); if (d && Object.keys(d).length>0) { allTx = d; window.__cajaPrecargada = d; } } catch(e) {}
-                    if (!Object.keys(allTx).length) { try { allTx = JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL)||'{}'); } catch(e){} }
+                    if (!Object.keys(allTx).length) { try { const d = await dbGetKey('cash_transactions','multiyear'); if (d && Object.keys(d).length>0) { allTx = d; window.__cajaPrecargada = d; } } catch(e){} }
                 }
                 // Primero borrar cualquier transacción existente con ese cajaId
                 Object.keys(allTx).forEach(yr => {
@@ -14154,7 +14123,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         year: yr
                     });
                 }
-                try { localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx)); } catch(e) {}
+                try {  } catch(e) {}
                 window.__cajaPrecargada = allTx;
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
@@ -14425,11 +14394,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 window.dispatchEvent(new Event('sueldoNotifUpdate'));
                 // Borrar de caja si tiene cajaId
                 if (pago?.cajaId) {
-                    const allTx = JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL) || '{}');
+                    const allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                     Object.keys(allTx).forEach(yr => {
                         allTx[yr] = (allTx[yr] || []).filter(t => t.id !== pago.cajaId);
                     });
-                    localStorage.setItem(CAJA_KEY_PAYROLL, JSON.stringify(allTx));
+                    
                     window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
                 }
             };
@@ -18909,7 +18878,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Sync helpers: proveedores -> caja
             const _writeCajaTx = (allTx) => {
-                localStorage.setItem(CAJA_KEY, JSON.stringify(allTx));
+                
                 // Disparar evento para que CashRegister recargue si está montado
                 window.dispatchEvent(new StorageEvent('storage', {
                     key: CAJA_KEY, newValue: JSON.stringify(allTx)
@@ -18918,7 +18887,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const updateCajaTxFromInvoice = (invoice) => {
                 if (!invoice.cajaRef) return;
                 try {
-                    const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                    const allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                     let updated = false;
                     Object.keys(allTx).forEach(yr => {
                         allTx[yr] = (allTx[yr] || []).map(t => {
@@ -18943,7 +18912,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const deleteCajaTxFromInvoice = (invoice) => {
                 if (!invoice.cajaRef) return;
                 try {
-                    const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                    const allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                     let deleted = false;
                     Object.keys(allTx).forEach(yr => {
                         const before = (allTx[yr]||[]).length;
@@ -19046,12 +19015,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 ));
 
                 // Eliminar de caja diaria
-                const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                const allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                 const idsACaja = facturasPagadas.map(f => `prov_${f.id}`);
                 Object.keys(allTx).forEach(yr => {
                     allTx[yr] = (allTx[yr] || []).filter(t => !idsACaja.includes(t.id));
                 });
-                localStorage.setItem(CAJA_KEY, JSON.stringify(allTx));
+                
 
                 const next = {...selectedInvoices};
                 seleccionadas.forEach(id => delete next[id]);
@@ -19086,7 +19055,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 if (tipoCosto) {
                     const allTx = window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0
                         ? JSON.parse(JSON.stringify(window.__cajaPrecargada))
-                        : JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                        : JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                     const yearTx = allTx[year] || [];
                     const nuevasTx = facturasPendientes.map((inv, i) => ({
                         id: `prov_${inv.id}`,
@@ -19105,7 +19074,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     }));
                     allTx[year] = [...yearTx, ...nuevasTx];
                     window.__cajaPrecargada = allTx;
-                    try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) {}
+                    try {  } catch(e) {}
                     dbUpsertOne('cash_transactions', 'multiyear', allTx);
                     window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
                     alert(`✅ ${facturasPendientes.length} factura${facturasPendientes.length>1?'s':''} pagadas y registradas en Caja Diaria como ${tipoCosto} · ${pagoMasivoOrigen}`);
@@ -20300,7 +20269,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Estados para Settings
             const [showSettings, setShowSettings] = useState(false);
-            const [webhookUrl, setWebhookUrl] = useState(localStorage.getItem('makeWebhookUrl') || '');
+            const [webhookUrl, setWebhookUrl] = useState(window.__webhookUrl || '');
             
             // Estados para modal de previsualización de factura
             const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -20404,7 +20373,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 // Registrar en caja diaria - leer siempre de window.__cajaPrecargada
                 const allTx = window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0
                     ? JSON.parse(JSON.stringify(window.__cajaPrecargada))
-                    : JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                    : JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                 const yearTx = allTx[year] || [];
                 const txId = esParcial ? `prov_${invoice.id}_${Date.now()}` : `prov_${invoice.id}`;
                 const newTx = {
@@ -20424,7 +20393,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 };
                 allTx[year] = [...yearTx, newTx];
                 window.__cajaPrecargada = allTx;
-                try { localStorage.setItem(CAJA_KEY, JSON.stringify(allTx)); } catch(e) {}
+                try {  } catch(e) {}
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
 
@@ -20484,14 +20453,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 // Eliminar de caja diaria
                 const txId = `prov_${invoice.id}`;
-                const allTx = JSON.parse(localStorage.getItem(CAJA_KEY) || '{}');
+                const allTx = JSON.parse(JSON.stringify(window.__cajaPrecargada || {}));
                 let removed = false;
                 Object.keys(allTx).forEach(yr => {
                     const before = allTx[yr].length;
                     allTx[yr] = allTx[yr].filter(t => t.id !== txId);
                     if (allTx[yr].length < before) removed = true;
                 });
-                localStorage.setItem(CAJA_KEY, JSON.stringify(allTx));
+                
 
                 if (removed) alert('↺ Factura restablecida y eliminada de Caja Diaria.');
                 else alert('↺ Factura restablecida como pendiente.');
@@ -20506,8 +20475,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             
             // Estados para Google Drive
             const [isDriveConnected, setIsDriveConnected] = useState(false);
-            const [driveFileId, setDriveFileId] = useState(localStorage.getItem('driveFileId') || null);
-            const [lastSync, setLastSync] = useState(localStorage.getItem('lastSync') || null);
+            const [driveFileId, setDriveFileId] = useState(window.__driveFileId || null);
+            const [lastSync, setLastSync] = useState(window.__lastSync || null);
             
             // Guardar categorías cuando cambien
             useEffect(() => {
@@ -21828,7 +21797,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 };
                 
                 // WEBHOOK DE MAKE.COM - Reemplaza con tu URL
-                const makeWebhookUrl = localStorage.getItem('makeWebhookUrl') || '';
+                const makeWebhookUrl = window.__webhookUrl || '';
                 
                 if (!makeWebhookUrl) {
                     // Si no hay webhook configurado, guardar localmente y mostrar instrucciones
@@ -21915,7 +21884,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     return;
                 }
                 
-                try { localStorage.setItem('makeWebhookUrl', webhookUrl); } catch(e) {}
+                window.__webhookUrl = webhookUrl; dbUpsertOne('app_config','webhookUrl',webhookUrl);
                 setShowSettings(false);
                 
                 if (webhookUrl) {
@@ -21956,11 +21925,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     // Crear nuevo archivo
                     const fileId = await createDriveFile('facturas-backup.json', data, token);
                     setDriveFileId(fileId);
-                    try { localStorage.setItem('driveFileId', fileId); } catch(e) {}
+                    window.__driveFileId = fileId; dbUpsertOne('app_config','driveFileId',fileId);
                 }
                 
                 setLastSync(new Date().toISOString());
-                localStorage.setItem('lastSync', new Date().toISOString());
+                window.__lastSync = new Date().toISOString(); dbUpsertOne('app_config','lastSync',window.__lastSync);;
                 setIsDriveConnected(true);
                 */
             };
@@ -22078,7 +22047,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Mantener compatibilidad con código antiguo
             const [expandedCategories, setExpandedCategories] = useState(() => {
-                const saved = localStorage.getItem('expandedCategories');
+                const saved = window.__expandedCategories;
                 return saved ? new Set(JSON.parse(saved)) : new Set();
             });
 
@@ -22090,7 +22059,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     } else {
                         newSet.add(category);
                     }
-                    localStorage.setItem('expandedCategories', JSON.stringify([...newSet]));
+                    window.__expandedCategories = JSON.stringify([...newSet]);
                     return newSet;
                 });
             };
@@ -23901,7 +23870,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <button
                                     onClick={() => {
                                         setShowSettings(false);
-                                        setWebhookUrl(localStorage.getItem('makeWebhookUrl') || '');
+                                        setWebhookUrl(window.__webhookUrl || '');
                                     }}
                                     className="text-slate-400 hover:text-slate-600 transition-colors"
                                 >
@@ -23963,7 +23932,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <button
                                     onClick={() => {
                                         setShowSettings(false);
-                                        setWebhookUrl(localStorage.getItem('makeWebhookUrl') || '');
+                                        setWebhookUrl(window.__webhookUrl || '');
                                     }}
                                     className={`flex-1 px-4 py-2 border rounded-lg font-medium transition-colors ${'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
                                 >
@@ -24669,7 +24638,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [etiquetaForm,    setEtiquetaForm]    = React.useState({ nombre:'', color:'#7c3aed' });
             const [editingEtiqueta, setEditingEtiqueta] = React.useState(null);
             const [showHelp, setShowHelp] = React.useState(() => {
-                try { const prefs = window.__userHelpPrefs||{}; return prefs['miCerebro_hideHelp'] !== '1' && localStorage.getItem('miCerebro_hideHelp') !== '1'; } catch(e) { return true; }
+                try { const prefs = window.__userHelpPrefs||{}; return prefs['miCerebro_hideHelp'] !== '1'; } catch(e) { return true; }
             });
             const [helpNoShow, setHelpNoShow] = React.useState(false);
 
@@ -24728,9 +24697,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         dbUpsertOne('app_config', autorKey, actualizada);
                         // Actualizar también el cache local de compartidas
                         const compKey = `miCerebroCompartidas_${_uid}`;
-                        const compCache = JSON.parse(localStorage.getItem(compKey)||'[]');
+                        const compCache = window.__compCache?.[compKey] || [];
                         const compActualizada = compCache.map(t => t.id===chatTarea.id ? {...t, chat:[...(t.chat||[]),msg]} : t);
-                        localStorage.setItem(compKey, JSON.stringify(compActualizada));
+                        window.__compCache = window.__compCache || {}; window.__compCache[compKey] = compActualizada;
                         setChatMsg('');
                         setChatTarea(prev => ({...prev, chat:[...(prev.chat||[]),msg]}));
                         window.dispatchEvent(new Event('tareasUpdate'));
@@ -25018,7 +24987,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-purple-500"/>
                                         <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('miCerebro_hideHelp','1');}catch(e){} const prefs={...window.__userHelpPrefs||{},miCerebro_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},miCerebro_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium">
                                         Entendido / Got it / Rozumím
                                     </button>
@@ -25393,7 +25362,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const L = (es, eng) => en ? eng : es;
 
         const [showHelp, setShowHelp] = React.useState(() => {
-            try { const prefs = window.__userHelpPrefs||{}; return prefs['cocina_hideHelp'] !== '1' && localStorage.getItem('cocina_hideHelp') !== '1'; } catch(e) { return true; }
+            try { const prefs = window.__userHelpPrefs||{}; return prefs['cocina_hideHelp'] !== '1'; } catch(e) { return true; }
         });
         const [helpNoShow, setHelpNoShow] = React.useState(false);
 
@@ -25556,7 +25525,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-orange-500"/>
                                         <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('cocina_hideHelp','1');}catch(e){} const prefs={...window.__userHelpPrefs||{},cocina_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},cocina_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium">
                                         {L('Entendido','Got it')}
                                     </button>
