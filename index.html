@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-13:00 - Cocina Stock mobile: sucursales/categorías scroll horizontal + cards en mobile -->
+<!-- Version: 2026-05-12-14:00 - Fix caja vacía y autolock: esperar __dataReadyPromise antes de leer datos -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -408,7 +408,7 @@
             window.__resolveSupabase();
             window.dispatchEvent(new CustomEvent('supabase-loaded'));
             // Cargar el resto de los datos en segundo plano (sin bloquear)
-            precargarDesdeSupabase().catch(e => console.warn('Error precarga:', e));
+            window.__dataReadyPromise = precargarDesdeSupabase().catch(e => console.warn('Error precarga:', e));
         }
         init();
     </script>
@@ -2474,13 +2474,16 @@ ${invoice.items.map(item => `
                     // Leer preferencia desde key persistente (más confiable que systemUsers)
                     // Cargar desde app_config (más confiable), luego localStorage, luego system_users
                     autoLogoutLoadedRef.current = false;
-                    dbGetKey('app_config', `autoLogout_${user.id}`).then(val => {
-                        const v = val != null ? val : (user.autoLogoutMinutes != null ? user.autoLogoutMinutes : null);
-                        const fromLS = localStorage.getItem(`userPref_autoLogout_${user.id}`);
-                        const logoutVal = v != null ? parseInt(v) : (fromLS != null ? parseInt(fromLS) : 5);
-                        setAutoLogoutMinutes(logoutVal);
-                        setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500);
-                    });
+                    (async () => {
+                        if (window.__dataReadyPromise) await window.__dataReadyPromise;
+                        dbGetKey('app_config', `autoLogout_${user.id}`).then(val => {
+                            const v = val != null ? val : (user.autoLogoutMinutes != null ? user.autoLogoutMinutes : null);
+                            const fromLS = localStorage.getItem(`userPref_autoLogout_${user.id}`);
+                            const logoutVal = v != null ? parseInt(v) : (fromLS != null ? parseInt(fromLS) : 5);
+                            setAutoLogoutMinutes(logoutVal);
+                            setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500);
+                        });
+                    })();
                 } else {
                     // PIN incorrecto
                     if (user.role === 'superadmin') {
@@ -10171,6 +10174,7 @@ ${invoice.items.map(item => `
                 }
                 const cargar = async () => {
                     if (window.__supabaseReadyPromise) await window.__supabaseReadyPromise;
+                    if (window.__dataReadyPromise) await window.__dataReadyPromise;
                     if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) {
                         setAllTransactions(window.__cajaPrecargada);
                         setAllTxLoaded(true);
