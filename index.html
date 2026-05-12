@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-17:15 - Fix syntax: brace balance verificado con parser, todos los scripts OK -->
+<!-- Version: 2026-05-12-18:00 - Fix BANK crash: asignaciones useState faltaba return -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1522,12 +1522,11 @@ ${invoice.items.map(item => `
                                     .eq('visto', false)
                                     .order('created_at', {ascending: false})
                                     .limit(50);
-                                        console.log('[NotifLoad] userId:', String(currentUser.id), 'rows:', notifRowsData, 'err:', notifErr);
                                 if (notifRowsData) {
                                     // notifRows handled elsewhere
                                 }
                             }
-                        } catch(ne) { console.log('[NotifLoad] catch:', ne); }
+                        } catch(ne) { }
                         let emps = window.__employeesPrecargados || [];
                         if (!emps.length) {
                             const r = await window._sb?.from('employees').select('data');
@@ -2435,32 +2434,27 @@ ${invoice.items.map(item => `
                     const userConTs = {...user, loginTs: Date.now()};
                     setCurrentUser(userConTs);
                     setIntentosFallidos(prev => { const n={...prev}; delete n[String(user.id)]; return n; });
-                    setIsUnlocked(true);
                     setPinError(false);
                     setUserInput('');
                     setPinInput('');
-                    // Cargar preferencias del usuario
                     if (user.language) { setCurrentLanguage(user.language); window.__userLanguage = user.language; }
                     autoLogoutLoadedRef.current = false;
+                    // Cargar prefs ANTES de desbloquear para que los componentes las vean al montar
                     (async () => {
                         if (window.__dataReadyPromise) await window.__dataReadyPromise;
-                        // darkMode
-                        const dm = await dbGetKey('app_config', `darkMode_${user.id}`);
+                        const [dm, autoLogout, bioCred, helpPrefs] = await Promise.all([
+                            dbGetKey('app_config', `darkMode_${user.id}`),
+                            dbGetKey('app_config', `autoLogout_${user.id}`),
+                            window._sb?.from('app_config').select('data').eq('id','bioCred_'+user.id).maybeSingle(),
+                            window._sb?.from('app_config').select('data').eq('id','helpPrefs_'+user.id).maybeSingle(),
+                        ]);
                         if (dm != null) { setDarkMode(!!dm); window.__userDarkMode = !!dm; }
-                        // autoLogout
-                        dbGetKey('app_config', `autoLogout_${user.id}`).then(val => {
-                            const logoutVal = val != null ? parseInt(val) : (user.autoLogoutMinutes != null ? parseInt(user.autoLogoutMinutes) : 5);
-                            setAutoLogoutMinutes(logoutVal);
-                            setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500);
-                        });
-                        // bioCred
-                        window._sb?.from('app_config').select('data').eq('id','bioCred_'+user.id).maybeSingle().then(r => {
-                            if (r?.data?.data) window.__bioCred = JSON.stringify(r.data.data);
-                        });
-                        // helpPrefs
-                        window._sb?.from('app_config').select('data').eq('id','helpPrefs_'+user.id).maybeSingle().then(r => {
-                            if (r?.data?.data) window.__userHelpPrefs = r.data.data;
-                        });
+                        const logoutVal = autoLogout != null ? parseInt(autoLogout) : (user.autoLogoutMinutes != null ? parseInt(user.autoLogoutMinutes) : 5);
+                        setAutoLogoutMinutes(logoutVal);
+                        setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500);
+                        if (bioCred?.data?.data) window.__bioCred = JSON.stringify(bioCred.data.data);
+                        if (helpPrefs?.data?.data) window.__userHelpPrefs = helpPrefs.data.data;
+                        setIsUnlocked(true);
                     })();
                 } else {
                     // PIN incorrecto
@@ -8825,7 +8819,7 @@ ${invoice.items.map(item => `
             const [showGastoAcredModal, setShowGastoAcredModal] = React.useState(false);
             const [editingGastoAcred, setEditingGastoAcred] = React.useState(null);
             const [gastoAcredForm, setGastoAcredForm] = React.useState({concepto:'',monto:'',moneda:'CZK',fecha:new Date().toISOString().split('T')[0],metodoPago:'BANK'});
-            const [asignaciones, setAsignaciones] = React.useState(() => { window.__cajaAsignacionesPrecargadas ? JSON.parse(JSON.stringify(window.__cajaAsignacionesPrecargadas)) : {} }); // factura esperando método de pago
+            const [asignaciones, setAsignaciones] = React.useState(() => { return window.__cajaAsignacionesPrecargadas ? JSON.parse(JSON.stringify(window.__cajaAsignacionesPrecargadas)) : {}; }); // factura esperando método de pago
             const [showGastoModal, setShowGastoModal] = React.useState(false);
             const [editingGasto, setEditingGasto] = React.useState(null);
             const [gastoForm, setGastoForm] = React.useState({ nombre: '', monto: '', moneda: 'CZK', notas: '', metodoPago: '' });
@@ -9113,10 +9107,10 @@ ${invoice.items.map(item => `
                                                 <span className={sub}>🧾 {f.category}</span>
                                                 <span className={`text-xs opacity-60 ${sub}`}>· {f.number} · {f.dueDate}</span>
                                                 <div className="flex gap-0.5">
-                                                {['BANK','CASH','ATM'].map(m => (
-                                                    <button key={m} onClick={e => { e.stopPropagation(); saveFacturasSeleccionadas(facturasSeleccionadas.map(x => x.id===f.id ? {...x, metodoPago: m} : x)); }}
-                                                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${f.metodoPago===m ? (m==='BANK' ? 'bg-blue-500 text-white' : m==='ATM' ? 'bg-orange-500 text-white' : 'bg-green-500 text-white') : (darkMode ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200')}`}>
-                                                        {m==='BANK'?'🏦':m==='ATM'?'🏧':'💵'}
+                                                {['BANK','CASH','ATM'].map(metodo => (
+                                                    <button key={metodo} onClick={e => { e.stopPropagation(); saveFacturasSeleccionadas(facturasSeleccionadas.map(x => x.id===f.id ? {...x, metodoPago: metodo} : x)); }}
+                                                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${f.metodoPago===metodo ? (metodo==='BANK' ? 'bg-blue-500 text-white' : metodo==='ATM' ? 'bg-orange-500 text-white' : 'bg-green-500 text-white') : (darkMode ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200')}`}>
+                                                        {metodo==='BANK'?'🏦':metodo==='ATM'?'🏧':'💵'}
                                                     </button>
                                                 ))}
                                             </div>
@@ -9135,10 +9129,10 @@ ${invoice.items.map(item => `
                                                 <span className={sub}>📌 {g.nombre}</span>
                                                 {g.notas && <span className={`text-xs ${sub} opacity-60`}>· {g.notas}</span>}
                                                 <div className="flex gap-0.5">
-                                                {['BANK','CASH','ATM','OTRO'].map(m => (
-                                                    <button key={m} onClick={e => { e.stopPropagation(); saveGastos(gastos.map(x => x.id===g.id ? {...x, metodoPago: m} : x)); }}
-                                                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${g.metodoPago===m ? (m==='BANK' ? 'bg-blue-500 text-white' : m==='ATM' ? 'bg-orange-500 text-white' : m==='CASH' ? 'bg-green-500 text-white' : 'bg-slate-500 text-white') : (darkMode ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200')}`}>
-                                                        {m==='BANK'?'🏦':m==='ATM'?'🏧':m==='CASH'?'💵':'📦'}
+                                                {['BANK','CASH','ATM','OTRO'].map(metodo => (
+                                                    <button key={metodo} onClick={e => { e.stopPropagation(); saveGastos(gastos.map(x => x.id===g.id ? {...x, metodoPago: metodo} : x)); }}
+                                                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${g.metodoPago===metodo ? (metodo==='BANK' ? 'bg-blue-500 text-white' : metodo==='ATM' ? 'bg-orange-500 text-white' : metodo==='CASH' ? 'bg-green-500 text-white' : 'bg-slate-500 text-white') : (darkMode ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200')}`}>
+                                                        {metodo==='BANK'?'🏦':metodo==='ATM'?'🏧':metodo==='CASH'?'💵':'📦'}
                                                     </button>
                                                 ))}
                                             </div>
