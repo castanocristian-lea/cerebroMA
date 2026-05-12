@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-19:00 - Fix helpPrefs: usar dbUpsertOne en lugar de window._sb directo -->
+<!-- Version: 2026-05-12-19:15 - Fix bioCred: esperar __dataReadyPromise antes de buscar en Supabase -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1788,23 +1788,22 @@ ${invoice.items.map(item => `
 
             // Verificar disponibilidad de biometría al montar
             useEffect(() => {
-                if (window.PublicKeyCredential) {
-                    setBioAvailable(true); // forzar true si API existe (iOS Safari puede dar false incorrectamente)
-                }
-                // Verificar si ya hay credencial en localStorage
-                const cred = window.__bioCred;
-                if (cred) { setBioRegistered(true); return; }
-                // Precargar credenciales bio de todos los usuarios desde Supabase
+                if (window.PublicKeyCredential) setBioAvailable(true);
+                // Check inmediato
+                if (window.__bioCred) { setBioRegistered(true); return; }
+                // Esperar precarga y chequear de nuevo
                 (async () => {
                     try {
+                        if (window.__dataReadyPromise) await window.__dataReadyPromise;
+                        if (window.__bioCred) { setBioRegistered(true); return; }
+                        // Buscar en Supabase por todos los usuarios conocidos
                         const users = (window.__systemUsersPrecargados || []);
                         if (!users.length) return;
                         const results = await Promise.all(
                             users.map(u => window._sb?.from('app_config').select('data').eq('id','bioCred_'+u.id).maybeSingle())
                         );
-                        results.forEach((r, i) => {
+                        results.forEach(r => {
                             if (r?.data?.data) {
-                                // Guardar con clave estándar para que loginConBiometria la encuentre
                                 window.__bioCred = JSON.stringify(r.data.data);
                                 setBioRegistered(true);
                             }
