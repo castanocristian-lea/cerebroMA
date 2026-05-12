@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-11-22:05 - Mercado notif: tabla notifications dedicada, Realtime -->
+<!-- Version: 2026-05-12-10:50 - Cocina: popup ayuda trilingüe con todas las funciones -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1493,7 +1493,7 @@ ${invoice.items.map(item => `
 
             // ── SISTEMA DE NOTIFICACIONES ─────────────────────────────────────
             const [notificaciones, setNotificaciones] = React.useState({});
-            const [notifRows, setNotifRows] = React.useState([]);
+
 
             const marcarNotifVista = (tipo, filtro) => {
                 setNotificaciones(prev => {
@@ -1515,19 +1515,19 @@ ${invoice.items.map(item => `
                         // Load notifications from dedicated table
                         try {
                             if (currentUser?.id) {
-                                const { data: notifRows } = await window._sb
+                                const { data: notifRowsData, error: notifErr } = await window._sb
                                     .from('notifications')
                                     .select('*')
                                     .eq('user_id', String(currentUser.id))
                                     .eq('visto', false)
                                     .order('created_at', {ascending: false})
                                     .limit(50);
-                                if (notifRows) {
-                                    window.__notificationsTable = notifRows;
-                                    window.dispatchEvent(new CustomEvent('notificationsTableUpdate', {detail: notifRows}));
+                                        console.log('[NotifLoad] userId:', String(currentUser.id), 'rows:', notifRowsData, 'err:', notifErr);
+                                if (notifRowsData) {
+                                    setNotifRows(notifRowsData);
                                 }
                             }
-                        } catch(ne) {}
+                        } catch(ne) { console.log('[NotifLoad] catch:', ne); }
                         let emps = window.__employeesPrecargados || [];
                         if (!emps.length) {
                             const r = await window._sb?.from('employees').select('data');
@@ -1545,7 +1545,6 @@ ${invoice.items.map(item => `
                         if (!yo) { console.warn('🔔 no se encontró empleado para', currentUser.name); return; }
                         const empId = yo.id;
                         const tipos = ['solicNotif','sueldoNotif','seguroNotif','calendarioNotif','prestamoNotif','solicRespNotif','envioNotif'];
-                        // mercadoNotif comes from notifications table, handled separately
                         const userId = String(currentUser.id);
                         // solicNotif y solicRespNotif usan userId, el resto usa empId
                         // Buscar por userId Y por empId, mergear ambos
@@ -1631,9 +1630,7 @@ ${invoice.items.map(item => `
                 };
                 const evts = ['supabase-loaded','sueldoNotifUpdate','solicNotifUpdate','calendarioNotifUpdate','prestamoNotifUpdate','notifUpdate'];
                 evts.forEach(e => window.addEventListener(e, onEvt));
-                const onNotifTable = (e) => { if(e.detail) setNotifRows(e.detail); };
-                window.addEventListener('notificationsTableUpdate', onNotifTable);
-                return () => { clearInterval(t); evts.forEach(e => window.removeEventListener(e, onEvt)); window.removeEventListener('notificationsTableUpdate', onNotifTable); };
+                return () => { clearInterval(t); evts.forEach(e => window.removeEventListener(e, onEvt)); };
             }, [isUnlocked, currentUser?.id]);
 
             // ── SUPABASE REALTIME ─────────────────────────────────────────────
@@ -1641,7 +1638,7 @@ ${invoice.items.map(item => `
                 const TABLAS = [
                     'calendar_events', 'cash_transactions', 'payroll_monthly',
                     'payroll_insurance', 'app_config', 'system_users',
-                    'employees', 'credentials', 'notifications'
+                    'employees', 'credentials'
                 ];
                 const EVENTOS_POR_TABLA = {
                     calendar_events:   'calendarioNotifUpdate',
@@ -1652,7 +1649,6 @@ ${invoice.items.map(item => `
                     app_config:        'notifUpdate',
                     system_users:      null,
                     credentials:       null,
-                    notifications:     'notifUpdate',
                 };
                 const channel = window._sb.channel('cerebroma-realtime');
                 TABLAS.forEach(tabla => {
@@ -3301,34 +3297,6 @@ ${invoice.items.map(item => `
 
 
 
-                    {/* Banner mercado — lee de tabla notifications */}
-                    {(()=>{
-                        if (!currentUser) return null;
-                        try {
-                            const pendientes = notifRows.filter(n => n.tipo === 'mercado' && !n.visto && String(n.user_id) === String(currentUser.id));
-                            if (!pendientes.length) return null;
-                            const n = pendientes[0];
-                            return (
-                                <div className="flex items-center gap-3 px-4 py-2.5" style={{background:'linear-gradient(90deg,#7c3aed,#6d28d9)',color:'white'}}>
-                                    <span className="text-lg shrink-0">🏪</span>
-                                    <p className="text-sm font-medium flex-1">
-                                        {L('Lista de mercado: ','Market list: ')}{n.data?.mercadoNombre} · {n.data?.fecha}
-                                        {pendientes.length>1?' (+'+String(pendientes.length-1)+' más)':''}
-                                    </p>
-                                    <button onClick={()=>{setActiveModule('cocina'); window.__cocinaTabInicial='stock'; window.__stockTabInicial='mercados';}}
-                                        className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
-                                        style={{background:'rgba(255,255,255,0.2)'}}>Ver →</button>
-                                    <button onClick={async ()=>{
-                                        const ids = pendientes.map(p=>p.id);
-                                        await window._sb.from('notifications').update({visto:true}).in('id', ids);
-                                        setNotifRows(prev => prev.filter(r => !ids.includes(r.id)));
-                                    }} className="text-xs px-2 py-1 rounded-lg font-medium shrink-0"
-                                        style={{background:'rgba(255,255,255,0.2)'}}>Enterado ✓</button>
-                                </div>
-                            );
-                        } catch(e) { return null; }
-                    })()}
-
                     {/* Banner notas nuevas */}
                     {(() => {
                         if (!currentUser) return null;
@@ -4255,6 +4223,10 @@ ${invoice.items.map(item => `
             const [currentDate, setCurrentDate] = useState(new Date());
             const [showModal,   setShowModal]   = useState(false);
             const [showConfig,  setShowConfig]  = useState(false);
+            const [showHelp, setShowHelp] = useState(() => {
+                try { return localStorage.getItem('calendario_hideHelp') !== '1'; } catch(e) { return true; }
+            });
+            const [helpNoShow, setHelpNoShow] = useState(false);
             const [showMisEvs,  setShowMisEvs]  = useState(false);
             const [editingEv,   setEditingEv]   = useState(null);
             const [form,        setForm]        = useState({});
@@ -4729,6 +4701,9 @@ ${invoice.items.map(item => `
                             <button onClick={()=>setShowMisEvs(true)} className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 ${darkMode?'bg-indigo-700 text-white hover:bg-indigo-600':'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                 Mis eventos
+                            </button>
+                            <button onClick={()=>setShowHelp(true)} className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1 border ${darkMode?'border-slate-600 text-slate-400':'border-slate-300 text-slate-500'}`}>
+                                ❓ {currentUser?.language==='en'?'How does it work?':currentUser?.language==='cs'?'Jak to funguje?':'¿Cómo funciona?'}
                             </button>
                             <button onClick={()=>setShowConfig(true)} className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 ${darkMode?'hover:bg-slate-700 text-slate-300 bg-slate-700/50':'hover:bg-slate-100 text-slate-600 bg-slate-100'}`}>
                                 ⚙️ Config.
@@ -5436,6 +5411,70 @@ ${invoice.items.map(item => `
                     </div>
                 )}
 
+                {/* Modal ayuda Calendario — trilingüe */}
+                {showHelp && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                        <div className={`rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                            <div className={`px-6 py-5 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <h2 className={`text-xl font-bold ${txt}`}>📅 Gestión de Calendario</h2>
+                            </div>
+                            <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 space-y-6">
+                                <div>
+                                    <p className="text-lg font-bold text-blue-500 mb-2">🇦🇷 Español</p>
+                                    <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                        <li>📅 <strong>Vistas</strong> — Navegá por día, semana o mes. Tocá "Hoy" para volver al día actual.</li>
+                                        <li>➕ <strong>Eventos</strong> — Creá eventos para empleados con tipo, color y rango de fechas.</li>
+                                        <li>📋 <strong>Solicitudes</strong> — Los empleados pueden pedir turnos, vacaciones o ausencias. Los admins las aprueban o rechazan.</li>
+                                        <li>⏱️ <strong>Cargar horas</strong> — Registrá horas normales, extra y feriados por empleado y fecha.</li>
+                                        <li>📆 <strong>Mis eventos</strong> — Vista rápida de todos tus eventos del mes actual.</li>
+                                        <li>🔒 <strong>Eventos privados</strong> — Al crear un evento podés marcarlo como privado; solo vos lo ves.</li>
+                                        <li>📊 <strong>Próximos 7 días</strong> — Al final de la pantalla hay un resumen personal de tus eventos de los próximos 7 días.</li>
+                                        <li>⚙️ <strong>Configuración</strong> — Personalizá los tipos de evento y sus colores.</li>
+                                    </ul>
+                                </div>
+                                <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}/>
+                                <div>
+                                    <p className="text-lg font-bold text-blue-500 mb-2">🇬🇧 English</p>
+                                    <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                        <li>📅 <strong>Views</strong> — Navigate by day, week or month. Tap "Today" to return to the current day.</li>
+                                        <li>➕ <strong>Events</strong> — Create events for employees with type, color and date range.</li>
+                                        <li>📋 <strong>Requests</strong> — Employees can request shifts, vacations or absences. Admins approve or reject them.</li>
+                                        <li>⏱️ <strong>Log hours</strong> — Record normal, extra and holiday hours per employee and date.</li>
+                                        <li>📆 <strong>My events</strong> — Quick view of all your events for the current month.</li>
+                                        <li>🔒 <strong>Private events</strong> — When creating an event you can mark it as private; only you can see it.</li>
+                                        <li>📊 <strong>Next 7 days</strong> — At the bottom of the screen there's a personal summary of your events for the next 7 days.</li>
+                                        <li>⚙️ <strong>Settings</strong> — Customize event types and their colors.</li>
+                                    </ul>
+                                </div>
+                                <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}/>
+                                <div>
+                                    <p className="text-lg font-bold text-blue-500 mb-2">🇨🇿 Čeština</p>
+                                    <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                        <li>📅 <strong>Zobrazení</strong> — Navigujte po dnech, týdnech nebo měsících. Klepněte na "Dnes".</li>
+                                        <li>➕ <strong>Události</strong> — Vytvářejte události pro zaměstnance s typem, barvou a rozsahem dat.</li>
+                                        <li>📋 <strong>Žádosti</strong> — Zaměstnanci mohou žádat o směny, dovolené nebo absence. Správci je schvalují nebo zamítají.</li>
+                                        <li>⏱️ <strong>Zaznamenat hodiny</strong> — Zaznamenejte normální, přesčasové a sváteční hodiny.</li>
+                                        <li>📆 <strong>Moje události</strong> — Rychlý přehled vašich událostí za aktuální měsíc.</li>
+                                        <li>🔒 <strong>Soukromé události</strong> — Při vytváření události ji můžete označit jako soukromou; vidíte ji pouze vy.</li>
+                                        <li>📊 <strong>Příštích 7 dní</strong> — Ve spodní části obrazovky je osobní přehled vašich událostí na příštích 7 dní.</li>
+                                        <li>⚙️ <strong>Nastavení</strong> — Přizpůsobte typy událostí a jejich barvy.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div className={`px-6 py-4 border-t flex items-center justify-between gap-4 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-blue-500"/>
+                                    <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
+                                </label>
+                                <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('calendario_hideHelp','1');}catch(e){} } setShowHelp(false); }}
+                                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium">
+                                    Entendido / Got it / Rozumím
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {showMisEvs && (
                     <div className={`fixed inset-0 z-50 flex flex-col ${darkMode?'bg-slate-900':'bg-slate-50'}`}>
                         {/* Header */}
@@ -5760,6 +5799,10 @@ ${invoice.items.map(item => `
             const [seguros,    setSeguros]    = useState({});
             const [loaded,     setLoaded]     = useState(false);
             const [yearSel,    setYearSel]    = useState(new Date().getFullYear());
+            const [showHelp, setShowHelp] = useState(() => {
+                try { return localStorage.getItem('miSueldo_hideHelp') !== '1'; } catch(e) { return true; }
+            });
+            const [helpNoShow, setHelpNoShow] = useState(false);
             const [mesesAbiertos, setMesesAbiertos] = useState({});
             const toggleMes = (mes) => setMesesAbiertos(prev => ({...prev, [mes]: !prev[mes]}));
 
@@ -5790,6 +5833,22 @@ ${invoice.items.map(item => `
                     setLoaded(true);
                 };
                 cargar();
+            }, []);
+
+            // Recargar cuando PayrollManager dispara sueldoNotifUpdate
+            useEffect(() => {
+                const reload = async () => {
+                    try {
+                        const [payR, segR] = await Promise.all([
+                            window._sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
+                            window._sb.from('payroll_insurance').select('data').eq('id','main').maybeSingle(),
+                        ]);
+                        if (payR?.data?.data) { setPayroll(payR.data.data); window.__payrollDataPrecargada = payR.data.data; }
+                        if (segR?.data?.data) { setSeguros(segR.data.data); window.__seguroDataPrecargada = segR.data.data; }
+                    } catch(e) {}
+                };
+                window.addEventListener('sueldoNotifUpdate', reload);
+                return () => window.removeEventListener('sueldoNotifUpdate', reload);
             }, []);
 
             // Polling cada 30s — SOLO para Cobrado Hoy, completamente independiente
@@ -5892,12 +5951,73 @@ ${invoice.items.map(item => `
                         <div className="flex items-center gap-3">
                             {onBack && <button onClick={onBack} className={`flex items-center gap-1 text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Volver</button>}
                             <h1 className={`text-base font-bold ${txt} flex-1`}>💰 Mi Sueldo</h1>
+                            <button onClick={()=>setShowHelp(true)}
+                                className={`text-xs px-2 py-1.5 rounded-lg border ${darkMode?'border-slate-600 text-slate-400 hover:border-orange-400 hover:text-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400 hover:text-orange-500'}`}>
+                                ❓ {currentUser?.language==='en' ? 'How does it work?' : currentUser?.language==='cs' ? 'Jak to funguje?' : '¿Cómo funciona?'}
+                            </button>
                             <select value={yearSel} onChange={e=>setYearSel(Number(e.target.value))}
                                 className={`text-xs px-2 py-1.5 rounded-lg border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
                                 {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
                             </select>
                         </div>
                     </div>
+
+                    {/* Modal de ayuda — trilingüe */}
+                    {showHelp && (
+                        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                            <div className={`rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                                <div className={`px-6 py-5 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                    <h2 className={`text-xl font-bold ${txt}`}>💰 Mi Sueldo</h2>
+                                </div>
+                                <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 space-y-6">
+                                    <div>
+                                        <p className="text-lg font-bold text-orange-500 mb-2">🇦🇷 Español</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📊 <strong>Resumen anual</strong> — Total cobrado en Sueldos, Seguros y Market/Hs. Extra.</li>
+                                            <li>📅 <strong>Historial por mes</strong> — Tocá cada mes para ver el detalle de cada pago.</li>
+                                            <li>✅ <strong>Cobrado hoy</strong> — Aparece cuando el admin registra un pago en el día.</li>
+                                            <li>🏥 <strong>Seguro médico</strong> — Se muestra separado del sueldo básico.</li>
+                                            <li>⏳ <strong>Pendiente</strong> — Diferencia entre lo que debería haberse pagado y lo cobrado.</li>
+                                        </ul>
+                                    </div>
+                                    <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}/>
+                                    <div>
+                                        <p className="text-lg font-bold text-orange-500 mb-2">🇬🇧 English</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📊 <strong>Annual summary</strong> — Total received in Salary, Insurance and Market/Extra Hours.</li>
+                                            <li>📅 <strong>Monthly history</strong> — Tap each month to see payment details.</li>
+                                            <li>✅ <strong>Paid today</strong> — Appears when the admin registers a payment today.</li>
+                                            <li>🏥 <strong>Health insurance</strong> — Shown separately from the base salary.</li>
+                                            <li>⏳ <strong>Pending</strong> — Difference between what should have been paid and what was received.</li>
+                                        </ul>
+                                    </div>
+                                    <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}/>
+                                    <div>
+                                        <p className="text-lg font-bold text-orange-500 mb-2">🇨🇿 Čeština</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📊 <strong>Roční přehled</strong> — Celková částka za Mzdy, Pojištění a Trh/Přesčasy.</li>
+                                            <li>📅 <strong>Historie po měsících</strong> — Klepnutím na měsíc zobrazíte detail plateb.</li>
+                                            <li>✅ <strong>Vyplaceno dnes</strong> — Zobrazí se, když správce zaregistruje platbu v tento den.</li>
+                                            <li>🏥 <strong>Zdravotní pojištění</strong> — Zobrazeno odděleně od základní mzdy.</li>
+                                            <li>⏳ <strong>Nevyplaceno</strong> — Rozdíl mezi tím, co mělo být vyplaceno, a skutečně přijatou částkou.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div className={`px-6 py-4 border-t flex items-center justify-between gap-4 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-orange-500"/>
+                                        <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>
+                                            {currentUser?.language==='en' ? "Don't show again" : currentUser?.language==='cs' ? 'Znovu nezobrazovat' : 'No volver a mostrar'}
+                                        </span>
+                                    </label>
+                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('miSueldo_hideHelp','1');}catch(e){} } setShowHelp(false); }}
+                                        className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium">
+                                        {currentUser?.language==='en' ? 'Got it' : currentUser?.language==='cs' ? 'Rozumím' : 'Entendido'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="p-4 max-w-2xl mx-auto space-y-4">
                         {!yoEmp ? (
@@ -14259,7 +14379,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const existing = payrollData[key] || [];
                 const pago = existing[idx];
                 const updated = existing.filter((_, i) => i !== idx);
-                setPayrollData({ ...payrollData, [key]: updated });
+                const newPayrollData = { ...payrollData, [key]: updated };
+                setPayrollData(newPayrollData);
+                // Guardar en Supabase y actualizar cache
+                window.__payrollPrecargado = newPayrollData;
+                window.__payrollDataPrecargada = newPayrollData;
+                dbUpsertOne('payroll_monthly', 'main', newPayrollData);
+                // Avisar a MiSueldo
+                window.dispatchEvent(new Event('sueldoNotifUpdate'));
                 // Borrar de caja si tiene cajaId
                 if (pago?.cajaId) {
                     const allTx = JSON.parse(localStorage.getItem(CAJA_KEY_PAYROLL) || '{}');
@@ -24503,6 +24630,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [showEtiquetasModal, setShowEtiquetasModal] = React.useState(false);
             const [etiquetaForm,    setEtiquetaForm]    = React.useState({ nombre:'', color:'#7c3aed' });
             const [editingEtiqueta, setEditingEtiqueta] = React.useState(null);
+            const [showHelp, setShowHelp] = React.useState(() => {
+                try { return localStorage.getItem('miCerebro_hideHelp') !== '1'; } catch(e) { return true; }
+            });
+            const [helpNoShow, setHelpNoShow] = React.useState(false);
 
             // Sync desde Supabase al montar
             React.useEffect(() => {
@@ -24790,11 +24921,74 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         <button onClick={onBack} className={`text-sm font-medium shrink-0 ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>← Menú</button>
                         <span className="text-lg shrink-0">🧠</span>
                         <h1 className={`text-sm font-bold ${txt}`}>Mi Cerebro</h1>
+                        <button onClick={()=>setShowHelp(true)}
+                            className={`text-xs px-2 py-1 rounded-lg border ${darkMode?'border-slate-600 text-slate-400 hover:border-purple-400 hover:text-purple-400':'border-slate-300 text-slate-500 hover:border-purple-400 hover:text-purple-500'}`}>
+                            ❓
+                        </button>
                         <div className="ml-auto">
                             {vistaActiva==='tareas'  && <button onClick={openNew} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">+ Nueva</button>}
                             {vistaActiva==='postits' && <button onClick={()=>{setEditingPostit('new');setPostitForm({texto:'',color:'#FEF08A'});}} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">+ Post-it</button>}
                         </div>
                     </div>
+
+                    {/* Modal de ayuda Mi Cerebro — trilingüe */}
+                    {showHelp && (
+                        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                            <div className={`rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                                <div className={`px-6 py-5 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                    <h2 className={`text-xl font-bold ${txt}`}>🧠 Mi Cerebro</h2>
+                                </div>
+                                <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 space-y-6">
+                                    <div>
+                                        <p className="text-lg font-bold text-purple-500 mb-2">🇦🇷 Español</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📋 <strong>Tareas</strong> — Creá tareas propias con título, descripción, vencimiento y prioridad (alta / media / baja).</li>
+                                            <li>🤝 <strong>Compartir</strong> — Podés compartir tareas con otros usuarios del equipo.</li>
+                                            <li>📝 <strong>Notas en tareas</strong> — Cada tarea tiene un chat interno para agregar notas y comentarios.</li>
+                                            <li>📅 <strong>Calendario</strong> — Vista mensual, semanal y diaria de todas tus tareas con vencimiento.</li>
+                                            <li>🗒️ <strong>Post-its</strong> — Notas rápidas con colores. Podés marcarlas como resueltas.</li>
+                                            <li>🏷️ <strong>Etiquetas</strong> — Organizá tus tareas con etiquetas de colores personalizadas.</li>
+                                        </ul>
+                                    </div>
+                                    <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}/>
+                                    <div>
+                                        <p className="text-lg font-bold text-purple-500 mb-2">🇬🇧 English</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📋 <strong>Tasks</strong> — Create tasks with title, description, due date and priority (high / medium / low).</li>
+                                            <li>🤝 <strong>Share</strong> — Share tasks with other team members.</li>
+                                            <li>📝 <strong>Task notes</strong> — Each task has an internal chat for notes and comments.</li>
+                                            <li>📅 <strong>Calendar</strong> — Monthly, weekly and daily views of all tasks with due dates.</li>
+                                            <li>🗒️ <strong>Post-its</strong> — Quick colored notes. Mark them as resolved.</li>
+                                            <li>🏷️ <strong>Labels</strong> — Organize tasks with custom colored labels.</li>
+                                        </ul>
+                                    </div>
+                                    <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}/>
+                                    <div>
+                                        <p className="text-lg font-bold text-purple-500 mb-2">🇨🇿 Čeština</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📋 <strong>Úkoly</strong> — Vytvářejte úkoly s názvem, popisem, termínem a prioritou (vysoká / střední / nízká).</li>
+                                            <li>🤝 <strong>Sdílení</strong> — Sdílejte úkoly s ostatními členy týmu.</li>
+                                            <li>📝 <strong>Poznámky k úkolům</strong> — Každý úkol má interní chat pro poznámky a komentáře.</li>
+                                            <li>📅 <strong>Kalendář</strong> — Měsíční, týdenní a denní zobrazení všech úkolů s termíny.</li>
+                                            <li>🗒️ <strong>Post-ity</strong> — Rychlé barevné poznámky. Označte je jako vyřešené.</li>
+                                            <li>🏷️ <strong>Štítky</strong> — Organizujte úkoly pomocí vlastních barevných štítků.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div className={`px-6 py-4 border-t flex items-center justify-between gap-4 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-purple-500"/>
+                                        <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
+                                    </label>
+                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('miCerebro_hideHelp','1');}catch(e){} } setShowHelp(false); }}
+                                        className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium">
+                                        Entendido / Got it / Rozumím
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Fila 2: tabs */}
                     <div className="flex px-4 pb-0 gap-0">
                         {[['tareas','📋 Tareas'],['calendario','📅 Calendario'],['postits','🗒️ Post-its']].map(([v,l])=>{
@@ -25160,6 +25354,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const en = language === 'en';
         const L = (es, eng) => en ? eng : es;
 
+        const [showHelp, setShowHelp] = React.useState(() => {
+            try { return localStorage.getItem('cocina_hideHelp') !== '1'; } catch(e) { return true; }
+        });
+        const [helpNoShow, setHelpNoShow] = React.useState(false);
+
         // Estilos
         const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
         const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
@@ -25255,7 +25454,78 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     <div className="flex items-center gap-3 max-w-5xl mx-auto">
                         {onBack && <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400 hover:text-white':'text-slate-500 hover:text-slate-800'}`}>{L('← Volver','← Back')}</button>}
                         <h1 className={`text-base font-bold ${txt} flex-1`}>{L('👨‍🍳 Gestión de Cocina','👨‍🍳 Kitchen Management')}</h1>
+                        <button onClick={()=>setShowHelp(true)}
+                            className={`text-xs px-2 py-1.5 rounded-lg border ${darkMode?'border-slate-600 text-slate-400 hover:border-orange-400 hover:text-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400 hover:text-orange-500'}`}>
+                            ❓ {L('¿Cómo funciona?','How does it work?')}
+                        </button>
                     </div>
+
+                    {/* Modal ayuda Cocina — trilingüe */}
+                    {showHelp && (
+                        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                            <div className={`rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                                <div className={`px-6 py-5 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                    <h2 className={`text-xl font-bold ${txt}`}>👨‍🍳 Gestión de Cocina</h2>
+                                </div>
+                                <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 space-y-6">
+                                    <div>
+                                        <p className="text-lg font-bold text-orange-500 mb-2">🇦🇷 Español</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📦 <strong>Stock</strong> — Ver y editar el stock por sucursal. Vista "Todas" muestra el total y la distribución entre locales. Filtrá por categoría.</li>
+                                            <li>🚚 <strong>Envíos</strong> — Creá envíos de productos entre sucursales. Podés guardarlos como borrador antes de confirmar. Al confirmar descuenta stock y notifica.</li>
+                                            <li>🏪 <strong>Mercados</strong> — Planificá mercados con lista de productos y cantidades. Exportá en PDF, compartí y registrá lo que vuelve.</li>
+                                            <li>🔍 <strong>Control de Stock</strong> — Hacé un recuento físico y comparalo con el sistema. Genera informe de diferencias y corrige el stock automáticamente.</li>
+                                            <li>📥 <strong>Ingresos</strong> — Historial de entradas de stock. Filtrá por categoría.</li>
+                                            <li>📤 <strong>Egresos</strong> — Historial de salidas de stock. Filtrá por categoría.</li>
+                                            <li>🗂 <strong>Productos</strong> — Alta, edición y baja de productos. Importá y exportá en Excel con aliases para el matching con Storyous.</li>
+                                            <li>🏪 <strong>Sucursales</strong> — Gestioná los locales del sistema.</li>
+                                            {isAdmin && <li>📋 <strong>Recetas</strong> — Solo admins. Creá y editá recetas con ingredientes y pasos.</li>}
+                                        </ul>
+                                    </div>
+                                    <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}/>
+                                    <div>
+                                        <p className="text-lg font-bold text-orange-500 mb-2">🇬🇧 English</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📦 <strong>Stock</strong> — View and edit stock by branch. "All" view shows totals and distribution. Filter by category.</li>
+                                            <li>🚚 <strong>Shipments</strong> — Create product transfers between branches. Save as draft before confirming. Confirming deducts stock and notifies.</li>
+                                            <li>🏪 <strong>Markets</strong> — Plan markets with product lists. Export as PDF, share, and log returns.</li>
+                                            <li>🔍 <strong>Stock Control</strong> — Do a physical count and compare with the system. Generates difference report and corrects stock automatically.</li>
+                                            <li>📥 <strong>Inbound</strong> — Stock entry history. Filter by category.</li>
+                                            <li>📤 <strong>Outbound</strong> — Stock exit history. Filter by category.</li>
+                                            <li>🗂 <strong>Products</strong> — Create, edit and delete products. Import/export Excel with aliases for Storyous matching.</li>
+                                            <li>🏪 <strong>Branches</strong> — Manage the locations in the system.</li>
+                                            {isAdmin && <li>📋 <strong>Recipes</strong> — Admins only. Create and edit recipes with ingredients and steps.</li>}
+                                        </ul>
+                                    </div>
+                                    <div className={`border-t ${darkMode?'border-slate-700':'border-slate-100'}`}/>
+                                    <div>
+                                        <p className="text-lg font-bold text-orange-500 mb-2">🇨🇿 Čeština</p>
+                                        <ul className={`space-y-2 text-sm ${darkMode?'text-slate-300':'text-slate-700'}`}>
+                                            <li>📦 <strong>Sklad</strong> — Zobrazujte a upravujte sklad podle pobočky. Zobrazení "Vše" ukazuje celkové množství. Filtrujte podle kategorie.</li>
+                                            <li>🚚 <strong>Zásilky</strong> — Vytvářejte převody produktů mezi pobočkami. Uložte jako koncept před potvrzením.</li>
+                                            <li>🏪 <strong>Trhy</strong> — Plánujte trhy se seznamy produktů. Exportujte jako PDF, sdílejte a zaznamenávejte návraty.</li>
+                                            <li>🔍 <strong>Kontrola skladu</strong> — Proveďte fyzické počítání a porovnejte se systémem. Generuje přehled rozdílů.</li>
+                                            <li>📥 <strong>Příjem</strong> — Historie vstupů do skladu. Filtrujte podle kategorie.</li>
+                                            <li>📤 <strong>Výdej</strong> — Historie výstupů ze skladu. Filtrujte podle kategorie.</li>
+                                            <li>🗂 <strong>Produkty</strong> — Přidávejte, upravujte a mažte produkty. Import/export Excel s aliasy pro párování se Storyous.</li>
+                                            <li>🏪 <strong>Pobočky</strong> — Spravujte pobočky v systému.</li>
+                                            {isAdmin && <li>📋 <strong>Recepty</strong> — Pouze správci. Vytvářejte a upravujte recepty s ingrediencemi a kroky.</li>}
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div className={`px-6 py-4 border-t flex items-center justify-between gap-4 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-orange-500"/>
+                                        <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
+                                    </label>
+                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('cocina_hideHelp','1');}catch(e){} } setShowHelp(false); }}
+                                        className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium">
+                                        {L('Entendido','Got it')}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {/* Tabs */}
                     <div className="flex gap-1 mt-3 max-w-5xl mx-auto">
                         {TABS.map(tab => (
@@ -26747,19 +27017,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     {mercadoForm.sucursalDescuento && <p className={`text-xs mt-1 text-amber-500`}>⚡ {L('Se descontará al guardar','Will be deducted on save')}</p>}
                                 </div>
 
-                                {/* Notificar a */}
-                                <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('🔔 NOTIFICAR A','🔔 NOTIFY')}</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {(window.__systemUsersPrecargados||[]).filter((u,i,arr)=>u.activo!==false&&arr.findIndex(x=>x.id===u.id)===i).map(u=>(
-                                            <button key={u.id} type="button"
-                                                onClick={()=>setMercadoForm(f=>({...f,destinatarios:(f.destinatarios||[]).includes(String(u.id))?(f.destinatarios||[]).filter(x=>x!==String(u.id)):[...(f.destinatarios||[]),String(u.id)]}))}
-                                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${(mercadoForm.destinatarios||[]).includes(String(u.id))?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700')}`}>
-                                                {u.name||u.username}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
                                 {/* Lista de productos */}
                                 <div>
                                     <label className={`block text-xs font-semibold mb-2 ${sub}`}>{L('LISTA DE PRODUCTOS','PRODUCT LIST')}</label>
@@ -26811,24 +27068,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         const movs = (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:mercadoForm.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado: '+mercadoForm.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
                                         saveMovimientos([...movs,...movimientos].slice(0,500));
                                     }
-                                    // Insertar notificaciones en tabla dedicada
-                                    if (isNew && (mercadoForm.destinatarios||[]).length > 0) {
-                                        const notifInserts = (mercadoForm.destinatarios||[]).map(destId => ({
-                                            user_id: String(destId),
-                                            tipo: 'mercado',
-                                            data: {
-                                                mercadoId: data.id,
-                                                mercadoNombre: mercadoForm.mercadoNombre,
-                                                fecha: mercadoForm.fecha,
-                                                productos: (mercadoForm.productos||[]).filter(p=>p.cantidad||p.notas),
-                                                creadoPor: currentUser?.name || ''
-                                            },
-                                            visto: false
-                                        }));
-                                        window._sb.from('notifications').insert(notifInserts).then(({data,error}) => {
-                                            console.log('[NotifInsert] data:', data, 'error:', error, 'inserts:', notifInserts);
-                                        });
-                                    }
+
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('💾 Guardar','💾 Save')}</button>
                             </div>
