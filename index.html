@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-16:00 - localStorage ERRADICADO: darkMode/language/moduleOrder/helpPrefs/webhookUrl/bio/logs → Supabase+window.__ -->
+<!-- Version: 2026-05-12-16:45 - Fix bioCred + helpPrefs: cargar desde Supabase al login -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1524,7 +1524,7 @@ ${invoice.items.map(item => `
                                     .limit(50);
                                         console.log('[NotifLoad] userId:', String(currentUser.id), 'rows:', notifRowsData, 'err:', notifErr);
                                 if (notifRowsData) {
-                                    setNotifRows(notifRowsData);
+                                    // notifRows handled elsewhere
                                 }
                             }
                         } catch(ne) { console.log('[NotifLoad] catch:', ne); }
@@ -2452,6 +2452,14 @@ ${invoice.items.map(item => `
                             const logoutVal = val != null ? parseInt(val) : (user.autoLogoutMinutes != null ? parseInt(user.autoLogoutMinutes) : 5);
                             setAutoLogoutMinutes(logoutVal);
                             setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500);
+                        });
+                        // bioCred
+                        window._sb?.from('app_config').select('data').eq('id','bioCred_'+user.id).maybeSingle().then(r => {
+                            if (r?.data?.data) window.__bioCred = JSON.stringify(r.data.data);
+                        });
+                        // helpPrefs
+                        window._sb?.from('app_config').select('data').eq('id','helpPrefs_'+user.id).maybeSingle().then(r => {
+                            if (r?.data?.data) window.__userHelpPrefs = r.data.data;
                         });
                     })();
                 } else {
@@ -9083,10 +9091,10 @@ ${invoice.items.map(item => `
                                                 <span className={sub}>👤 {s.nombreEmpleado}</span>
                                                 {s.vencimiento && <span className={`text-xs opacity-60 ${sub}`}>· {s.vencimiento}</span>}
                                                 <div className="flex gap-0.5">
-                                                {['BANK','CASH','ATM'].map(m => (
-                                                    <button key={m} onClick={e => { e.stopPropagation(); saveSueldosSeleccionados(sueldosSeleccionados.map(x => x.id===s.id ? {...x, metodoPago: m} : x)); }}
-                                                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${s.metodoPago===m ? (m==='BANK' ? 'bg-blue-500 text-white' : m==='ATM' ? 'bg-orange-500 text-white' : 'bg-green-500 text-white') : (darkMode ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200')}`}>
-                                                        {m==='BANK'?'🏦':m==='ATM'?'🏧':'💵'}
+                                                {['BANK','CASH','ATM'].map(metodo => (
+                                                    <button key={metodo} onClick={e => { e.stopPropagation(); saveSueldosSeleccionados(sueldosSeleccionados.map(x => x.id===s.id ? {...x, metodoPago: metodo} : x)); }}
+                                                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${s.metodoPago===metodo ? (metodo==='BANK' ? 'bg-blue-500 text-white' : metodo==='ATM' ? 'bg-orange-500 text-white' : 'bg-green-500 text-white') : (darkMode ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200')}`}>
+                                                        {metodo==='BANK'?'🏦':metodo==='ATM'?'🏧':'💵'}
                                                     </button>
                                                 ))}
                                             </div>
@@ -14021,6 +14029,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     year: yr
                 });
                 
+                window.__cajaPrecargada = allTx;
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
 
@@ -14049,8 +14058,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     Object.keys(allTx).forEach(yr => {
                         allTx[yr] = (allTx[yr] || []).filter(t => t.id !== pago.cajaId);
                     });
-                    
+                    window.__cajaPrecargada = allTx;
+                    dbUpsertOne('cash_transactions', 'multiyear', allTx);
                     window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
+
+
                 }
             };
 
@@ -14399,8 +14411,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         allTx[yr] = (allTx[yr] || []).filter(t => t.id !== pago.cajaId);
                     });
                     
+                    window.__cajaPrecargada = allTx;
+                    dbUpsertOne('cash_transactions', 'multiyear', allTx);
                     window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
-                }
+
+
             };
 
             // Solo los pagos de concepto 'sueldo' descuentan del sueldo adeudado
