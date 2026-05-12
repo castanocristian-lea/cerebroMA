@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-14:00 - Fix caja vacía y autolock: esperar __dataReadyPromise antes de leer datos -->
+<!-- Version: 2026-05-12-14:30 - Fix caja vacía: mover carga a ronda 1, cash_transactions sin cache, fix parser maybeSingle -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -36,7 +36,7 @@
             return data.map(r => r.data);
         }
         // Tablas que NO deben cachearse (necesitan datos frescos)
-        const DB_NO_CACHE = new Set(['payroll_monthly','payroll_insurance','system_users','employees','app_config']);
+        const DB_NO_CACHE = new Set(['payroll_monthly','payroll_insurance','system_users','employees','app_config','cash_transactions']);
         async function dbGetKey(table, key) {
             // Check window cache first (valid for 30s) — skip for realtime tables
             if (!DB_NO_CACHE.has(table)) {
@@ -218,7 +218,7 @@
                     _sb.from('employees').select('data'),
                     _sb.from('payroll_notes').select('data'),
                     _sb.from('cash_notes').select('data'),
-                    _sb.from('cash_transactions').select('id').limit(1), // solo verificar existencia, multiyear se carga en ronda 2
+                    _sb.from('cash_transactions').select('data').eq('id','multiyear').maybeSingle(), // caja: primera ronda
                     _sb.from('calendar_events').select('data'),
                     _sb.from('calendar_hours').select('data'),
                     _sb.from('calendar_config').select('*'),
@@ -262,8 +262,8 @@
                 set('systemUsers',        sysU.data?.map(r=>r.data) || []);
 
                 // cash_transactions multiyear
-                const txRow = cashTx.data?.find(r => r.id === 'multiyear');
-                const _cashTx = txRow?.data || {}; window.__cashTxPrecargadas = _cashTx; window.__cajaPrecargada = _cashTx; // no localStorage
+                const _cashTx = cashTx.data?.data || {}; 
+                if (Object.keys(_cashTx).length > 0) { window.__cashTxPrecargadas = _cashTx; window.__cajaPrecargada = _cashTx; }
 
                 // calendar_config
                 const calUbic = calCfg.data?.find(r => r.id === 'ubicaciones');
@@ -328,7 +328,7 @@
                     _sb.from('payroll_monthly').select('data').eq('id','main').maybeSingle(),
                     _sb.from('app_config').select('data').eq('id','markedCategories').maybeSingle(),
                 ]);
-                if (cajaR.data?.data && Object.keys(cajaR.data.data).length > 0) window.__cajaPrecargada = cajaR.data.data;
+                if (cajaR.data?.data && Object.keys(cajaR.data.data).length > 0 && !window.__cajaPrecargada) window.__cajaPrecargada = cajaR.data.data;
                 if (!window.__invoicesPrecargadas?.length && invR2.data?.data?.length > 0) window.__invoicesPrecargadas = invR2.data.data;
                 if (catR2.data?.data?.length > 0) window.__categoriesPrecargadas = catR2.data.data;
                 if (supR2.data?.data) window.__suppliersInfoPrecargada = supR2.data.data;
