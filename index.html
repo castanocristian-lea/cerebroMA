@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-10:50 - Cocina: popup ayuda trilingüe con todas las funciones -->
+<!-- Version: 2026-05-12-12:10 - Facturas vencidas: incluye vencen hoy + filtro proveedor + ordenar -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1961,11 +1961,12 @@ ${invoice.items.map(item => `
                 const systemUsers = (window.__systemUsersPrecargados || []);
                 const updated = systemUsers.map(u => u.id === currentUser.id ? { ...u, autoLogoutMinutes } : u);
                 try { localStorage.setItem(`userPref_autoLogout_${currentUser.id}`, String(autoLogoutMinutes)); } catch(e) {}
-                // También guardar en Supabase
+                // Guardar en app_config como clave separada (más confiable)
+                dbUpsertOne('app_config', `autoLogout_${currentUser.id}`, autoLogoutMinutes);
+                // También en system_users
                 const _usrs = (window.__systemUsersPrecargados||[]);
                 const _upd = _usrs.map(u => u.id === currentUser.id ? {...u, autoLogoutMinutes} : u);
                 if (_upd.length) { window.__systemUsersPrecargados = _upd; dbSetArray('system_users', _upd); }
-                dbSetArray('system_users', updated);
             }, [autoLogoutMinutes, currentUser]);
             // Timer de auto-logout
             useEffect(() => {
@@ -2471,11 +2472,15 @@ ${invoice.items.map(item => `
                     // Cargar preferencias del usuario
                     if (user.language) setCurrentLanguage(user.language);
                     // Leer preferencia desde key persistente (más confiable que systemUsers)
-                    const savedLogout = user.autoLogoutMinutes != null ? String(user.autoLogoutMinutes) : localStorage.getItem(`userPref_autoLogout_${user.id}`);
-                    const logoutVal = savedLogout !== null ? parseInt(savedLogout) : (user.autoLogoutMinutes !== undefined ? user.autoLogoutMinutes : 5);
-                    autoLogoutLoadedRef.current = false; // evita que el useEffect guarde durante el set
-                    setAutoLogoutMinutes(logoutVal);
-                    setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500); // habilita guardado después de cargar
+                    // Cargar desde app_config (más confiable), luego localStorage, luego system_users
+                    autoLogoutLoadedRef.current = false;
+                    dbGetKey('app_config', `autoLogout_${user.id}`).then(val => {
+                        const v = val != null ? val : (user.autoLogoutMinutes != null ? user.autoLogoutMinutes : null);
+                        const fromLS = localStorage.getItem(`userPref_autoLogout_${user.id}`);
+                        const logoutVal = v != null ? parseInt(v) : (fromLS != null ? parseInt(fromLS) : 5);
+                        setAutoLogoutMinutes(logoutVal);
+                        setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500);
+                    });
                 } else {
                     // PIN incorrecto
                     if (user.role === 'superadmin') {
@@ -3789,7 +3794,7 @@ ${invoice.items.map(item => `
                         <CocinaModule darkMode={darkMode} currentUser={currentUser} language={currentLanguage} onBack={() => setActiveModule('home')} />
                     )}
                     {activeModule === 'micerebro' && (
-                        <MiCerebroModule darkMode={darkMode} currentUser={currentUser} systemUsers={systemUsers} onBack={() => setActiveModule('home')} />
+                        <MiCerebroModule darkMode={darkMode} currentUser={currentUser} systemUsers={systemUsers} language={currentLanguage} onBack={() => setActiveModule('home')} />
                     )}
                     {activeModule === 'stock' && (
                         <div className={`min-h-screen flex flex-col items-center justify-center ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
@@ -4224,7 +4229,7 @@ ${invoice.items.map(item => `
             const [showModal,   setShowModal]   = useState(false);
             const [showConfig,  setShowConfig]  = useState(false);
             const [showHelp, setShowHelp] = useState(() => {
-                try { return localStorage.getItem('calendario_hideHelp') !== '1'; } catch(e) { return true; }
+                try { const prefs = window.__userHelpPrefs||{}; return prefs['calendario_hideHelp'] !== '1' && localStorage.getItem('calendario_hideHelp') !== '1'; } catch(e) { return true; }
             });
             const [helpNoShow, setHelpNoShow] = useState(false);
             const [showMisEvs,  setShowMisEvs]  = useState(false);
@@ -5466,7 +5471,7 @@ ${invoice.items.map(item => `
                                     <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-blue-500"/>
                                     <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                 </label>
-                                <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('calendario_hideHelp','1');}catch(e){} } setShowHelp(false); }}
+                                <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('calendario_hideHelp','1');}catch(e){} const prefs={...window.__userHelpPrefs||{},calendario_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
                                     className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium">
                                     Entendido / Got it / Rozumím
                                 </button>
@@ -5800,7 +5805,7 @@ ${invoice.items.map(item => `
             const [loaded,     setLoaded]     = useState(false);
             const [yearSel,    setYearSel]    = useState(new Date().getFullYear());
             const [showHelp, setShowHelp] = useState(() => {
-                try { return localStorage.getItem('miSueldo_hideHelp') !== '1'; } catch(e) { return true; }
+                try { const prefs = window.__userHelpPrefs||{}; return prefs['miSueldo_hideHelp'] !== '1' && localStorage.getItem('miSueldo_hideHelp') !== '1'; } catch(e) { return true; }
             });
             const [helpNoShow, setHelpNoShow] = useState(false);
             const [mesesAbiertos, setMesesAbiertos] = useState({});
@@ -6010,7 +6015,7 @@ ${invoice.items.map(item => `
                                             {currentUser?.language==='en' ? "Don't show again" : currentUser?.language==='cs' ? 'Znovu nezobrazovat' : 'No volver a mostrar'}
                                         </span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('miSueldo_hideHelp','1');}catch(e){} } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('miSueldo_hideHelp','1');}catch(e){} const prefs={...window.__userHelpPrefs||{},miSueldo_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium">
                                         {currentUser?.language==='en' ? 'Got it' : currentUser?.language==='cs' ? 'Rozumím' : 'Entendido'}
                                     </button>
@@ -8823,6 +8828,8 @@ ${invoice.items.map(item => `
             const [showFacturasModal, setShowFacturasModal] = React.useState(false);
             const [facturasSeleccionadas, setFacturasSeleccionadas] = React.useState(() => { if (window.__facturasPlanPrecargadas?.length > 0) return window.__facturasPlanPrecargadas; return []; });
             const [pendingFactura, setPendingFactura] = React.useState(null);
+            const [facturasVencidasFilter, setFacturasVencidasFilter] = React.useState('');
+            const [facturasVencidasSort, setFacturasVencidasSort] = React.useState('fecha');
             const [showSueldosModal, setShowSueldosModal] = React.useState(false);
             const [sueldosSeleccionados, setSueldosSeleccionados] = React.useState(() => { if (window.__sueldosPlanPrecargados?.length > 0) return window.__sueldosPlanPrecargados; return []; });
             const [pendingSueldo, setPendingSueldo] = React.useState(null);
@@ -9574,7 +9581,8 @@ ${invoice.items.map(item => `
                 {showFacturasModal && (() => {
                     const allInvoices = (() => { if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; return []; })();
                     const today = new Date().toISOString().split('T')[0];
-                    const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate < today).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+                    const proveedores = [...new Set(allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate <= today).map(inv => inv.category || inv.supplier || 'Sin proveedor'))].sort();
+                    const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate <= today && (!facturasVencidasFilter || (inv.category || inv.supplier || 'Sin proveedor') === facturasVencidasFilter)).sort((a,b) => facturasVencidasSort === 'proveedor' ? (a.category||a.supplier||'').localeCompare(b.category||b.supplier||'') : facturasVencidasSort === 'monto' ? Math.abs(parseFloat(b.amount)||0) - Math.abs(parseFloat(a.amount)||0) : a.dueDate.localeCompare(b.dueDate));
                     return (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4" style={{touchAction:"none"}}>
                         <div className={`rounded-2xl shadow-2xl w-full max-w-lg p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
@@ -9582,7 +9590,18 @@ ${invoice.items.map(item => `
                                 <h3 className={`text-lg font-bold ${txt}`}>🧾 Facturas vencidas</h3>
                                 <span className={`text-xs ${sub}`}>{facturasSeleccionadas.length} seleccionadas</span>
                             </div>
-                            <p className={`text-xs ${sub} mb-4`}>Seleccioná las facturas que querés incluir en la planificación. No se modifica nada en el módulo de proveedores.</p>
+                            <p className={`text-xs ${sub} mb-3`}>Seleccioná las facturas que querés incluir en la planificación. No se modifica nada en el módulo de proveedores.</p>
+                            <div className="flex gap-2 mb-3">
+                                <select value={facturasVencidasFilter} onChange={e => setFacturasVencidasFilter(e.target.value)} className={`flex-1 text-xs rounded-lg px-2 py-1.5 border ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}>
+                                    <option value="">Todos los proveedores</option>
+                                    {proveedores.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                                <select value={facturasVencidasSort} onChange={e => setFacturasVencidasSort(e.target.value)} className={`text-xs rounded-lg px-2 py-1.5 border ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}>
+                                    <option value="fecha">↑ Fecha</option>
+                                    <option value="proveedor">A-Z Proveedor</option>
+                                    <option value="monto">↓ Monto</option>
+                                </select>
+                            </div>
                             {vencidas.length === 0 ? (
                                 <p className={`text-sm text-center py-8 ${sub}`}>No hay facturas vencidas pendientes de pago</p>
                             ) : (
@@ -9622,7 +9641,7 @@ ${invoice.items.map(item => `
                             )}
                             <div className="flex gap-2">
                                 {facturasSeleccionadas.length > 0 && <button onClick={() => saveFacturasSeleccionadas([])} className={`px-3 py-2 text-xs rounded-lg border ${darkMode ? 'border-slate-600 text-slate-400' : 'border-slate-200 text-slate-500'}`}>Limpiar todo</button>}
-                                <button onClick={() => { setShowFacturasModal(false); setPendingFactura(null); }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cerrar</button>
+                                <button onClick={() => { setShowFacturasModal(false); setPendingFactura(null); setFacturasVencidasFilter(''); setFacturasVencidasSort('fecha'); }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cerrar</button>
                             </div>
                         </div>
                     </div>
@@ -9693,13 +9712,25 @@ ${invoice.items.map(item => `
                 {showFacturasAcredModal && (() => {
                     const allInvoices = (() => { if (window.__invoicesPrecargadas?.length > 0) return window.__invoicesPrecargadas; return []; })();
                     const today = new Date().toISOString().split('T')[0];
-                    const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate < today).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+                    const proveedores = [...new Set(allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate <= today).map(inv => inv.category || inv.supplier || 'Sin proveedor'))].sort();
+                    const vencidas = allInvoices.filter(inv => inv.status === 'pending' && inv.dueDate && inv.dueDate <= today && (!facturasVencidasFilter || (inv.category || inv.supplier || 'Sin proveedor') === facturasVencidasFilter)).sort((a,b) => facturasVencidasSort === 'proveedor' ? (a.category||a.supplier||'').localeCompare(b.category||b.supplier||'') : facturasVencidasSort === 'monto' ? Math.abs(parseFloat(b.amount)||0) - Math.abs(parseFloat(a.amount)||0) : a.dueDate.localeCompare(b.dueDate));
                     return (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4" style={{touchAction:"none"}}>
                         <div className={`rounded-2xl shadow-2xl w-full max-w-lg p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'}`}>
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className={`text-lg font-bold ${txt}`}>🧾 Facturas vencidas</h3>
                                 <span className={`text-xs ${sub}`}>{facturasAcred.length} seleccionadas</span>
+                            </div>
+                            <div className="flex gap-2 mb-3">
+                                <select value={facturasVencidasFilter} onChange={e => setFacturasVencidasFilter(e.target.value)} className={`flex-1 text-xs rounded-lg px-2 py-1.5 border ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}>
+                                    <option value="">Todos los proveedores</option>
+                                    {proveedores.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                                <select value={facturasVencidasSort} onChange={e => setFacturasVencidasSort(e.target.value)} className={`text-xs rounded-lg px-2 py-1.5 border ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}>
+                                    <option value="fecha">↑ Fecha</option>
+                                    <option value="proveedor">A-Z Proveedor</option>
+                                    <option value="monto">↓ Monto</option>
+                                </select>
                             </div>
                             {vencidas.length === 0 ? (
                                 <p className={`text-sm text-center py-8 ${sub}`}>No hay facturas vencidas pendientes de pago</p>
@@ -9740,7 +9771,7 @@ ${invoice.items.map(item => `
                             )}
                             <div className="flex gap-2">
                                 {facturasAcred.length > 0 && <button onClick={() => saveFacturasAcred([])} className={`px-3 py-2 text-xs rounded-lg border ${darkMode ? 'border-slate-600 text-slate-400' : 'border-slate-200 text-slate-500'}`}>Limpiar todo</button>}
-                                <button onClick={() => { setShowFacturasAcredModal(false); setPendingFacturaAcred(null); }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cerrar</button>
+                                <button onClick={() => { setShowFacturasAcredModal(false); setPendingFacturaAcred(null); setFacturasVencidasFilter(''); setFacturasVencidasSort('fecha'); }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>Cerrar</button>
                             </div>
                         </div>
                     </div>
@@ -24601,7 +24632,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         // Esperar a que Supabase precargue antes de renderizar
 
         // ══ MI CEREBRO ══
-        const MiCerebroModule = ({ darkMode, currentUser, systemUsers, onBack }) => {
+        const MiCerebroModule = ({ darkMode, currentUser, systemUsers, onBack, language = 'es' }) => {
+            const lang = language || currentUser?.language || 'es';
+            const L3 = (es, en, cs) => lang==='en' ? en : lang==='cs' ? cs : es;
             // Claves privadas por usuario — definidas PRIMERO antes de cualquier useState
             const _uid = String(currentUser?.id || '');
             const tareasKey   = `miCerebroTareas_${_uid}`;
@@ -24621,7 +24654,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [showCompletadas, setShowCompletadas] = React.useState(false);
             const [colVerTodo, setColVerTodo] = React.useState({0:false,1:false,2:false});
             const [busqueda,        setBusqueda]        = React.useState('');
-            const [vistaActiva,     setVistaActiva]     = React.useState('tareas');
+            const [vistaActiva,     setVistaActiva]     = React.useState(L3('tareas','tasks','úkoly'));
             const [calFecha,        setCalFecha]        = React.useState(new Date());
             const [calVista,        setCalVista]        = React.useState('mes');
             const [editingPostit,   setEditingPostit]   = React.useState(null);
@@ -24631,7 +24664,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [etiquetaForm,    setEtiquetaForm]    = React.useState({ nombre:'', color:'#7c3aed' });
             const [editingEtiqueta, setEditingEtiqueta] = React.useState(null);
             const [showHelp, setShowHelp] = React.useState(() => {
-                try { return localStorage.getItem('miCerebro_hideHelp') !== '1'; } catch(e) { return true; }
+                try { const prefs = window.__userHelpPrefs||{}; return prefs['miCerebro_hideHelp'] !== '1' && localStorage.getItem('miCerebro_hideHelp') !== '1'; } catch(e) { return true; }
             });
             const [helpNoShow, setHelpNoShow] = React.useState(false);
 
@@ -24710,7 +24743,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 if (t&&!t.completada) { const v={...window.__mcChatVistos||{}}; delete v[String(id)]; window.__mcChatVistos=v; setChatVistos(v); dbUpsertOne('app_config','miCerebroChatVistos_'+_uid,v); window.dispatchEvent(new Event('chatUpdate')); }
             };
             const eliminarTarea = (id) => {
-                if (!confirm('¿Eliminar esta tarea?')) return;
+                if (!confirm(L3('¿Eliminar esta tarea?','Delete this task?','Smazat tento úkol?'))) return;
                 saveTareas(tareas.filter(t=>t.id!==id));
                 const v={...window.__mcChatVistos||{}}; delete v[String(id)]; window.__mcChatVistos=v; setChatVistos(v); dbUpsertOne('app_config','miCerebroChatVistos_'+_uid,v); window.dispatchEvent(new Event('chatUpdate'));
             };
@@ -24758,8 +24791,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 if (!v) return null;
                 const d = new Date(v+'T23:59:59'), diff=(d-new Date())/86400000;
                 if (diff<0)  return {label:`Vencida hace ${Math.abs(Math.ceil(diff))}d`, bg:'bg-red-500',   text:'text-white'};
-                if (diff<1)  return {label:'Vence hoy',                                  bg:'bg-orange-500',text:'text-white'};
-                if (diff<2)  return {label:'Mañana',                                     bg:'bg-amber-400', text:'text-white'};
+                if (diff<1)  return {label:L3('Vence hoy','Due today','Vyprší dnes'),                                  bg:'bg-orange-500',text:'text-white'};
+                if (diff<2)  return {label:L3('Mañana','Tomorrow','Zítra'),                                     bg:'bg-amber-400', text:'text-white'};
                 return {label:`${Math.ceil(diff)}d`, bg:darkMode?'bg-slate-700':'bg-slate-100', text:sub};
             };
             const prioColors = {alta:'#E24B4A',media:'#EF9F27',baja:'#888780'};
@@ -24784,8 +24817,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             // ── Calendario ─────────────────────────────────────────────────────
             const tareasEnFecha = (f) => todasMisT.filter(t=>t.vencimiento===f&&!t.completada);
             const CalendarioVista = () => {
-                const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                const dsem=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+                const meses=lang==='en'?['January','February','March','April','May','June','July','August','September','October','November','December']:lang==='cs'?['Leden','Únor','Březen','Duben','Květen','Červen','Červenec','Srpen','Září','Říjen','Listopad','Prosinec']:['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                const dsem=lang==='en'?['Sun','Mon','Tue','Wed','Thu','Fri','Sat']:lang==='cs'?['Ne','Po','Út','St','Čt','Pá','So']:['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
                 const hoyStr=new Date().toISOString().slice(0,10);
                 const irMes=(d)=>{const f=new Date(calFecha);f.setMonth(f.getMonth()+d);setCalFecha(f);};
                 const irSem=(d)=>{const f=new Date(calFecha);f.setDate(f.getDate()+d*7);setCalFecha(f);};
@@ -24895,7 +24928,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         {ultimaNota&&!tarea.completada&&(
                             <div className={`text-xs px-2 py-1.5 rounded-lg mb-1.5 italic ${darkMode?'bg-slate-700/50 text-slate-300':'bg-slate-50 text-slate-600'}`}
                                 style={{borderLeft:`2px solid ${String(ultimaNota.autorId)===uid?'#7F77DD':'#888780'}`}}>
-                                <span className="not-italic font-medium" style={{color:String(ultimaNota.autorId)===uid?'#7F77DD':undefined}}>{String(ultimaNota.autorId)===uid?'Vos':ultimaNota.autorNombre?.split(' ')[0]}:</span>{' '}
+                                <span className="not-italic font-medium" style={{color:String(ultimaNota.autorId)===uid?'#7F77DD':undefined}}>{String(ultimaNota.autorId)===uid?L3('Vos','You','Ty'):ultimaNota.autorNombre?.split(' ')[0]}:</span>{' '}
                                 {ultimaNota.texto.length>55?ultimaNota.texto.slice(0,55)+'…':ultimaNota.texto}
                             </div>)}
                         <button onClick={()=>setChatTarea(tarea)} className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${notasN>0?'bg-purple-600 text-white':darkMode?'bg-slate-700/60 text-slate-400 hover:bg-slate-700':'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
@@ -24907,9 +24940,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             };
 
             const colHeaders=[
-                {titulo:'Mis tareas',         emoji:'📋',headerBg:'#534AB7',headerText:'#EEEDFE',tareas:misActivas,    esPropia:true, mostrarDe:false},
-                {titulo:'Compartidas por mí',  emoji:'📤',headerBg:'#185FA5',headerText:'#E6F1FB',tareas:misCompartidas,esPropia:true, mostrarDe:false},
-                {titulo:'Compartidas conmigo', emoji:'🤝',headerBg:'#854F0B',headerText:'#FAEEDA',tareas:compartConmigo,esPropia:false,mostrarDe:true},
+                {titulo:L3('Mis tareas','My tasks','Moje úkoly'),         emoji:'📋',headerBg:'#534AB7',headerText:'#EEEDFE',tareas:misActivas,    esPropia:true, mostrarDe:false},
+                {titulo:L3('Compartidas por mí','Shared by me','Sdílené mnou'),  emoji:'📤',headerBg:'#185FA5',headerText:'#E6F1FB',tareas:misCompartidas,esPropia:true, mostrarDe:false},
+                {titulo:L3('Compartidas conmigo','Shared with me','Sdílené se mnou'), emoji:'🤝',headerBg:'#854F0B',headerText:'#FAEEDA',tareas:compartConmigo,esPropia:false,mostrarDe:true},
             ];
             const coloresPostit=['#FEF08A','#86EFAC','#93C5FD','#FDA4AF','#C4B5FD','#FED7AA'];
 
@@ -24926,7 +24959,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             ❓
                         </button>
                         <div className="ml-auto">
-                            {vistaActiva==='tareas'  && <button onClick={openNew} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">+ Nueva</button>}
+                            {vistaActiva===L3('tareas','tasks','úkoly')  && <button onClick={openNew} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">+ Nueva</button>}
                             {vistaActiva==='postits' && <button onClick={()=>{setEditingPostit('new');setPostitForm({texto:'',color:'#FEF08A'});}} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">+ Post-it</button>}
                         </div>
                     </div>
@@ -24980,7 +25013,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-purple-500"/>
                                         <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('miCerebro_hideHelp','1');}catch(e){} } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('miCerebro_hideHelp','1');}catch(e){} const prefs={...window.__userHelpPrefs||{},miCerebro_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium">
                                         Entendido / Got it / Rozumím
                                     </button>
@@ -24991,7 +25024,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* Fila 2: tabs */}
                     <div className="flex px-4 pb-0 gap-0">
-                        {[['tareas','📋 Tareas'],['calendario','📅 Calendario'],['postits','🗒️ Post-its']].map(([v,l])=>{
+                        {[[L3('tareas','tasks','úkoly'),'📋 Tareas'],['calendario','📅 Calendario'],['postits','🗒️ Post-its']].map(([v,l])=>{
                             const badge=v==='postits'?postits.filter(p=>!p.resuelto).length:0;
                             return(<button key={v} onClick={()=>setVistaActiva(v)}
                                 className={`relative flex-1 py-2 text-xs font-medium transition-colors border-b-2 ${vistaActiva===v?(darkMode?'border-purple-500 text-purple-400':'border-purple-600 text-purple-600'):(darkMode?'border-transparent text-slate-400 hover:text-white':'border-transparent text-slate-500 hover:text-slate-700')}`}>
@@ -25003,7 +25036,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 </div>
 
                 {/* ── TAREAS ── */}
-                {vistaActiva==='tareas'&&<>
+                {vistaActiva===L3('tareas','tasks','úkoly')&&<>
                     <div className={`px-4 pt-3 pb-2 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
                         <div className="relative">
                             <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${sub}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -25064,7 +25097,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     <div className="flex-1 p-4 max-w-4xl mx-auto w-full">
                         <div className={`rounded-2xl border p-4 ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
                             <div className="flex items-center gap-2 mb-4">
-                                {[['dia','Día'],['semana','Semana'],['mes','Mes']].map(([v,l])=>(
+                                {[['dia',L3('Día','Day','Den')],['semana',L3('Semana','Week','Týden')],['mes',L3('Mes','Month','Měsíc')]].map(([v,l])=>(
                                     <button key={v} onClick={()=>setCalVista(v)} className={`px-3 py-1 rounded-lg text-xs font-medium ${calVista===v?'bg-purple-600 text-white':darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>{l}</button>))}
                                 <button onClick={()=>setCalFecha(new Date())} className={`ml-auto px-3 py-1 rounded-lg text-xs font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>Hoy</button>
                             </div>
@@ -25092,7 +25125,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <button onClick={()=>savePostits(postits.map(x=>x.id===p.id?{...x,resuelto:!x.resuelto}:x))}
                                             className={`w-5 h-5 rounded text-xs flex items-center justify-center ${p.resuelto?'bg-green-500 text-white':'bg-white/70 hover:bg-green-100'}`}>✓</button>
                                         <button onClick={()=>{setEditingPostit(p.id);setPostitForm({texto:p.texto,color:p.color});}} className="w-5 h-5 bg-white/70 hover:bg-white rounded text-xs flex items-center justify-center">✏️</button>
-                                        <button onClick={()=>{if(confirm('¿Eliminar este post-it?'))savePostits(postits.filter(x=>x.id!==p.id));}} className="w-5 h-5 bg-white/70 hover:bg-red-100 rounded text-xs flex items-center justify-center">✕</button>
+                                        <button onClick={()=>{if(confirm(L3('¿Eliminar este post-it?','Delete this post-it?','Smazat tento post-it?')))savePostits(postits.filter(x=>x.id!==p.id));}} className="w-5 h-5 bg-white/70 hover:bg-red-100 rounded text-xs flex items-center justify-center">✕</button>
                                     </div>
                                 </div>))}
                         </div>
@@ -25208,7 +25241,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {editingPostit&&(
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
                         <div className="rounded-2xl shadow-2xl w-full max-w-sm p-5" style={{background:postitForm.color}}>
-                            <h2 className="text-sm font-bold mb-3 text-slate-800">{editingPostit==='new'?'Nuevo post-it':'Editar post-it'}</h2>
+                            <h2 className="text-sm font-bold mb-3 text-slate-800">{editingPostit==='new'?L3('Nuevo post-it','New post-it','Nový post-it'):'Editar post-it'}</h2>
                             <textarea value={postitForm.texto} onChange={e=>setPostitForm(f=>({...f,texto:e.target.value}))} rows={5} autoFocus placeholder="Escribí tu nota..."
                                 className="w-full px-3 py-2 rounded-xl text-sm resize-none bg-white/50 text-slate-800 placeholder-slate-500 border-0 outline-none focus:bg-white/70"/>
                             <div className="flex gap-2 mt-3">
@@ -25236,7 +25269,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <button onClick={()=>{setShowEtiquetasModal(false);setEditingEtiqueta(null);setEtiquetaForm({nombre:'',color:'#7c3aed'});}} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
                             </div>
                             <div className={`p-3 rounded-xl mb-4 ${darkMode?'bg-slate-700/50':'bg-slate-50'}`}>
-                                <p className={`text-xs font-semibold mb-2 ${sub}`}>{editingEtiqueta?'Editar':'Nueva etiqueta'}</p>
+                                <p className={`text-xs font-semibold mb-2 ${sub}`}>{editingEtiqueta?'Editar':L3('Nueva etiqueta','New label','Nový štítek')}</p>
                                 <div className="flex gap-2">
                                     <input type="text" value={etiquetaForm.nombre} onChange={e=>setEtiquetaForm(f=>({...f,nombre:e.target.value}))} placeholder="Nombre..."
                                         className={`flex-1 px-3 py-1.5 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'border-slate-300'}`}/>
@@ -25303,7 +25336,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             background:esMio?(darkMode?'rgba(147,51,234,0.15)':'#faf5ff'):(darkMode?'rgba(51,65,85,0.5)':'#f8fafc')}}>
                                         <div style={{display:'flex',gap:'8px',marginBottom:'2px'}}>
                                             <span style={{fontSize:'11px',fontWeight:600,color:esMio?(darkMode?'#c084fc':'#7c3aed'):darkMode?'#94a3b8':'#64748b'}}>
-                                                {esMio?'Vos':msg.autorNombre?.split(' ')[0]}</span>
+                                                {esMio?L3('Vos','You','Ty'):msg.autorNombre?.split(' ')[0]}</span>
                                             <span style={{fontSize:'11px',color:darkMode?'#64748b':'#94a3b8'}}>{fecha}</span>
                                         </div>
                                         <p style={{fontSize:'13px',color:darkMode?'#f1f5f9':'#0f172a',margin:0}}>{msg.texto}</p>
@@ -25355,7 +25388,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const L = (es, eng) => en ? eng : es;
 
         const [showHelp, setShowHelp] = React.useState(() => {
-            try { return localStorage.getItem('cocina_hideHelp') !== '1'; } catch(e) { return true; }
+            try { const prefs = window.__userHelpPrefs||{}; return prefs['cocina_hideHelp'] !== '1' && localStorage.getItem('cocina_hideHelp') !== '1'; } catch(e) { return true; }
         });
         const [helpNoShow, setHelpNoShow] = React.useState(false);
 
@@ -25518,7 +25551,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-orange-500"/>
                                         <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('cocina_hideHelp','1');}catch(e){} } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ try{localStorage.setItem('cocina_hideHelp','1');}catch(e){} const prefs={...window.__userHelpPrefs||{},cocina_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium">
                                         {L('Entendido','Got it')}
                                     </button>
