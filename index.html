@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-18:00 - Fix BANK crash: asignaciones useState faltaba return -->
+<!-- Version: 2026-05-12-18:20 - Fix helpPrefs+bioCred: setear window.__currentUserId al login -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -115,15 +115,14 @@
             return user ? String(user.id) : String(empId);
         }
         function notifRead(key) {
-            // Read from window cache first, then localStorage
+            // Read from window cache only
             if (window.__notifCache && window.__notifCache[key] !== undefined) return window.__notifCache[key];
-            try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; }
+            return [];
         }
         function notifWrite(key, value) {
-            // Write to window cache and localStorage
+            // Write to window cache only
             window.__notifCache = window.__notifCache || {};
             window.__notifCache[key] = value;
-            try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) {}
         }
         async function notifPush(key, item) {
             // Leer de Supabase para no perder notifs de otros dispositivos
@@ -2433,6 +2432,7 @@ ${invoice.items.map(item => `
                 if (user.pin === pinInput) {
                     const userConTs = {...user, loginTs: Date.now()};
                     setCurrentUser(userConTs);
+                    window.__currentUserId = user.id;
                     setIntentosFallidos(prev => { const n={...prev}; delete n[String(user.id)]; return n; });
                     setPinError(false);
                     setUserInput('');
@@ -2452,8 +2452,12 @@ ${invoice.items.map(item => `
                         const logoutVal = autoLogout != null ? parseInt(autoLogout) : (user.autoLogoutMinutes != null ? parseInt(user.autoLogoutMinutes) : 5);
                         setAutoLogoutMinutes(logoutVal);
                         setTimeout(() => { autoLogoutLoadedRef.current = true; }, 500);
-                        if (bioCred?.data?.data) window.__bioCred = JSON.stringify(bioCred.data.data);
-                        if (helpPrefs?.data?.data) window.__userHelpPrefs = helpPrefs.data.data;
+                        if (bioCred?.data?.data) {
+                            window.__bioCred = JSON.stringify(bioCred.data.data);
+                        }
+                        if (helpPrefs?.data?.data) {
+                            window.__userHelpPrefs = helpPrefs.data.data;
+                        }
                         setIsUnlocked(true);
                     })();
                 } else {
