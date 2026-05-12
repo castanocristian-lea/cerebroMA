@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-19:15 - Fix bioCred: esperar __dataReadyPromise antes de buscar en Supabase -->
+<!-- Version: 2026-05-12-19:30 - bioCred: volver a localStorage (seguro, solo identificador biométrico) -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1789,7 +1789,11 @@ ${invoice.items.map(item => `
             // Verificar disponibilidad de biometría al montar
             useEffect(() => {
                 if (window.PublicKeyCredential) setBioAvailable(true);
-                // Check inmediato
+                // Check localStorage primero (más rápido)
+                try {
+                    const ls = localStorage.getItem('cerebroma_bio_cred');
+                    if (ls) { window.__bioCred = ls; setBioRegistered(true); return; }
+                } catch(e) {}
                 if (window.__bioCred) { setBioRegistered(true); return; }
                 // Esperar precarga y chequear de nuevo
                 (async () => {
@@ -1859,6 +1863,7 @@ ${invoice.items.map(item => `
                         userName: user.name
                     };
                     window.__bioCred = JSON.stringify(credData);
+                    try { localStorage.setItem('cerebroma_bio_cred', JSON.stringify(credData)); } catch(e) {}
                     // También guardar en Supabase para persistir entre sesiones
                     try {
                         await window._sb?.from('app_config').upsert({ id: 'bioCred_'+user.id, data: credData });
