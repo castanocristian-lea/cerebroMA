@@ -263,6 +263,7 @@
 
                 // cash_transactions multiyear
                 const _cashTx = cashTx.data?.data || {}; 
+                console.log('💰 cashTx raw:', cashTx, 'parsed:', _cashTx, 'keys:', Object.keys(_cashTx));
                 if (Object.keys(_cashTx).length > 0) { window.__cashTxPrecargadas = _cashTx; window.__cajaPrecargada = _cashTx; }
 
                 // calendar_config
