@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-19:45 - Fix import Excel productos: guardar en Supabase con saveProductos -->
+<!-- Version: 2026-05-12-20:10 - Stock input: suma/resta al existente (no iguala), placeholder +/- -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -16104,7 +16104,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.amount} (CZK)</label>
-                                            <input type="number" min="0" step="0.01" value={seguroForm.monto} onChange={e => setSeguroForm({...seguroForm, monto: e.target.value})}
+                                            <input type="number" step="1" value={seguroForm.monto} onChange={e => setSeguroForm({...seguroForm, monto: e.target.value})}
                                                 placeholder="0.00"
                                                 className={`w-full px-3 py-2 border rounded-lg text-sm font-mono ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`} />
                                         </div>
@@ -16699,7 +16699,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         </div>
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.hourlyRate}</label>
-                                            <input type="number" min="0" step="0.01" value={formData.valorHora || ''} onChange={e => setFormData({...formData, valorHora: e.target.value})}
+                                            <input type="number" step="1" value={formData.valorHora || ''} onChange={e => setFormData({...formData, valorHora: e.target.value})}
                                                 placeholder={language==="en"?"E.g.: 200":language==="cs"?"Např.: 200":"Ej: 200"}
                                                 className={`w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`} />
                                         </div>
@@ -16792,7 +16792,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
                                             <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{t.amount} (CZK)</label>
-                                            <input type="number" min="0" step="0.01" value={payForm.monto} onChange={e => setPayForm({...payForm, monto: e.target.value})}
+                                            <input type="number" step="1" value={payForm.monto} onChange={e => setPayForm({...payForm, monto: e.target.value})}
                                                 placeholder="0.00"
                                                 className={`w-full px-3 py-2 border rounded-lg text-sm font-mono ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'border-slate-300'}`} />
                                         </div>
@@ -26371,7 +26371,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             <tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
                                                 <th className={`px-4 py-4 text-left text-sm font-semibold ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
                                                 <th className={`px-4 py-4 text-left text-sm font-semibold ${sub}`}>{L('CATEGORÍA','CATEGORY')}</th>
-                                                <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{sucursalSel==='todas'?L('STOCK POR SUCURSAL','STOCK BY BRANCH'):'STOCK'}</th>
+                                                <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{sucursalSel==='todas'?L('STOCK POR SUCURSAL','STOCK BY BRANCH'):L('ACTUAL','CURRENT')}</th>
+                                                {canEdit && sucursalSel !== 'todas' && <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{L('NUEVO','NEW')}</th>}
                                                 {sucursalSel==='todas' && <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{L('STOCK TOTAL','TOTAL STOCK')}</th>}
                                                 <th className={`px-4 py-4 text-right text-sm font-semibold ${sub}`}>{L('ESTADO','STATUS')}</th>
                                             </tr>
@@ -26389,29 +26390,34 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 ))}
                                                             </div>
                                                         )}
-                                                        {canEdit && sucursalSel !== 'todas' ? (
-                                                            <input key={`${p.id}_${sucursalSel}`} type="number" min="0" step="0.01"
-                                                                defaultValue={p.cantidad}
-                                                                onBlur={e => {
-                                                                    const val = parseFloat(e.target.value);
-                                                                    if (isNaN(val)) return;
-                                                                    const k = stockKey(p.id, sucursalSel);
-                                                                    const prev = parseFloat(stock[k] || 0);
-                                                                    if (val === prev) return;
-                                                                    const diff = val - prev;
-                                                                    const newStock = { ...stock, [k]: val };
-                                                                    saveStock(newStock);
-                                                                    const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
-                                                                    const mov = { id: Date.now(), tipo: diff > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(diff), notas: 'Edición en Stock · ' + sNombre + (diff > 0 ? ' · anterior: '+prev : ' · anterior: '+prev), fecha: new Date().toISOString(), user: currentUser?.name || '' };
-                                                                    saveMovimientos([mov, ...movimientos].slice(0, 200));
-                                                                }}
-                                                                className={`w-24 px-2 py-1.5 text-right font-mono font-bold text-base border-2 rounded-lg ${p.alerta ? 'text-red-500 border-red-300' : 'text-green-600 border-green-300'} ${darkMode ? 'bg-slate-700' : 'bg-white'}`}
-                                                            />
-                                                        ) : (
-                                                            sucursalSel !== 'todas' && <span className={`font-mono font-bold text-base ${p.cantidad < 0 ? 'text-red-600 font-extrabold' : p.alerta ? 'text-red-500' : 'text-green-600'}`}>{p.cantidad < 0 ? '⚠️ ' : ''}{p.cantidad}</span>
+                                                        {sucursalSel !== 'todas' && (
+                                                            <span className={`font-mono font-bold text-base ${p.cantidad < 0 ? 'text-red-600 font-extrabold' : p.alerta ? 'text-red-500' : 'text-green-600'}`}>
+                                                                {p.cantidad < 0 ? '⚠️ ' : ''}{p.cantidad}
+                                                            </span>
                                                         )}
                                                         {sucursalSel !== 'todas' && <span className={`text-sm ml-1 ${sub}`}>{p.unidad}</span>}
                                                     </td>
+                                                    {canEdit && sucursalSel !== 'todas' && (
+                                                        <td className="px-4 py-3 text-right">
+                                                            <input key={`${p.id}_${sucursalSel}`} type="number" step="1"
+                                                                placeholder="+/-"
+                                                                onBlur={e => {
+                                                                    const val = parseFloat(e.target.value);
+                                                                    if (isNaN(val) || val === 0) return;
+                                                                    const k = stockKey(p.id, sucursalSel);
+                                                                    const prev = parseFloat(stock[k] || 0);
+                                                                    const newQty = prev + val;
+                                                                    const newStock = { ...stock, [k]: newQty };
+                                                                    saveStock(newStock);
+                                                                    const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
+                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+                                                                    saveMovimientos([mov, ...movimientos].slice(0, 200));
+                                                                    e.target.value = '';
+                                                                }}
+                                                                className={`w-24 px-2 py-1.5 text-right font-mono font-bold text-base border-2 rounded-lg border-orange-300 ${darkMode ? 'bg-slate-700 text-white' : 'bg-white text-slate-800'}`}
+                                                            />
+                                                        </td>
+                                                    )}
                                                     {sucursalSel==='todas' && <td className={`px-4 py-4 text-right font-mono font-bold text-sm ${txt}`}>{p.cantidad}</td>}
                                                     <td className="px-4 py-4 text-right">
                                                         {p.alerta
@@ -26445,25 +26451,35 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <span className={`text-xs px-2 py-1 rounded-lg font-bold ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-800'}`}>Total: {p.cantidad}</span>
                                                 </div>
                                             ) : canEdit ? (
-                                                <div className="flex items-center gap-2">
-                                                    <input key={`${p.id}_${sucursalSel}_m`} type="number" min="0" step="0.01"
-                                                        defaultValue={p.cantidad}
-                                                        onBlur={e => {
-                                                            const val = parseFloat(e.target.value);
-                                                            if (isNaN(val)) return;
-                                                            const k = stockKey(p.id, sucursalSel);
-                                                            const prev = parseFloat(stock[k] || 0);
-                                                            if (val === prev) return;
-                                                            const diff = val - prev;
-                                                            const newStock = { ...stock, [k]: val };
-                                                            saveStock(newStock);
-                                                            const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
-                                                            const mov = { id: Date.now(), tipo: diff > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(diff), notas: 'Edición en Stock · ' + sNombre + (diff > 0 ? ' · anterior: '+prev : ' · anterior: '+prev), fecha: new Date().toISOString(), user: currentUser?.name || '' };
-                                                            saveMovimientos([mov, ...movimientos].slice(0, 200));
-                                                        }}
-                                                        className={`w-28 px-2 py-1.5 text-right font-mono font-bold text-lg border-2 rounded-lg ${p.alerta ? 'text-red-500 border-red-300' : 'text-green-600 border-green-300'} ${darkMode ? 'bg-slate-700' : 'bg-white'}`}
-                                                    />
-                                                    <span className={`text-sm ${sub}`}>{p.unidad}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={`text-xs ${sub} mb-1`}>{L('Actual','Current')}</span>
+                                                        <span className={`font-mono font-bold text-lg px-3 py-1.5 rounded-lg ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-500'} ${p.cantidad < 0 ? 'text-red-500' : ''}`}>{p.cantidad}</span>
+                                                    </div>
+                                                    <span className={`text-lg ${sub}`}>→</span>
+                                                    <div className="flex flex-col items-center flex-1">
+                                                        <span className={`text-xs ${sub} mb-1`}>{L('Nuevo','New')}</span>
+                                                        <div className="flex items-center gap-1 w-full">
+                                                            <input key={`${p.id}_${sucursalSel}_m`} type="number" step="1"
+                                                                placeholder="+/-"
+                                                                onBlur={e => {
+                                                                    const val = parseFloat(e.target.value);
+                                                                    if (isNaN(val) || val === 0) return;
+                                                                    const k = stockKey(p.id, sucursalSel);
+                                                                    const prev = parseFloat(stock[k] || 0);
+                                                                    const newQty = prev + val;
+                                                                    const newStock = { ...stock, [k]: newQty };
+                                                                    saveStock(newStock);
+                                                                    const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
+                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+                                                                    saveMovimientos([mov, ...movimientos].slice(0, 200));
+                                                                    e.target.value = '';
+                                                                }}
+                                                                className={`flex-1 px-2 py-1.5 text-right font-mono font-bold text-lg border-2 rounded-lg border-orange-300 ${darkMode ? 'bg-slate-700 text-white' : 'bg-white text-slate-800'}`}
+                                                            />
+                                                            <span className={`text-sm ${sub}`}>{p.unidad}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-1">
@@ -26638,6 +26654,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className='flex gap-2'>
                             {showControlInforme && <button onClick={()=>setShowControlInforme(false)} className={`px-3 py-1.5 text-xs rounded-lg ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>← {L('Volver','Back')}</button>}
                             <button onClick={()=>setShowControlHistorial(v=>!v)} className={`px-3 py-1.5 text-xs rounded-lg ${showControlHistorial?(darkMode?'bg-orange-600 text-white':'bg-orange-500 text-white'):(darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600')}`}>📋 {L('Historial','History')}{controlHistorial.length>0?' ('+controlHistorial.length+')':''}</button>
+                            {isAdmin && showControlHistorial && controlHistorial.length > 0 && <button onClick={()=>{ if(confirm(L('¿Resetear historial de control?','Reset stock check history?'))){ setControlHistorial([]); save('stock_control_historial',[]); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
                         </div>
                         </div>
                         {showControlHistorial ? (
@@ -26717,10 +26734,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 <td className={`px-4 py-2.5 font-medium ${txt}`}>{p.nombre}</td>
                                                                 <td className={`px-4 py-2.5 text-right font-mono ${sub}`}>{sistema}</td>
                                                                 <td className="px-4 py-2.5 text-right">
-                                                                    <input type="number" min="0" step="0.01"
+                                                                    <input type="number" step="1"
                                                                         value={fisico}
                                                                         onChange={e=>setControlData(d=>({...d,[p.id]:e.target.value}))}
-                                                                        placeholder="—"
+                                                                        placeholder="+/-"
                                                                         className={`w-24 px-2 py-1 text-right font-mono font-bold border-2 rounded-lg text-sm ${fisico!==''&&diff!==0?'border-red-400 text-red-600':fisico!==''&&diff===0?'border-green-400 text-green-600':'border-slate-200'} ${darkMode?'bg-slate-700 text-white':'bg-white'}`}/>
                                                                 </td>
                                                             <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${diff===null?sub:diff>0?'text-green-600':diff<0?'text-red-700 font-extrabold bg-red-50':'text-slate-400'}`}>
@@ -26811,40 +26828,18 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {activeTab === 'ingresos' && (
                     <div className="mt-4 space-y-3">
-                        {/* Edicion directa de stock */}
-                        <div className={`rounded-xl border ${card} p-3`}>
-                            <p className={`text-xs font-semibold mb-2 ${sub}`}>{L('✏️ MODIFICAR STOCK DIRECTAMENTE','✏️ EDIT STOCK DIRECTLY')}</p>
-                            <div className="flex gap-2 flex-wrap items-center">
-                                <select value={sucursalSel==='todas'?String(sucursales[0]?.id||''):sucursalSel} onChange={e=>setSucursalSel(e.target.value)}
-                                    className={`px-3 py-1.5 rounded-lg text-sm border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
-                                    {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
-                                </select>
-                                <p className={`text-xs ${sub}`}>{L('Seleccioná una sucursal en Stock para editar cantidades directamente','Select a branch in Stock tab to edit quantities directly')}</p>
-                                <button onClick={()=>{ if(sucursalSel==='todas') setSucursalSel(String(sucursales[0]?.id||'')); setActiveTab('stock'); }}
-                                    className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium">
-                                    → {L('Ir a Stock','Go to Stock')}
-                                </button>
-                            </div>
-                        </div>
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <p className={`text-sm font-semibold ${txt}`}>{L("Historial de ingresos","Inbound history")}</p>
-                                {(categoriasProd.length > 0 && (
+                                {categoriasProd.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5 items-center">
-                                        <button onClick={()=>setCatFilter('')}
-                                            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===''?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
-                                            {L('Todas','All')}
-                                        </button>
-                                        {categoriasProd.map(c=>(
-                                            <button key={c} onClick={()=>setCatFilter(catFilter===c?'':c)}
-                                                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===c?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
-                                                {c}
-                                            </button>
-                                        ))}
+                                        <button onClick={()=>setCatFilter('')} className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===''?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>{L('Todas','All')}</button>
+                                        {categoriasProd.map(c=>(<button key={c} onClick={()=>setCatFilter(catFilter===c?'':c)} className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===c?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>{c}</button>))}
                                     </div>
-                                ))}
+                                )}
                             </div>
                             <div className="flex gap-2 flex-wrap">
+                                {isAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de ingresos?','Reset inbound history?'))){ const filtered=movimientos.filter(m=>m.tipo!=='ingreso'); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
                                 {canEdit && <button onClick={() => { setIngForm({ productoId: '', branchId: sucursalSel || String(sucursales[0]?.id||''), cantidad: '', notas: '' }); setShowIngModal(true); }} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">{L('📥 1 producto','📥 1 product')}</button>}
                                 {canEdit && <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">{L('📋 Lista completa','📋 Full list')}</button>}
                             </div>
@@ -26884,25 +26879,18 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <p className={`text-sm font-semibold ${txt}`}>{L('Historial de egresos','Outbound history')}</p>
-                                {(categoriasProd.length > 0 && (
+                                {categoriasProd.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5 items-center">
-                                        <button onClick={()=>setCatFilter('')}
-                                            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===''?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
-                                            {L('Todas','All')}
-                                        </button>
-                                        {categoriasProd.map(c=>(
-                                            <button key={c} onClick={()=>setCatFilter(catFilter===c?'':c)}
-                                                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===c?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>
-                                                {c}
-                                            </button>
-                                        ))}
+                                        <button onClick={()=>setCatFilter('')} className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===''?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>{L('Todas','All')}</button>
+                                        {categoriasProd.map(c=>(<button key={c} onClick={()=>setCatFilter(catFilter===c?'':c)} className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${catFilter===c?'bg-orange-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400 hover:border-orange-400':'border-slate-300 text-slate-500 hover:border-orange-400')}`}>{c}</button>))}
                                     </div>
-                                ))}
+                                )}
                             </div>
-                            {canEdit && <div className="flex gap-2">
-                                <button onClick={() => { setMovManualTipo('venta'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('📋 Carga manual','📋 Manual entry')}</button>
-                                <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>
-                            </div>}
+                            <div className="flex gap-2 flex-wrap">
+                                {isAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de egresos?','Reset outbound history?'))){ const filtered=movimientos.filter(m=>!['venta','ajuste','envio'].includes(m.tipo)); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
+                                {canEdit && <button onClick={() => { setMovManualTipo('venta'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('📋 Carga manual','📋 Manual entry')}</button>}
+                                {canEdit && <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
+                            </div>
                         </div>
                         <div className={`rounded-xl border ${card} overflow-hidden`}>
                             {movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter))).length === 0
@@ -27132,7 +27120,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <tr key={p.id} className={(p.cantidad||p.notas)?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
                                                         <td className={`px-3 py-2 font-medium ${txt}`}>{p.nombre}</td>
                                                         <td className="px-3 py-2 text-right">
-                                                            <input type="number" min="0" step="0.01" value={p.cantidad}
+                                                            <input type="number" step="1" value={p.cantidad}
                                                                 onChange={e=>setMercadoForm(f=>({...f,productos:f.productos.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}))}
                                                                 placeholder="0"
                                                                 className={`w-20 px-2 py-1 text-right font-mono text-sm border-2 rounded-lg ${p.cantidad?'border-orange-400 text-orange-600':'border-slate-200'} ${darkMode?'bg-slate-700 text-white':'bg-white'}`}/>
@@ -27211,7 +27199,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         <td className={`px-3 py-2.5 font-medium ${txt}`}>{p.nombre}</td>
                                                         <td className={`px-3 py-2.5 text-right font-mono text-sm ${sub}`}>{p.cantidad||'—'}</td>
                                                         <td className="px-3 py-2.5 text-right">
-                                                            <input type="number" min="0" step="0.01"
+                                                            <input type="number" step="1"
                                                                 value={p.cantVuelve||''}
                                                                 onChange={e=>setVuelvenForm(f=>({...f,productos:f.productos.map((x,j)=>j===i?{...x,cantVuelve:e.target.value}:x)}))}
                                                                 placeholder="0"
@@ -27467,7 +27455,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </div>
                                 <div>
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('CANTIDAD *','QUANTITY *')}</label>
-                                    <input type="number" min="0" step="0.01" value={ingForm.cantidad} onChange={e=>setIngForm(f=>({...f,cantidad:e.target.value}))} placeholder="0" className={inp} style={{maxWidth:'150px'}}/>
+                                    <input type="number" step="1" value={ingForm.cantidad} onChange={e=>setIngForm(f=>({...f,cantidad:e.target.value}))} placeholder="0" className={inp} style={{maxWidth:'150px'}}/>
                                 </div>
                                 <div>
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('NOTAS','NOTES')}</label>
@@ -27566,7 +27554,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                             {envioForm.desde && <span className={`text-xs ml-1 ${sub}`}>({getStock(p.id, envioForm.desde)} avail.)</span>}
                                                         </td>
                                                         <td className="px-3 py-2.5 text-right">
-                                                            <input type="number" min="0" step="0.01"
+                                                            <input type="number" step="1"
                                                                 value={p.cantidad}
                                                                 onChange={e=>setEnvioForm(f=>({...f,productos:f.productos.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}))}
                                                                 placeholder="0"
@@ -27648,7 +27636,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <td className={`px-4 py-3 text-right font-mono text-sm ${actual > 0 ? 'text-green-500' : sub}`}>{actual}</td>
                                                     <td className="px-4 py-3 text-right">
                                                         <input
-                                                            type="number" min="0" step="0.01"
+                                                            type="number" step="1"
                                                             value={f.cantidad}
                                                             onChange={e => setMovManualFilas(rows => rows.map((r,j) => j===i ? {...r, cantidad: e.target.value} : r))}
                                                             placeholder="0"
