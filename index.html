@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-12:10 - Facturas vencidas: incluye vencen hoy + filtro proveedor + ordenar -->
+<!-- Version: 2026-05-12-12:30 - Mi Cerebro: traducciones botón Nueva + modal tarea -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -24654,7 +24654,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [showCompletadas, setShowCompletadas] = React.useState(false);
             const [colVerTodo, setColVerTodo] = React.useState({0:false,1:false,2:false});
             const [busqueda,        setBusqueda]        = React.useState('');
-            const [vistaActiva,     setVistaActiva]     = React.useState(L3('tareas','tasks','úkoly'));
+            const [vistaActiva,     setVistaActiva]     = React.useState('tareas');
             const [calFecha,        setCalFecha]        = React.useState(new Date());
             const [calVista,        setCalVista]        = React.useState('mes');
             const [editingPostit,   setEditingPostit]   = React.useState(null);
@@ -24959,7 +24959,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             ❓
                         </button>
                         <div className="ml-auto">
-                            {vistaActiva===L3('tareas','tasks','úkoly')  && <button onClick={openNew} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">+ Nueva</button>}
+                            {vistaActiva==='tareas'  && <button onClick={openNew} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">+ {L3('Nueva','New','Nová')}</button>}
                             {vistaActiva==='postits' && <button onClick={()=>{setEditingPostit('new');setPostitForm({texto:'',color:'#FEF08A'});}} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">+ Post-it</button>}
                         </div>
                     </div>
@@ -25024,7 +25024,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                     {/* Fila 2: tabs */}
                     <div className="flex px-4 pb-0 gap-0">
-                        {[[L3('tareas','tasks','úkoly'),'📋 Tareas'],['calendario','📅 Calendario'],['postits','🗒️ Post-its']].map(([v,l])=>{
+                        {[['tareas', L3('📋 Tareas','📋 Tasks','📋 Úkoly')],['calendario', L3('📅 Calendario','📅 Calendar','📅 Kalendář')],['postits','🗒️ Post-its']].map(([v,l])=>{
                             const badge=v==='postits'?postits.filter(p=>!p.resuelto).length:0;
                             return(<button key={v} onClick={()=>setVistaActiva(v)}
                                 className={`relative flex-1 py-2 text-xs font-medium transition-colors border-b-2 ${vistaActiva===v?(darkMode?'border-purple-500 text-purple-400':'border-purple-600 text-purple-600'):(darkMode?'border-transparent text-slate-400 hover:text-white':'border-transparent text-slate-500 hover:text-slate-700')}`}>
@@ -25036,7 +25036,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 </div>
 
                 {/* ── TAREAS ── */}
-                {vistaActiva===L3('tareas','tasks','úkoly')&&<>
+                {vistaActiva==='tareas'&&<>
                     <div className={`px-4 pt-3 pb-2 border-b ${darkMode?'border-slate-700':'border-slate-200'}`}>
                         <div className="relative">
                             <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${sub}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -25147,7 +25147,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     borderBottom:`1px solid ${darkMode?'#334155':'#e2e8f0'}`}}>
                                 <h2 style={{fontSize:'15px',fontWeight:700,flex:1,margin:0,
                                         color:darkMode?'#f1f5f9':'#0f172a'}}>
-                                    {editingTarea?'Editar tarea':'Nueva tarea'}</h2>
+                                    {editingTarea?L3('Editar tarea','Edit task','Upravit úkol'):L3('Nueva tarea','New task','Nový úkol')}</h2>
                                 <button onClick={()=>setShowModal(false)}
                                     style={{width:'28px',height:'28px',borderRadius:'50%',border:'none',cursor:'pointer',
                                             background:darkMode?'#334155':'#f1f5f9',color:darkMode?'#94a3b8':'#64748b',
@@ -25157,44 +25157,44 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div style={{flex:1,overflowY:'auto',padding:'16px 16px 12px',overscrollBehavior:'contain'}}>
                                 <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
                                     <div>
-                                        <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>TÍTULO *</label>
+                                        <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>{L3('TÍTULO *','TITLE *','NÁZEV *')}</label>
                                         <input type="text" value={form.titulo} onChange={e=>setForm(f=>({...f,titulo:e.target.value}))}
-                                            placeholder="¿Qué necesitás hacer?"
+                                            placeholder={L3('¿Qué necesitás hacer?','What do you need to do?','Co je třeba udělat?')}
                                             style={{width:'100%',padding:'10px 14px',borderRadius:'10px',fontSize:'14px',boxSizing:'border-box',
                                                     border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',
                                                     background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}/>
                                     </div>
                                     <div>
-                                        <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>DESCRIPCIÓN</label>
+                                        <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>{L3('DESCRIPCIÓN','DESCRIPTION','POPIS')}</label>
                                         <textarea value={form.descripcion} onChange={e=>setForm(f=>({...f,descripcion:e.target.value}))}
-                                            rows={2} placeholder="Detalles opcionales..."
+                                            rows={2} placeholder={L3('Detalles opcionales...','Optional details...','Volitelné podrobnosti...')}
                                             style={{width:'100%',padding:'10px 14px',borderRadius:'10px',fontSize:'14px',resize:'none',boxSizing:'border-box',
                                                     border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',
                                                     background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}/>
                                     </div>
                                     <div style={{display:'flex',gap:'16px',flexDirection:'column'}}>
                                         <div>
-                                            <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>VENCIMIENTO</label>
+                                            <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>{L3('VENCIMIENTO','DUE DATE','TERMÍN')}</label>
                                             <input type="date" value={form.vencimiento} onChange={e=>setForm(f=>({...f,vencimiento:e.target.value}))}
                                                 style={{width:'100%',maxWidth:'220px',padding:'8px 12px',borderRadius:'10px',fontSize:'13px',boxSizing:'border-box',
                                                         border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',
                                                         background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}/>
                                         </div>
                                         <div>
-                                            <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>PRIORIDAD</label>
+                                            <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'4px'}}>{L3('PRIORIDAD','PRIORITY','PRIORITA')}</label>
                                             <select value={form.prioridad} onChange={e=>setForm(f=>({...f,prioridad:e.target.value}))}
                                                 style={{width:'100%',padding:'10px 14px',borderRadius:'10px',fontSize:'14px',boxSizing:'border-box',
                                                         border:`1px solid ${darkMode?'#475569':'#cbd5e1'}`,outline:'none',
                                                         background:darkMode?'#334155':'#ffffff',color:darkMode?'#f1f5f9':'#0f172a'}}>
-                                                <option value="alta">🔴 Alta</option>
-                                                <option value="media">🟡 Media</option>
-                                                <option value="baja">⚪ Baja</option>
+                                                <option value="alta">🔴 {L3('Alta','High','Vysoká')}</option>
+                                                <option value="media">🟡 {L3('Media','Medium','Střední')}</option>
+                                                <option value="baja">⚪ {L3('Baja','Low','Nízká')}</option>
                                             </select>
                                         </div>
                                     </div>
                                     {etiquetas.length>0&&(
                                         <div>
-                                            <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'6px'}}>ETIQUETAS</label>
+                                            <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'6px'}}>{L3('ETIQUETAS','LABELS','ŠTÍTKY')}</label>
                                             <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}}>
                                                 {etiquetas.map(et=>(
                                                     <button key={et.id} type="button"
@@ -25208,7 +25208,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         </div>)}
                                     {otrosUsuarios.length>0&&(
                                         <div>
-                                            <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'6px'}}>COMPARTIR CON</label>
+                                            <label style={{fontSize:'11px',fontWeight:600,color:darkMode?'#94a3b8':'#64748b',display:'block',marginBottom:'6px'}}>{L3('COMPARTIR CON','SHARE WITH','SDÍLET S')}</label>
                                             <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}}>
                                                 {otrosUsuarios.map(u=>(
                                                     <button key={u.id}
@@ -25228,11 +25228,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <button onClick={()=>setShowModal(false)}
                                     style={{flex:1,padding:'11px',borderRadius:'12px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:500,
                                             background:darkMode?'#334155':'#f1f5f9',color:darkMode?'#cbd5e1':'#475569'}}>
-                                    Cancelar</button>
+                                    {L3('Cancelar','Cancel','Zrušit')}</button>
                                 <button onClick={saveTarea}
                                     style={{flex:1,padding:'11px',borderRadius:'12px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:700,
                                             background:'#9333ea',color:'white'}}>
-                                    💾 Guardar</button>
+                                    💾 {L3('Guardar','Save','Uložit')}</button>
                             </div>
                         </div>
                     </div>)}
