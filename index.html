@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-18:30 - Fix helpPrefs/bioCred: cargar prefs también en login biométrico -->
+<!-- Version: 2026-05-12-19:00 - Fix helpPrefs: usar dbUpsertOne en lugar de window._sb directo -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -4222,9 +4222,11 @@ ${invoice.items.map(item => `
             const [currentDate, setCurrentDate] = useState(new Date());
             const [showModal,   setShowModal]   = useState(false);
             const [showConfig,  setShowConfig]  = useState(false);
-            const [showHelp, setShowHelp] = useState(() => {
-                try { const prefs = window.__userHelpPrefs||{}; return prefs['calendario_hideHelp'] !== '1'; } catch(e) { return true; }
-            });
+            const [showHelp, setShowHelp] = useState(true);
+            useEffect(() => {
+                if (!currentUser) return;
+                try { const prefs = window.__userHelpPrefs||{}; setShowHelp(prefs['calendario_hideHelp'] !== '1'); } catch(e) {}
+            }, [currentUser?.id]);
             const [helpNoShow, setHelpNoShow] = useState(false);
             const [showMisEvs,  setShowMisEvs]  = useState(false);
             const [editingEv,   setEditingEv]   = useState(null);
@@ -5465,7 +5467,7 @@ ${invoice.items.map(item => `
                                     <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-blue-500"/>
                                     <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                 </label>
-                                <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},calendario_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
+                                <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},calendario_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window.__currentUserId){ dbUpsertOne('app_config','helpPrefs_'+window.__currentUserId,prefs); } } setShowHelp(false); }}
                                     className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium">
                                     Entendido / Got it / Rozumím
                                 </button>
@@ -5798,9 +5800,11 @@ ${invoice.items.map(item => `
             const [seguros,    setSeguros]    = useState({});
             const [loaded,     setLoaded]     = useState(false);
             const [yearSel,    setYearSel]    = useState(new Date().getFullYear());
-            const [showHelp, setShowHelp] = useState(() => {
-                try { const prefs = window.__userHelpPrefs||{}; return prefs['miSueldo_hideHelp'] !== '1'; } catch(e) { return true; }
-            });
+            const [showHelp, setShowHelp] = useState(true);
+            useEffect(() => {
+                if (!currentUser) return;
+                try { const prefs = window.__userHelpPrefs||{}; setShowHelp(prefs['miSueldo_hideHelp'] !== '1'); } catch(e) {}
+            }, [currentUser?.id]);
             const [helpNoShow, setHelpNoShow] = useState(false);
             const [mesesAbiertos, setMesesAbiertos] = useState({});
             const toggleMes = (mes) => setMesesAbiertos(prev => ({...prev, [mes]: !prev[mes]}));
@@ -6009,7 +6013,7 @@ ${invoice.items.map(item => `
                                             {currentUser?.language==='en' ? "Don't show again" : currentUser?.language==='cs' ? 'Znovu nezobrazovat' : 'No volver a mostrar'}
                                         </span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},miSueldo_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},miSueldo_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window.__currentUserId){ dbUpsertOne('app_config','helpPrefs_'+window.__currentUserId,prefs); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium">
                                         {currentUser?.language==='en' ? 'Got it' : currentUser?.language==='cs' ? 'Rozumím' : 'Entendido'}
                                     </button>
@@ -24664,9 +24668,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [showEtiquetasModal, setShowEtiquetasModal] = React.useState(false);
             const [etiquetaForm,    setEtiquetaForm]    = React.useState({ nombre:'', color:'#7c3aed' });
             const [editingEtiqueta, setEditingEtiqueta] = React.useState(null);
-            const [showHelp, setShowHelp] = React.useState(() => {
-                try { const prefs = window.__userHelpPrefs||{}; return prefs['miCerebro_hideHelp'] !== '1'; } catch(e) { return true; }
-            });
+            const [showHelp, setShowHelp] = React.useState(true);
+            React.useEffect(() => {
+                if (!currentUser) return;
+                try { const prefs = window.__userHelpPrefs||{}; setShowHelp(prefs['miCerebro_hideHelp'] !== '1'); } catch(e) {}
+            }, [currentUser?.id]);
             const [helpNoShow, setHelpNoShow] = React.useState(false);
 
             // Sync desde Supabase al montar
@@ -25014,7 +25020,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-purple-500"/>
                                         <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},miCerebro_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},miCerebro_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window.__currentUserId){ dbUpsertOne('app_config','helpPrefs_'+window.__currentUserId,prefs); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium">
                                         Entendido / Got it / Rozumím
                                     </button>
@@ -25388,9 +25394,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const en = language === 'en';
         const L = (es, eng) => en ? eng : es;
 
-        const [showHelp, setShowHelp] = React.useState(() => {
-            try { const prefs = window.__userHelpPrefs||{}; return prefs['cocina_hideHelp'] !== '1'; } catch(e) { return true; }
-        });
+        const [showHelp, setShowHelp] = React.useState(true);
+        React.useEffect(() => {
+            if (!currentUser) return;
+            try { const prefs = window.__userHelpPrefs||{}; setShowHelp(prefs['cocina_hideHelp'] !== '1'); } catch(e) {}
+        }, [currentUser?.id]);
         const [helpNoShow, setHelpNoShow] = React.useState(false);
 
         // Estilos
@@ -25552,7 +25560,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         <input type="checkbox" checked={helpNoShow} onChange={e=>setHelpNoShow(e.target.checked)} className="w-4 h-4 accent-orange-500"/>
                                         <span className={`text-sm ${darkMode?'text-slate-400':'text-slate-600'}`}>No volver a mostrar / Don't show again / Znovu nezobrazovat</span>
                                     </label>
-                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},cocina_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window._sb&&window.__currentUserId){ window._sb.from('app_config').upsert({id:'helpPrefs_'+window.__currentUserId,data:prefs,updated_at:new Date().toISOString()},{onConflict:'id'}); } } setShowHelp(false); }}
+                                    <button onClick={()=>{ if(helpNoShow){ const prefs={...window.__userHelpPrefs||{},cocina_hideHelp:'1'}; window.__userHelpPrefs=prefs; if(window.__currentUserId){ dbUpsertOne('app_config','helpPrefs_'+window.__currentUserId,prefs); } } setShowHelp(false); }}
                                         className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-medium">
                                         {L('Entendido','Got it')}
                                     </button>
