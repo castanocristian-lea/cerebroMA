@@ -26355,6 +26355,22 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             )}
                         </div>
 
+                        {/* Reset stock - solo super admin */}
+                        {isAdmin && sucursalSel !== 'todas' && (
+                            <div className="flex justify-end">
+                                <button onClick={()=>{
+                                    const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
+                                    if(confirm(L(`¿Poner en CERO todo el stock de ${sNombre}? Esta acción no se puede deshacer.`,`Set ALL stock to ZERO for ${sNombre}? This cannot be undone.`))){
+                                        const newStock = {...stock};
+                                        productos.forEach(p => { newStock[stockKey(p.id, sucursalSel)] = 0; });
+                                        saveStock(newStock);
+                                    }
+                                }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">
+                                    🗑 {L('Resetear stock a cero','Reset stock to zero')}
+                                </button>
+                            </div>
+                        )}
+
                         {/* Tabla de stock */}
                         {stockFiltrado.length === 0 ? (
                             <div className={`rounded-xl border ${card} p-10 text-center`}>
