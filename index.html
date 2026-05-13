@@ -25377,7 +25377,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const { useState, useEffect, useMemo } = React;
 
         // Permisos
-        const { canEdit, canRead, isAdmin } = usePermissions(currentUser, 'cocina');
+        const { canEdit, canRead, isAdmin, isSuperAdmin } = usePermissions(currentUser, 'cocina');
 
         // i18n
         const en = language === 'en';
@@ -25884,7 +25884,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
     // ═══════════════════════════════════════════════
     const StockModule = ({ darkMode, currentUser, language = 'es' }) => {
         const { useState, useEffect, useMemo, useRef } = React;
-        const { canEdit, canRead, isAdmin } = usePermissions(currentUser, 'cocina');
+        const { canEdit, canRead, isAdmin, isSuperAdmin } = usePermissions(currentUser, 'cocina');
 
         // i18n
         const L = (es, eng) => language === 'en' ? eng : es;
@@ -26346,6 +26346,19 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const k = stockKey(p.id, envio.descontarDe);
                         newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
                     });
+                    if (envio.sumarEn) {
+                        prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                            const k = stockKey(p.id, envio.sumarEn);
+                            newStock[k] = (parseFloat(newStock[k]||0)) + parseFloat(p.cantidad);
+                        });
+                    }
+                    saveStock(newStock);
+                } else if (envio.sumarEn) {
+                    const newStock = { ...stock };
+                    prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                        const k = stockKey(p.id, envio.sumarEn);
+                        newStock[k] = (parseFloat(newStock[k]||0)) + parseFloat(p.cantidad);
+                    });
                     saveStock(newStock);
                 }
                 if (envio.destinatario) {
@@ -26450,7 +26463,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         </div>
 
                         {/* Reset stock - solo super admin */}
-                        {isAdmin && sucursalSel !== 'todas' && (
+                        {isSuperAdmin && sucursalSel !== 'todas' && (
                             <div className="flex justify-end">
                                 <button onClick={()=>{
                                     const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
@@ -26639,12 +26652,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
                                     const esPasado = m.fecha && new Date(m.fecha) < new Date();
                                     const esResuelto = m.estado === 'resuelto';
+                                    const mCollapsed = m._collapsed !== false;
                                     return (
                                         <div key={m.id} className={`rounded-xl border ${card} overflow-hidden ${esResuelto?'opacity-50':''}`}>
                                             <div className={`px-4 py-3 flex items-center justify-between gap-2 flex-wrap ${darkMode?'bg-slate-700/30':'bg-slate-50'}`}>
-                                                <div>
+                                                <div className="flex-1 cursor-pointer" onClick={()=>saveMercados(mercados.map(x=>x.id===m.id?{...x,_collapsed:!mCollapsed}:x))}>
                                                     <div className="flex items-center gap-2">
                                                         <p className={`font-semibold ${txt}`}>🏪 {m.mercadoNombre}</p>
+                                                        <span className={`text-xs ${sub}`}>{mCollapsed?'▶':'▼'}</span>
                                                         {m.estado === 'borrador' && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">📝 {L('Borrador','Draft')}</span>}
                                                         {esResuelto && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">✓ {L('Resuelto','Done')}</span>}
                                                         {!esResuelto && m.estado !== 'borrador' && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
@@ -26654,6 +26669,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     {esResuelto && m.resueltoPor && <p className={`text-xs text-green-600 mt-0.5`}>✓ {L('Cerrado por','Closed by')} {m.resueltoPor} · {m.resueltAt?new Date(m.resueltAt).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''}</p>}
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 mt-2">
+                                                    {canEdit && <button onClick={e=>{e.stopPropagation();const newDate=prompt(L('Nueva fecha para repetir este mercado (YYYY-MM-DD):','New date to repeat this market (YYYY-MM-DD):'), new Date().toISOString().split('T')[0]); if(!newDate||!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return; const copia={...m,id:Date.now(),fecha:newDate,estado:'pendiente',creadoAt:new Date().toISOString(),creadoPor:currentUser?.name||currentUser?.username||'',resueltoPor:undefined,resueltAt:undefined,_collapsed:false}; saveMercados([copia,...mercados]); }} className={`px-3 py-1.5 text-xs rounded-lg font-medium ${darkMode?'bg-slate-600 text-slate-200':'bg-slate-100 text-slate-600'}`}>🔁 {L('Repetir','Repeat')}</button>}
                                                     {m.estado === 'borrador' && canEdit && <button onClick={()=>{
                                                         if(!confirm(L('¿Confirmar este mercado? Se descontará el stock.','Confirm this market? Stock will be deducted.'))) return;
                                                         saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'pendiente'}:x));
@@ -26745,7 +26761,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     {canEdit && <button onClick={()=>{ if(confirm(L('¿Eliminar este mercado?','Delete this market?'))) saveMercados(mercados.filter(x=>x.id!==m.id)); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-red-50 text-red-500 hover:bg-red-100">🗑️ {L('Borrar','Delete')}</button>}
                                                 </div>
                                             </div>
-                                            {prods.length > 0 && (
+                                            {!mCollapsed && prods.length > 0 && (
                                                 <div className="px-4 py-3">
                                                     <table className="w-full text-sm">
                                                         <thead><tr className={darkMode?'':''}><th className={`text-left text-xs ${sub} pb-1`}>{L('PRODUCTO','PRODUCT')}</th><th className={`text-right text-xs ${sub} pb-1`}>{L('CANTIDAD','QTY')}</th><th className={`text-left text-xs ${sub} pb-1 pl-3`}>{L('NOTAS','NOTES')}</th></tr></thead>
@@ -26777,7 +26793,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className='flex gap-2'>
                             {showControlInforme && <button onClick={()=>setShowControlInforme(false)} className={`px-3 py-1.5 text-xs rounded-lg ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>← {L('Volver','Back')}</button>}
                             <button onClick={()=>setShowControlHistorial(v=>!v)} className={`px-3 py-1.5 text-xs rounded-lg ${showControlHistorial?(darkMode?'bg-orange-600 text-white':'bg-orange-500 text-white'):(darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600')}`}>📋 {L('Historial','History')}{controlHistorial.length>0?' ('+controlHistorial.length+')':''}</button>
-                            {isAdmin && showControlHistorial && controlHistorial.length > 0 && <button onClick={()=>{ if(confirm(L('¿Resetear historial de control?','Reset stock check history?'))){ setControlHistorial([]); save('stock_control_historial',[]); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
+                            {isSuperAdmin && showControlHistorial && controlHistorial.length > 0 && <button onClick={()=>{ if(confirm(L('¿Resetear historial de control?','Reset stock check history?'))){ setControlHistorial([]); save('stock_control_historial',[]); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
                         </div>
                         </div>
                         {showControlHistorial ? (
@@ -26973,7 +26989,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 )}
                             </div>
                             <div className="flex gap-2 flex-wrap">
-                                {isAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de ingresos?','Reset inbound history?'))){ const filtered=movimientos.filter(m=>m.tipo!=='ingreso'); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
+                                {isSuperAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de ingresos?','Reset inbound history?'))){ const filtered=movimientos.filter(m=>m.tipo!=='ingreso'); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
                                 {canEdit && <button onClick={() => { setIngForm({ productoId: '', branchId: sucursalSel || String(sucursales[0]?.id||''), cantidad: '', notas: '' }); setShowIngModal(true); }} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">📥 {L('1 producto','1 product')}</button>}
                                 {canEdit && <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">📋 {L('Lista','List')}</button>}
                             </div>
@@ -27050,7 +27066,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 )}
                             </div>
                             <div className="flex gap-2 flex-wrap">
-                                {isAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de egresos?','Reset outbound history?'))){ const filtered=movimientos.filter(m=>!['venta','ajuste','envio'].includes(m.tipo)); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
+                                {isSuperAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de egresos?','Reset outbound history?'))){ const filtered=movimientos.filter(m=>!['venta','ajuste','envio'].includes(m.tipo)); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
                                 {canEdit && <button onClick={() => { setMovManualTipo('venta'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('📋 Carga manual','📋 Manual entry')}</button>}
                                 {canEdit && <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
                             </div>
@@ -27185,7 +27201,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <button onClick={()=>{ const XLSX = window.XLSX; const data = [['nombre','categoria','unidad','minimo','alias1','alias2','alias3'],...productos.map(p=>[p.nombre,p.categoria||'',p.unidad||'unidad',p.minimo||'',...(p.aliases||[]),'','',''].slice(0,7))]; const ws = XLSX.utils.aoa_to_sheet(data); ws['!cols'] = [{wch:30},{wch:15},{wch:10},{wch:8},{wch:20},{wch:20},{wch:20}]; const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Productos'); XLSX.writeFile(wb, 'productos.xlsx'); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>⬇️ Excel</button>
                                 {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; rows.forEach(row=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:Date.now()+Math.random(),nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
                                 {canEdit && <button onClick={() => { setEditingProd(null); setProdForm({ nombre: '', categoria: '', unidad: 'unidad', minimo: '', aliases: [] }); setShowProdModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nuevo producto','+ New product')}</button>}
-                                {isAdmin && productos.length > 0 && <button onClick={()=>{ if(confirm(L(`¿Borrar TODOS los ${productos.length} productos? No se puede deshacer.`,`Delete ALL ${productos.length} products? Cannot be undone.`))) saveProductos([]); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200">🗑 {L('Borrar todos','Delete all')}</button>}
+                                {isSuperAdmin && productos.length > 0 && <button onClick={()=>{ if(confirm(L(`¿Borrar TODOS los ${productos.length} productos? No se puede deshacer.`,`Delete ALL ${productos.length} products? Cannot be undone.`))) saveProductos([]); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200">🗑 {L('Borrar todos','Delete all')}</button>}
                             </div>
                         </div>
                         <input type="text" value={stockSearch} onChange={e=>setStockSearch(e.target.value)}
@@ -27796,12 +27812,21 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </div>
                                 {/* Descontar stock de */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>📦 DEDUCT STOCK FROM</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>📦 {L('DESCONTAR STOCK DE','DEDUCT STOCK FROM')}</label>
                                     <select value={envioForm.descontarDe} onChange={e=>setEnvioForm(f=>({...f,descontarDe:e.target.value}))} className={inp}>
-                                        <option value="">Do not deduct stock</option>
+                                        <option value="">{L('No descontar stock','Do not deduct stock')}</option>
                                         {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
                                     </select>
-                                    {envioForm.descontarDe && <p className={`text-xs mt-1 ${sub}`}>⚡ Stock will be automatically deducted when confirming the shipment</p>}
+                                    {envioForm.descontarDe && <p className={`text-xs mt-1 ${sub}`}>⚡ {L('El stock se descontará al confirmar el envío','Stock will be deducted when confirming')}</p>}
+                                </div>
+                                {/* Sumar stock en */}
+                                <div>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>📥 {L('SUMAR STOCK EN','ADD STOCK TO')}</label>
+                                    <select value={envioForm.sumarEn||''} onChange={e=>setEnvioForm(f=>({...f,sumarEn:e.target.value}))} className={inp}>
+                                        <option value="">{L('No sumar stock','Do not add stock')}</option>
+                                        {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+                                    </select>
+                                    {envioForm.sumarEn && <p className={`text-xs mt-1 ${sub}`}>📥 {L('El stock se sumará en la sucursal destino al confirmar','Stock will be added to destination when confirming')}</p>}
                                 </div>
 
                                 {/* Notificar al que arma */}
@@ -28104,7 +28129,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
     // ═══════════════════════════════════════════════
     const AlmacenModule = ({ darkMode, currentUser, language = 'es', onBack = null }) => {
         const { useState, useEffect, useMemo, useRef } = React;
-        const { canEdit, canRead, isAdmin } = usePermissions(currentUser, 'cocina');
+        const { canEdit, canRead, isAdmin, isSuperAdmin } = usePermissions(currentUser, 'cocina');
 
         // i18n
         const en = language === 'en';
@@ -28535,6 +28560,19 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const k = stockKey(p.id, envio.descontarDe);
                         newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
                     });
+                    if (envio.sumarEn) {
+                        prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                            const k = stockKey(p.id, envio.sumarEn);
+                            newStock[k] = (parseFloat(newStock[k]||0)) + parseFloat(p.cantidad);
+                        });
+                    }
+                    saveStock(newStock);
+                } else if (envio.sumarEn) {
+                    const newStock = { ...stock };
+                    prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                        const k = stockKey(p.id, envio.sumarEn);
+                        newStock[k] = (parseFloat(newStock[k]||0)) + parseFloat(p.cantidad);
+                    });
                     saveStock(newStock);
                 }
                 if (envio.destinatario) {
@@ -28859,12 +28897,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
                                     const esPasado = m.fecha && new Date(m.fecha) < new Date();
                                     const esResuelto = m.estado === 'resuelto';
+                                    const mCollapsed = m._collapsed !== false;
                                     return (
                                         <div key={m.id} className={`rounded-xl border ${card} overflow-hidden ${esResuelto?'opacity-50':''}`}>
                                             <div className={`px-4 py-3 flex items-center justify-between gap-2 flex-wrap ${darkMode?'bg-slate-700/30':'bg-slate-50'}`}>
-                                                <div>
+                                                <div className="flex-1 cursor-pointer" onClick={()=>saveMercados(mercados.map(x=>x.id===m.id?{...x,_collapsed:!mCollapsed}:x))}>
                                                     <div className="flex items-center gap-2">
                                                         <p className={`font-semibold ${txt}`}>🏪 {m.mercadoNombre}</p>
+                                                        <span className={`text-xs ${sub}`}>{mCollapsed?'▶':'▼'}</span>
                                                         {m.estado === 'borrador' && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">📝 {L('Borrador','Draft')}</span>}
                                                         {esResuelto && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">✓ {L('Resuelto','Done')}</span>}
                                                         {!esResuelto && m.estado !== 'borrador' && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
@@ -28874,6 +28914,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     {esResuelto && m.resueltoPor && <p className={`text-xs text-green-600 mt-0.5`}>✓ {L('Cerrado por','Closed by')} {m.resueltoPor} · {m.resueltAt?new Date(m.resueltAt).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''}</p>}
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 mt-2">
+                                                    {canEdit && <button onClick={e=>{e.stopPropagation();const newDate=prompt(L('Nueva fecha para repetir este mercado (YYYY-MM-DD):','New date to repeat this market (YYYY-MM-DD):'), new Date().toISOString().split('T')[0]); if(!newDate||!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return; const copia={...m,id:Date.now(),fecha:newDate,estado:'pendiente',creadoAt:new Date().toISOString(),creadoPor:currentUser?.name||currentUser?.username||'',resueltoPor:undefined,resueltAt:undefined,_collapsed:false}; saveMercados([copia,...mercados]); }} className={`px-3 py-1.5 text-xs rounded-lg font-medium ${darkMode?'bg-slate-600 text-slate-200':'bg-slate-100 text-slate-600'}`}>🔁 {L('Repetir','Repeat')}</button>}
                                                     {m.estado === 'borrador' && canEdit && <button onClick={()=>{
                                                         if(!confirm(L('¿Confirmar este mercado? Se descontará el stock.','Confirm this market? Stock will be deducted.'))) return;
                                                         saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'pendiente'}:x));
@@ -28965,7 +29006,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     {canEdit && <button onClick={()=>{ if(confirm(L('¿Eliminar este mercado?','Delete this market?'))) saveMercados(mercados.filter(x=>x.id!==m.id)); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-red-50 text-red-500 hover:bg-red-100">🗑️ {L('Borrar','Delete')}</button>}
                                                 </div>
                                             </div>
-                                            {prods.length > 0 && (
+                                            {!mCollapsed && prods.length > 0 && (
                                                 <div className="px-4 py-3">
                                                     <table className="w-full text-sm">
                                                         <thead><tr className={darkMode?'':''}><th className={`text-left text-xs ${sub} pb-1`}>{L('PRODUCTO','PRODUCT')}</th><th className={`text-right text-xs ${sub} pb-1`}>{L('CANTIDAD','QTY')}</th><th className={`text-left text-xs ${sub} pb-1 pl-3`}>{L('NOTAS','NOTES')}</th></tr></thead>
