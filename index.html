@@ -25900,6 +25900,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [categoriasProd, setCategoriasProd] = useState([]);
         const [catFilter, setCatFilter] = useState('');
         const [stockSearch, setStockSearch] = useState('');
+        const [vivoEgresos, setVivoEgresos] = useState({}); // {productoId_sucId: cant}
+        const [vivoTimestamp, setVivoTimestamp] = useState(null);
+        const [vivoSucursal, setVivoSucursal] = useState('');
         const [controlSuc, setControlSuc] = useState('');
         const [controlCat, setControlCat] = useState('');
         const [controlData, setControlData] = useState({}); // {productoId: cantidadFisica}
@@ -26219,6 +26222,20 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         const guardarMovManual = () => {
             if (!movManualSuc) return;
+            if (movManualTipo === 'vivo') {
+                const newVivo = { ...vivoEgresos };
+                movManualFilas.forEach(f => {
+                    const cant = parseFloat(f.cantidad);
+                    if (!cant || cant <= 0) return;
+                    const k = `${f.id}_${movManualSuc}`;
+                    newVivo[k] = (parseFloat(newVivo[k] || 0)) + cant;
+                });
+                setVivoEgresos(newVivo);
+                const now = new Date();
+                setVivoTimestamp(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`);
+                setShowMovManual(false);
+                return;
+            }
             const newStock = { ...stock };
             const newMovs = [];
             movManualFilas.forEach(f => {
@@ -26347,6 +26364,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             { id: 'control',    label: L('🔍 Control','🔍 Stock Check') },
             { id: 'ingresos',   label: L('📥 Ingresos','📥 Inbound') },
             { id: 'ventas',     label: L('📤 Egresos','📤 Outbound') },
+            { id: 'vivo',       label: L('⚡ En Vivo','⚡ Live') },
             { id: 'productos',  label: L('🗂 Productos','🗂 Products') },
             { id: 'sucursales', label: L('🏪 Sucursales','🏪 Branches') },
         ];
@@ -27070,6 +27088,70 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     </div>
                 )}
 
+                {/* ── EGRESOS EN VIVO ── */}
+                {activeTab === 'vivo' && (() => {
+                    const sucSel = vivoSucursal || String(sucursales[0]?.id||'');
+                    const prodsFiltrados = productos
+                        .filter(p => !catFilter || p.categoria === catFilter)
+                        .filter(p => !stockSearch || p.nombre.toLowerCase().includes(stockSearch.toLowerCase()));
+                    return (
+                        <div className="mt-4 space-y-3">
+                            {vivoTimestamp && (
+                                <div className={`rounded-xl px-4 py-2.5 flex items-center justify-between ${darkMode?'bg-blue-900/30 border border-blue-700':'bg-blue-50 border border-blue-200'}`}>
+                                    <span className={`text-sm font-semibold ${darkMode?'text-blue-300':'text-blue-700'}`}>⚡ {L('Stock hasta las','Stock as of')} {vivoTimestamp}</span>
+                                    <button onClick={()=>{ setVivoEgresos({}); setVivoTimestamp(null); }} className={`text-xs px-2.5 py-1 rounded-lg ${darkMode?'bg-blue-800 text-blue-200':'bg-blue-100 text-blue-600'}`}>🔄 {L('Reiniciar','Reset')}</button>
+                                </div>
+                            )}
+                            <div className="flex gap-2 overflow-x-auto pb-1" style={{scrollbarWidth:'none'}}>
+                                {sucursales.map(s => (
+                                    <button key={s.id} onClick={()=>setVivoSucursal(String(s.id))}
+                                        className={`px-3 py-2 rounded-lg text-sm font-medium shrink-0 ${sucSel===String(s.id)?'bg-blue-500 text-white':darkMode?'bg-slate-700 text-slate-300':'bg-white border border-slate-200 text-slate-700'}`}>
+                                        🏪 {s.nombre}
+                                    </button>
+                                ))}
+                            </div>
+                            <input type="text" value={stockSearch} onChange={e=>setStockSearch(e.target.value)} placeholder={L('🔍 Buscar producto...','🔍 Search...')} className={`w-full px-3 py-2 rounded-lg text-sm border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            {categoriasProd.length > 0 && (
+                                <div className="flex gap-1.5 overflow-x-auto pb-1" style={{scrollbarWidth:'none'}}>
+                                    <button onClick={()=>setCatFilter('')} className={`px-3 py-1 rounded-full text-xs font-medium shrink-0 ${catFilter===''?'bg-blue-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400':'border-slate-300 text-slate-500')}`}>{L('Todas','All')}</button>
+                                    {categoriasProd.map(c=><button key={c} onClick={()=>setCatFilter(catFilter===c?'':c)} className={`px-3 py-1 rounded-full text-xs font-medium shrink-0 ${catFilter===c?'bg-blue-500 text-white':'border '+(darkMode?'border-slate-600 text-slate-400':'border-slate-300 text-slate-500')}`}>{c}</button>)}
+                                </div>
+                            )}
+                            {canEdit && (
+                                <div className="flex gap-2 flex-wrap">
+                                    <button onClick={()=>{ setMovManualTipo('vivo'); setMovManualSuc(sucSel); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium">📋 {L('Carga manual','Manual entry')}</button>
+                                    <button onClick={()=>{ setVentasSucursal(sucSel); setShowVentasModal(true); }} className="px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium">📤 {L('Importar Excel/CSV','Import Excel/CSV')}</button>
+                                </div>
+                            )}
+                            <div className={`rounded-xl border ${card} overflow-hidden`}>
+                                <table className="w-full text-sm">
+                                    <thead><tr className={darkMode?'bg-slate-700/50':'bg-slate-50'}>
+                                        <th className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
+                                        <th className={`px-4 py-3 text-right text-xs font-semibold ${sub}`}>{L('REAL','REAL')}</th>
+                                        <th className={`px-4 py-3 text-right text-xs font-semibold text-blue-500`}>{L('EGRESADO','SOLD')}</th>
+                                        <th className={`px-4 py-3 text-right text-xs font-semibold text-green-600`}>{L('EN VIVO','LIVE')}</th>
+                                    </tr></thead>
+                                    <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                        {prodsFiltrados.map(p => {
+                                            const real = parseFloat(stock[`${p.id}_${sucSel}`] || 0);
+                                            const egr  = parseFloat(vivoEgresos[`${p.id}_${sucSel}`] || 0);
+                                            const vivo = real - egr;
+                                            return (
+                                                <tr key={p.id} className={vivo < 0 ? (darkMode?'bg-red-900/10':'bg-red-50/50') : ''}>
+                                                    <td className={`px-4 py-3 font-semibold ${txt}`}>{p.nombre}</td>
+                                                    <td className={`px-4 py-3 text-right font-mono ${sub}`}>{real}</td>
+                                                    <td className={`px-4 py-3 text-right font-mono font-bold ${egr>0?'text-blue-500':sub}`}>{egr>0?`-${egr}`:'—'}</td>
+                                                    <td className={`px-4 py-3 text-right font-mono font-bold text-lg ${vivo<0?'text-red-500':vivo===0?'text-orange-400':'text-green-500'}`}>{vivo} <span className={`text-xs font-normal ${sub}`}>{p.unidad||''}</span></td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* ── PRODUCTS ── */}
                 {activeTab === 'productos' && (
                     <div className="mt-4 space-y-3">
@@ -27170,15 +27252,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     const hasta  = sucursales.find(s => String(s.id) === String(e.hasta));
                                     const prods  = (e.productos||[]).filter(p => parseFloat(p.cantidad) > 0);
                                     const estadoColor = e.estado === 'entregado' ? 'text-green-500 bg-green-50' : e.estado === 'en_camino' ? 'text-blue-500 bg-blue-50' : e.estado === 'borrador' ? 'text-slate-500 bg-slate-100' : 'text-amber-600 bg-amber-50';
+                                    const collapsed = (e._collapsed !== false);
                                     return (
                                         <div key={e.id} className={`rounded-xl border ${card} overflow-hidden`}>
                                             <div className={`px-4 py-3 flex items-center justify-between flex-wrap gap-2 ${darkMode?'bg-slate-700/30':'bg-slate-50'}`}>
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={()=>saveEnvios(envios.map(x=>x.id===e.id?{...x,_collapsed:!collapsed}:x))}>
                                                     <span className="text-xl">🚚</span>
                                                     <div>
                                                         <p className={`font-semibold text-sm ${txt}`}>{desde?.nombre || '?'} → {hasta?.nombre || '?'}</p>
                                                         <p className={`text-xs ${sub}`}>{e.fecha}{e.hora ? ` · ${e.hora}` : ''} · {prods.length} producto{prods.length!==1?'s':''}</p>
                                                     </div>
+                                                    <span className={`text-xs ml-auto ${sub}`}>{collapsed ? '▶' : '▼'}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${estadoColor}`}>
@@ -27194,7 +27278,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     {canEdit && <button onClick={() => { setEditingEnvio(e); setEnvioForm({...e, descontarDe: e.descontarDe||String(e.desde||''), destinatarioRecibe: e.destinatarioRecibe||'', estadoBorrador: e.estado==='borrador', productos: productos.map(p => { const ex = e.productos?.find(x=>String(x.id)===String(p.id)); return {...p, cantidad: ex?.cantidad||''}; })}); setShowEnvioModal(true); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>}
                                                 </div>
                                             </div>
-                                            {prods.length > 0 && (
+                                            {!collapsed && prods.length > 0 && (
                                                 <div className="px-4 py-3 space-y-1">
                                                     {prods.map(p => {
                                                         const checked = (e._checks||{})[p.id] || false;
@@ -27226,7 +27310,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     )}
                                                 </div>
                                             )}
-                                            {e.notas && <div className={`mx-4 mb-3 px-3 py-2 rounded-lg border-l-4 border-orange-400 ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-800'} text-sm font-medium`}>📝 {e.notas}</div>}
+                                            {!collapsed && e.notas && <div className={`mx-4 mb-3 px-3 py-2 rounded-lg border-l-4 border-orange-400 ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-800'} text-sm font-medium`}>📝 {e.notas}</div>}
                                             {(()=>{ const d=e.creadoAt?new Date(e.creadoAt).toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):null; return d ? <p className={`px-4 pb-3 text-xs ${sub}`}>👤 {e.creadoPor||'—'} · {d}</p> : null; })()}
                                         </div>
                                     );
@@ -29391,15 +29475,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     const hasta  = sucursales.find(s => String(s.id) === String(e.hasta));
                                     const prods  = (e.productos||[]).filter(p => parseFloat(p.cantidad) > 0);
                                     const estadoColor = e.estado === 'entregado' ? 'text-green-500 bg-green-50' : e.estado === 'en_camino' ? 'text-blue-500 bg-blue-50' : e.estado === 'borrador' ? 'text-slate-500 bg-slate-100' : 'text-amber-600 bg-amber-50';
+                                    const collapsed = (e._collapsed !== false);
                                     return (
                                         <div key={e.id} className={`rounded-xl border ${card} overflow-hidden`}>
                                             <div className={`px-4 py-3 flex items-center justify-between flex-wrap gap-2 ${darkMode?'bg-slate-700/30':'bg-slate-50'}`}>
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={()=>saveEnvios(envios.map(x=>x.id===e.id?{...x,_collapsed:!collapsed}:x))}>
                                                     <span className="text-xl">🚚</span>
                                                     <div>
                                                         <p className={`font-semibold text-sm ${txt}`}>{desde?.nombre || '?'} → {hasta?.nombre || '?'}</p>
                                                         <p className={`text-xs ${sub}`}>{e.fecha}{e.hora ? ` · ${e.hora}` : ''} · {prods.length} producto{prods.length!==1?'s':''}</p>
                                                     </div>
+                                                    <span className={`text-xs ml-auto ${sub}`}>{collapsed ? '▶' : '▼'}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${estadoColor}`}>
@@ -29415,7 +29501,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     {canEdit && <button onClick={() => { setEditingEnvio(e); setEnvioForm({...e, descontarDe: e.descontarDe||String(e.desde||''), destinatarioRecibe: e.destinatarioRecibe||'', estadoBorrador: e.estado==='borrador', productos: productos.map(p => { const ex = e.productos?.find(x=>String(x.id)===String(p.id)); return {...p, cantidad: ex?.cantidad||''}; })}); setShowEnvioModal(true); }} className={`w-7 h-7 flex items-center justify-center rounded-lg ${darkMode?'hover:bg-slate-600 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✏️</button>}
                                                 </div>
                                             </div>
-                                            {prods.length > 0 && (
+                                            {!collapsed && prods.length > 0 && (
                                                 <div className="px-4 py-3 space-y-1">
                                                     {prods.map(p => {
                                                         const checked = (e._checks||{})[p.id] || false;
@@ -29447,7 +29533,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     )}
                                                 </div>
                                             )}
-                                            {e.notas && <div className={`mx-4 mb-3 px-3 py-2 rounded-lg border-l-4 border-orange-400 ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-800'} text-sm font-medium`}>📝 {e.notas}</div>}
+                                            {!collapsed && e.notas && <div className={`mx-4 mb-3 px-3 py-2 rounded-lg border-l-4 border-orange-400 ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-800'} text-sm font-medium`}>📝 {e.notas}</div>}
                                             {(()=>{ const d=e.creadoAt?new Date(e.creadoAt).toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):null; return d ? <p className={`px-4 pb-3 text-xs ${sub}`}>👤 {e.creadoPor||'—'} · {d}</p> : null; })()}
                                         </div>
                                     );
