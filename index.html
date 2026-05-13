@@ -25931,7 +25931,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [vuelvenForm, setVuelvenForm] = useState({ sucursal: '', productos: [] });
         const [showMercadosConfigModal, setShowMercadosConfigModal] = useState(false);
         const [editingMercado, setEditingMercado] = useState(null);
-        const [mercadoForm, setMercadoForm] = useState({ mercadoNombre: '', fecha: '', productos: [], destinatarios: [], sucursalDescuento: '', notasGral: '' });
+        const [mercadoForm, setMercadoForm] = useState({ mercadoNombre: '', fecha: '', productos: [], destinatarios: [], sucursalDescuento: '', notasGral: '', estadoBorrador: false });
         const [listaMercados, setListaMercados] = useState([]);
         const [newMercadoName, setNewMercadoName] = useState('');
         const [deliveryData,      setDeliveryData]      = useState({ nombre: '', link: '', usuario: '', password: '', notas: '' });
@@ -26292,12 +26292,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         const marcarEnvioEstado = (id, estado) => {
             const envio = envios.find(e => e.id === id);
-            saveEnvios(envios.map(e => e.id === id ? { ...e, estado } : e));
+            // Apply diffs to product quantities
+            const prodsFinal = (envio?.productos||[]).map(p => {
+                const dif = (envio?._difs||{})[p.id];
+                return (dif !== undefined && dif !== '') ? {...p, cantidad: String(parseFloat(dif)), _cantOriginal: p.cantidad} : p;
+            });
+            saveEnvios(envios.map(e => e.id === id ? { ...e, estado, productos: prodsFinal } : e));
             // Si sale de borrador → disparar stock y notificaciones
             if (envio?.estado === 'borrador' && estado !== 'borrador') {
                 if (envio.descontarDe) {
                     const newStock = { ...stock };
-                    (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                    prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
                         const k = stockKey(p.id, envio.descontarDe);
                         newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
                     });
@@ -26599,17 +26604,32 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <div>
                                                     <div className="flex items-center gap-2">
                                                         <p className={`font-semibold ${txt}`}>🏪 {m.mercadoNombre}</p>
+                                                        {m.estado === 'borrador' && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">📝 {L('Borrador','Draft')}</span>}
                                                         {esResuelto && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">✓ {L('Resuelto','Done')}</span>}
-                                                        {!esResuelto && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
+                                                        {!esResuelto && m.estado !== 'borrador' && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
                                                     </div>
                                                     <p className={`text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long'}) : '—'} · {prods.length} {L('productos','products')}{m.creadoPor ? (' · 👤 '+m.creadoPor) : ''}</p>
 
                                                     {esResuelto && m.resueltoPor && <p className={`text-xs text-green-600 mt-0.5`}>✓ {L('Cerrado por','Closed by')} {m.resueltoPor} · {m.resueltAt?new Date(m.resueltAt).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''}</p>}
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 mt-2">
-                                                    {!esResuelto && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
+                                                    {m.estado === 'borrador' && canEdit && <button onClick={()=>{
+                                                        if(!confirm(L('¿Confirmar este mercado? Se descontará el stock.','Confirm this market? Stock will be deducted.'))) return;
+                                                        saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'pendiente'}:x));
+                                                        if(m.sucursalDescuento) {
+                                                            const newStock = {...stock};
+                                                            (m.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
+                                                                const k = stockKey(p.id, m.sucursalDescuento);
+                                                                newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
+                                                            });
+                                                            saveStock(newStock);
+                                                            const movs = (m.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:m.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado confirmado: '+m.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
+                                                            saveMovimientos([...movs,...movimientos].slice(0,500));
+                                                        }
+                                                    }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">✓ {L('Confirmar','Confirm')}</button>}
+                                                    {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
                                                         className="px-3 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium">↩️ {L('Vuelven','Returns')}</button>}
-                                                    {!esResuelto && canEdit && <button onClick={()=>{ if(!confirm(L('¿Marcar como resuelto? Esto cerrará la lista.','Mark as done? This will close the list.'))) return; saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'resuelto',resueltoPor:currentUser?.name||currentUser?.username||'',resueltAt:new Date().toISOString()}:x)); }}
+                                                    {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ if(!confirm(L('¿Marcar como resuelto? Esto cerrará la lista.','Mark as done? This will close the list.'))) return; saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'resuelto',resueltoPor:currentUser?.name||currentUser?.username||'',resueltAt:new Date().toISOString()}:x)); }}
                                                         className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">✓ {L('Resuelto','Done')}</button>}
                                                     <button onClick={()=>{
                                                         const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
@@ -27175,15 +27195,38 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                             </div>
                                             {prods.length > 0 && (
-                                                <div className="px-4 py-3 flex flex-wrap gap-2">
-                                                    {prods.map(p => (
-                                                        <span key={p.id} className={`text-xs px-2.5 py-1 rounded-lg font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>
-                                                            {p.nombre} <span className="font-bold">{p.cantidad}</span> {p.unidad}
-                                                        </span>
-                                                    ))}
+                                                <div className="px-4 py-3 space-y-1">
+                                                    {prods.map(p => {
+                                                        const checked = (e._checks||{})[p.id] || false;
+                                                        const dif     = (e._difs||{})[p.id];
+                                                        const cantFinal = (dif !== undefined && dif !== '') ? parseFloat(dif) : parseFloat(p.cantidad);
+                                                        return (
+                                                            <div key={p.id} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors ${checked?(darkMode?'bg-green-900/20':'bg-green-50'):(darkMode?'bg-slate-700/40':'bg-slate-50')}`}>
+                                                                <input type="checkbox" checked={checked} onChange={ev=>{
+                                                                    const nc={...(e._checks||{}),[p.id]:ev.target.checked};
+                                                                    saveEnvios(envios.map(x=>x.id===e.id?{...x,_checks:nc}:x));
+                                                                }} className="w-4 h-4 rounded shrink-0" style={{accentColor:'#16a34a'}}/>
+                                                                <span className={`flex-1 text-sm ${checked?(darkMode?'text-green-400':'text-green-700')+(darkMode?' line-through opacity-60':' line-through opacity-60'):txt}`}>{p.nombre}</span>
+                                                                <span className={`text-sm font-mono font-bold ${dif!==undefined&&dif!==''&&cantFinal!==parseFloat(p.cantidad)?'text-orange-500':checked?'text-green-500':txt}`}>{cantFinal} <span className={`text-xs font-normal ${sub}`}>{p.unidad}</span></span>
+                                                                {e.estado !== 'entregado' && e.estado !== 'borrador' && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className={`text-xs ${sub}`}>{L('Dif:','Diff:')}</span>
+                                                                        <input type="number" step="1" value={dif!==undefined?dif:''} placeholder={p.cantidad}
+                                                                            onChange={ev=>{ const v=ev.target.value; const nd={...(e._difs||{}),[p.id]:v===''?'':parseFloat(v)||0}; saveEnvios(envios.map(x=>x.id===e.id?{...x,_difs:nd}:x)); }}
+                                                                            className={`w-16 px-1.5 py-0.5 text-right text-sm font-mono border rounded ${dif!==undefined&&dif!==''?'border-orange-400 text-orange-500':'border-slate-200'} ${darkMode?'bg-slate-700 text-white':'bg-white'}`}/>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {Object.values(e._difs||{}).some(v=>v!==''&&v!==undefined) && (
+                                                        <div className={`mt-2 p-2 rounded-lg text-xs ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-700'}`}>
+                                                            ⚠️ {L('Diferencias:','Differences:')} {prods.filter(p=>(e._difs||{})[p.id]!==undefined&&(e._difs||{})[p.id]!=='').map(p=>`${p.nombre}: ${p.cantidad}→${(e._difs||{})[p.id]}`).join(' · ')}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
-                                            {e.notas && <p className={`px-4 pb-2 text-xs ${sub} italic`}>📝 {e.notas}</p>}
+                                            {e.notas && <div className={`mx-4 mb-3 px-3 py-2 rounded-lg border-l-4 border-orange-400 ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-800'} text-sm font-medium`}>📝 {e.notas}</div>}
                                             {(()=>{ const d=e.creadoAt?new Date(e.creadoAt).toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):null; return d ? <p className={`px-4 pb-3 text-xs ${sub}`}>👤 {e.creadoPor||'—'} · {d}</p> : null; })()}
                                         </div>
                                     );
@@ -27263,15 +27306,22 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                 </div>
                             </div>
+                            <div className={`px-5 py-2 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" checked={mercadoForm.estadoBorrador} onChange={e=>setMercadoForm(f=>({...f,estadoBorrador:e.target.checked}))} className="w-4 h-4 rounded"/>
+                                    <span className={mercadoForm.estadoBorrador?'text-amber-500':sub}>📝 {L('Guardar como borrador','Save as draft')}</span>
+                                </label>
+                            </div>
                             <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <button onClick={()=>{setShowMercadoModal(false);setEditingMercado(null);}} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cancelar','Cancel')}</button>
                                 <button onClick={()=>{
                                     if(!mercadoForm.mercadoNombre||!mercadoForm.fecha) return;
                                     const isNew = !editingMercado;
-                                    const data = {...mercadoForm, id: editingMercado?.id||Date.now(), creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
+                                    const esBorrador = mercadoForm.estadoBorrador;
+                                    const data = {...mercadoForm, id: editingMercado?.id||Date.now(), estado: esBorrador ? 'borrador' : 'pendiente', creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
                                     saveMercados(editingMercado ? mercados.map(m=>m.id===editingMercado.id?data:m) : [data,...mercados]);
-                                    // Descontar stock si se eligió sucursal (solo en creación)
-                                    if (mercadoForm.sucursalDescuento && isNew) {
+                                    // Descontar stock solo si NO es borrador y se eligió sucursal (solo en creación)
+                                    if (mercadoForm.sucursalDescuento && isNew && !esBorrador) {
                                         const newStock = {...stock};
                                         (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
                                             const k = stockKey(p.id, mercadoForm.sucursalDescuento);
@@ -27281,9 +27331,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         const movs = (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:mercadoForm.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado: '+mercadoForm.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
                                         saveMovimientos([...movs,...movimientos].slice(0,500));
                                     }
-
                                     setShowMercadoModal(false); setEditingMercado(null);
-                                }} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('💾 Guardar','💾 Save')}</button>
+                                }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${mercadoForm.estadoBorrador?'bg-amber-500 text-white':'bg-orange-500 text-white'}`}>{mercadoForm.estadoBorrador ? L('💾 Guardar borrador','💾 Save draft') : L('💾 Guardar','💾 Save')}</button>
                             </div>
                         </div>
                     </div>
@@ -28001,7 +28050,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [vuelvenForm, setVuelvenForm] = useState({ sucursal: '', productos: [] });
         const [showMercadosConfigModal, setShowMercadosConfigModal] = useState(false);
         const [editingMercado, setEditingMercado] = useState(null);
-        const [mercadoForm, setMercadoForm] = useState({ mercadoNombre: '', fecha: '', productos: [], destinatarios: [], sucursalDescuento: '', notasGral: '' });
+        const [mercadoForm, setMercadoForm] = useState({ mercadoNombre: '', fecha: '', productos: [], destinatarios: [], sucursalDescuento: '', notasGral: '', estadoBorrador: false });
         const [listaMercados, setListaMercados] = useState([]);
         const [newMercadoName, setNewMercadoName] = useState('');
         const [deliveryData,      setDeliveryData]      = useState({ nombre: '', link: '', usuario: '', password: '', notas: '' });
@@ -28362,12 +28411,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         const marcarEnvioEstado = (id, estado) => {
             const envio = envios.find(e => e.id === id);
-            saveEnvios(envios.map(e => e.id === id ? { ...e, estado } : e));
+            // Apply diffs to product quantities
+            const prodsFinal = (envio?.productos||[]).map(p => {
+                const dif = (envio?._difs||{})[p.id];
+                return (dif !== undefined && dif !== '') ? {...p, cantidad: String(parseFloat(dif)), _cantOriginal: p.cantidad} : p;
+            });
+            saveEnvios(envios.map(e => e.id === id ? { ...e, estado, productos: prodsFinal } : e));
             // Si sale de borrador → disparar stock y notificaciones
             if (envio?.estado === 'borrador' && estado !== 'borrador') {
                 if (envio.descontarDe) {
                     const newStock = { ...stock };
-                    (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                    prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
                         const k = stockKey(p.id, envio.descontarDe);
                         newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
                     });
@@ -28701,17 +28755,32 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <div>
                                                     <div className="flex items-center gap-2">
                                                         <p className={`font-semibold ${txt}`}>🏪 {m.mercadoNombre}</p>
+                                                        {m.estado === 'borrador' && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">📝 {L('Borrador','Draft')}</span>}
                                                         {esResuelto && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">✓ {L('Resuelto','Done')}</span>}
-                                                        {!esResuelto && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
+                                                        {!esResuelto && m.estado !== 'borrador' && esPasado && <span className={`text-xs px-2 py-0.5 rounded-full ${darkMode?'bg-amber-900/30 text-amber-400':'bg-amber-50 text-amber-600'}`}>⏳ {L('Pendiente cierre','Pending closure')}</span>}
                                                     </div>
                                                     <p className={`text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{weekday:'long',day:'2-digit',month:'long'}) : '—'} · {prods.length} {L('productos','products')}{m.creadoPor ? (' · 👤 '+m.creadoPor) : ''}</p>
 
                                                     {esResuelto && m.resueltoPor && <p className={`text-xs text-green-600 mt-0.5`}>✓ {L('Cerrado por','Closed by')} {m.resueltoPor} · {m.resueltAt?new Date(m.resueltAt).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''}</p>}
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 mt-2">
-                                                    {!esResuelto && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
+                                                    {m.estado === 'borrador' && canEdit && <button onClick={()=>{
+                                                        if(!confirm(L('¿Confirmar este mercado? Se descontará el stock.','Confirm this market? Stock will be deducted.'))) return;
+                                                        saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'pendiente'}:x));
+                                                        if(m.sucursalDescuento) {
+                                                            const newStock = {...stock};
+                                                            (m.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
+                                                                const k = stockKey(p.id, m.sucursalDescuento);
+                                                                newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
+                                                            });
+                                                            saveStock(newStock);
+                                                            const movs = (m.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:m.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado confirmado: '+m.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
+                                                            saveMovimientos([...movs,...movimientos].slice(0,500));
+                                                        }
+                                                    }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">✓ {L('Confirmar','Confirm')}</button>}
+                                                    {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
                                                         className="px-3 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium">↩️ {L('Vuelven','Returns')}</button>}
-                                                    {!esResuelto && canEdit && <button onClick={()=>{ if(!confirm(L('¿Marcar como resuelto? Esto cerrará la lista.','Mark as done? This will close the list.'))) return; saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'resuelto',resueltoPor:currentUser?.name||currentUser?.username||'',resueltAt:new Date().toISOString()}:x)); }}
+                                                    {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ if(!confirm(L('¿Marcar como resuelto? Esto cerrará la lista.','Mark as done? This will close the list.'))) return; saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'resuelto',resueltoPor:currentUser?.name||currentUser?.username||'',resueltAt:new Date().toISOString()}:x)); }}
                                                         className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">✓ {L('Resuelto','Done')}</button>}
                                                     <button onClick={()=>{
                                                         const prods = (m.productos||[]).filter(p=>p.cantidad||p.notas);
@@ -29347,15 +29416,38 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                             </div>
                                             {prods.length > 0 && (
-                                                <div className="px-4 py-3 flex flex-wrap gap-2">
-                                                    {prods.map(p => (
-                                                        <span key={p.id} className={`text-xs px-2.5 py-1 rounded-lg font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>
-                                                            {p.nombre} <span className="font-bold">{p.cantidad}</span> {p.unidad}
-                                                        </span>
-                                                    ))}
+                                                <div className="px-4 py-3 space-y-1">
+                                                    {prods.map(p => {
+                                                        const checked = (e._checks||{})[p.id] || false;
+                                                        const dif     = (e._difs||{})[p.id];
+                                                        const cantFinal = (dif !== undefined && dif !== '') ? parseFloat(dif) : parseFloat(p.cantidad);
+                                                        return (
+                                                            <div key={p.id} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors ${checked?(darkMode?'bg-green-900/20':'bg-green-50'):(darkMode?'bg-slate-700/40':'bg-slate-50')}`}>
+                                                                <input type="checkbox" checked={checked} onChange={ev=>{
+                                                                    const nc={...(e._checks||{}),[p.id]:ev.target.checked};
+                                                                    saveEnvios(envios.map(x=>x.id===e.id?{...x,_checks:nc}:x));
+                                                                }} className="w-4 h-4 rounded shrink-0" style={{accentColor:'#16a34a'}}/>
+                                                                <span className={`flex-1 text-sm ${checked?(darkMode?'text-green-400':'text-green-700')+(darkMode?' line-through opacity-60':' line-through opacity-60'):txt}`}>{p.nombre}</span>
+                                                                <span className={`text-sm font-mono font-bold ${dif!==undefined&&dif!==''&&cantFinal!==parseFloat(p.cantidad)?'text-orange-500':checked?'text-green-500':txt}`}>{cantFinal} <span className={`text-xs font-normal ${sub}`}>{p.unidad}</span></span>
+                                                                {e.estado !== 'entregado' && e.estado !== 'borrador' && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className={`text-xs ${sub}`}>{L('Dif:','Diff:')}</span>
+                                                                        <input type="number" step="1" value={dif!==undefined?dif:''} placeholder={p.cantidad}
+                                                                            onChange={ev=>{ const v=ev.target.value; const nd={...(e._difs||{}),[p.id]:v===''?'':parseFloat(v)||0}; saveEnvios(envios.map(x=>x.id===e.id?{...x,_difs:nd}:x)); }}
+                                                                            className={`w-16 px-1.5 py-0.5 text-right text-sm font-mono border rounded ${dif!==undefined&&dif!==''?'border-orange-400 text-orange-500':'border-slate-200'} ${darkMode?'bg-slate-700 text-white':'bg-white'}`}/>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {Object.values(e._difs||{}).some(v=>v!==''&&v!==undefined) && (
+                                                        <div className={`mt-2 p-2 rounded-lg text-xs ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-700'}`}>
+                                                            ⚠️ {L('Diferencias:','Differences:')} {prods.filter(p=>(e._difs||{})[p.id]!==undefined&&(e._difs||{})[p.id]!=='').map(p=>`${p.nombre}: ${p.cantidad}→${(e._difs||{})[p.id]}`).join(' · ')}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
-                                            {e.notas && <p className={`px-4 pb-2 text-xs ${sub} italic`}>📝 {e.notas}</p>}
+                                            {e.notas && <div className={`mx-4 mb-3 px-3 py-2 rounded-lg border-l-4 border-orange-400 ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-800'} text-sm font-medium`}>📝 {e.notas}</div>}
                                             {(()=>{ const d=e.creadoAt?new Date(e.creadoAt).toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):null; return d ? <p className={`px-4 pb-3 text-xs ${sub}`}>👤 {e.creadoPor||'—'} · {d}</p> : null; })()}
                                         </div>
                                     );
@@ -29435,15 +29527,22 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                 </div>
                             </div>
+                            <div className={`px-5 py-2 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" checked={mercadoForm.estadoBorrador} onChange={e=>setMercadoForm(f=>({...f,estadoBorrador:e.target.checked}))} className="w-4 h-4 rounded"/>
+                                    <span className={mercadoForm.estadoBorrador?'text-amber-500':sub}>📝 {L('Guardar como borrador','Save as draft')}</span>
+                                </label>
+                            </div>
                             <div className={`flex gap-3 px-5 py-3 border-t flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <button onClick={()=>{setShowMercadoModal(false);setEditingMercado(null);}} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cancelar','Cancel')}</button>
                                 <button onClick={()=>{
                                     if(!mercadoForm.mercadoNombre||!mercadoForm.fecha) return;
                                     const isNew = !editingMercado;
-                                    const data = {...mercadoForm, id: editingMercado?.id||Date.now(), creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
+                                    const esBorrador = mercadoForm.estadoBorrador;
+                                    const data = {...mercadoForm, id: editingMercado?.id||Date.now(), estado: esBorrador ? 'borrador' : 'pendiente', creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
                                     saveMercados(editingMercado ? mercados.map(m=>m.id===editingMercado.id?data:m) : [data,...mercados]);
-                                    // Descontar stock si se eligió sucursal (solo en creación)
-                                    if (mercadoForm.sucursalDescuento && isNew) {
+                                    // Descontar stock solo si NO es borrador y se eligió sucursal (solo en creación)
+                                    if (mercadoForm.sucursalDescuento && isNew && !esBorrador) {
                                         const newStock = {...stock};
                                         (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
                                             const k = stockKey(p.id, mercadoForm.sucursalDescuento);
@@ -29453,9 +29552,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         const movs = (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:mercadoForm.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado: '+mercadoForm.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
                                         saveMovimientos([...movs,...movimientos].slice(0,500));
                                     }
-
                                     setShowMercadoModal(false); setEditingMercado(null);
-                                }} className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('💾 Guardar','💾 Save')}</button>
+                                }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${mercadoForm.estadoBorrador?'bg-amber-500 text-white':'bg-orange-500 text-white'}`}>{mercadoForm.estadoBorrador ? L('💾 Guardar borrador','💾 Save draft') : L('💾 Guardar','💾 Save')}</button>
                             </div>
                         </div>
                     </div>
