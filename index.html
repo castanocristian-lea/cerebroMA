@@ -25976,11 +25976,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 setCategoriasProd(Array.isArray(cats) && cats.length ? cats : CATEGORIAS_PROD_DEFAULT);
                 // Load delivery + mercados in one batch request
                 dbGetKey('app_config', 'stock_control_historial').then(d => { if(Array.isArray(d)) setControlHistorial(d); });
-                dbGetKeyBatch('app_config', ['stock_delivery','stock_mercados','stock_lista_mercados']).then(b => {
+                dbGetKeyBatch('app_config', ['stock_delivery','stock_mercados','stock_lista_mercados','stock_vivo_egresos','stock_vivo_ts']).then(b => {
                     if(b['stock_delivery']) setDeliveryData(b['stock_delivery']);
                     setDeliveryLoaded(true);
                     if(Array.isArray(b['stock_mercados'])) setMercados(b['stock_mercados']);
                     setListaMercados(Array.isArray(b['stock_lista_mercados']) && b['stock_lista_mercados'].length ? b['stock_lista_mercados'] : ['Mercado Central','Makro','Metro']);
+                    if(b['stock_vivo_egresos']) setVivoEgresos(b['stock_vivo_egresos']);
+                    if(b['stock_vivo_ts']) setVivoTimestamp(b['stock_vivo_ts']);
                 });
                 if (sucList.length) setSucursalSel(String(sucList[0].id));
                 setLoaded(true);
@@ -26180,15 +26182,33 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             }
         };
 
+        const [vivoMode, setVivoMode] = useState(false);
+
         const confirmarVentas = () => {
             if (!ventasSucursal || !ventasPreview.length) return;
+            if (vivoMode) {
+                const newVivo = { ...vivoEgresos };
+                ventasPreview.forEach(({ producto, cantidad }) => {
+                    const prod = productos.find(p => p.nombre.toLowerCase().trim() === producto.toLowerCase().trim());
+                    if (!prod) return;
+                    const k = `${prod.id}_${ventasSucursal}`;
+                    newVivo[k] = (parseFloat(newVivo[k] || 0)) + cantidad;
+                });
+                setVivoEgresos(newVivo);
+                save('stock_vivo_egresos', newVivo);
+                const now = new Date();
+                const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                setVivoTimestamp(ts); save('stock_vivo_ts', ts);
+                setShowVentasModal(false); setVentasPreview([]); setVentasSucursal(''); setVivoMode(false);
+                return;
+            }
             const newStock = { ...stock };
             const newMovs = [];
             ventasPreview.forEach(({ producto, cantidad }) => {
                 const prod = productos.find(p => p.nombre.toLowerCase().trim() === producto.toLowerCase().trim());
                 if (!prod) return;
                 const k = stockKey(prod.id, ventasSucursal);
-                newStock[k] = (parseFloat(newStock[k] || 0)) - cantidad; // permite negativo para detectar errores
+                newStock[k] = (parseFloat(newStock[k] || 0)) - cantidad;
                 newMovs.push({ id: Date.now() + Math.random(), tipo: 'venta', productoId: prod.id, sucursalId: ventasSucursal, cantidad, fecha: new Date().toISOString(), user: 'Storyous Import' });
             });
             saveStock(newStock);
@@ -26231,8 +26251,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     newVivo[k] = (parseFloat(newVivo[k] || 0)) + cant;
                 });
                 setVivoEgresos(newVivo);
+                save('stock_vivo_egresos', newVivo);
                 const now = new Date();
-                setVivoTimestamp(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`);
+                const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                setVivoTimestamp(ts);
+                save('stock_vivo_ts', ts);
                 setShowMovManual(false);
                 return;
             }
@@ -27099,7 +27122,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             {vivoTimestamp && (
                                 <div className={`rounded-xl px-4 py-2.5 flex items-center justify-between ${darkMode?'bg-blue-900/30 border border-blue-700':'bg-blue-50 border border-blue-200'}`}>
                                     <span className={`text-sm font-semibold ${darkMode?'text-blue-300':'text-blue-700'}`}>⚡ {L('Stock hasta las','Stock as of')} {vivoTimestamp}</span>
-                                    <button onClick={()=>{ setVivoEgresos({}); setVivoTimestamp(null); }} className={`text-xs px-2.5 py-1 rounded-lg ${darkMode?'bg-blue-800 text-blue-200':'bg-blue-100 text-blue-600'}`}>🔄 {L('Reiniciar','Reset')}</button>
+                                    <button onClick={()=>{ setVivoEgresos({}); setVivoTimestamp(null); save('stock_vivo_egresos',{}); save('stock_vivo_ts',null); }} className={`text-xs px-2.5 py-1 rounded-lg ${darkMode?'bg-blue-800 text-blue-200':'bg-blue-100 text-blue-600'}`}>🔄 {L('Reiniciar','Reset')}</button>
                                 </div>
                             )}
                             <div className="flex gap-2 overflow-x-auto pb-1" style={{scrollbarWidth:'none'}}>
@@ -27120,7 +27143,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             {canEdit && (
                                 <div className="flex gap-2 flex-wrap">
                                     <button onClick={()=>{ setMovManualTipo('vivo'); setMovManualSuc(sucSel); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium">📋 {L('Carga manual','Manual entry')}</button>
-                                    <button onClick={()=>{ setVentasSucursal(sucSel); setShowVentasModal(true); }} className="px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium">📤 {L('Importar Excel/CSV','Import Excel/CSV')}</button>
+                                    <button onClick={()=>{ setVivoMode(true); setVentasSucursal(sucSel); setShowVentasModal(true); }} className="px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium">📤 {L('Importar Excel/CSV','Import Excel/CSV')}</button>
                                 </div>
                             )}
                             <div className={`rounded-xl border ${card} overflow-hidden`}>
@@ -27372,7 +27395,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
                                                 {mercadoForm.productos.map((p,i)=>(
                                                     <tr key={p.id} className={(p.cantidad||p.notas)?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
-                                                        <td className={`px-3 py-2 font-medium ${txt}`}>{p.nombre}</td>
+                                                        <td className={`px-3 py-2 font-medium ${txt}`}>
+                                            {p.nombre}
+                                            {mercadoForm.sucursalDescuento && (() => { const real = getStock(p.id, mercadoForm.sucursalDescuento); const egr = parseFloat((vivoEgresos||{})[`${p.id}_${mercadoForm.sucursalDescuento}`]||0); const vivo = real - egr; return <span className={`text-xs ml-1 ${sub}`}>{real}{egr>0&&<span className='text-blue-500 font-semibold'> / ⚡{vivo}</span>}</span>; })()}
+                                        </td>
                                                         <td className="px-3 py-2 text-right">
                                                             <input type="number" step="1" value={p.cantidad}
                                                                 onChange={e=>setMercadoForm(f=>({...f,productos:f.productos.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}))}
@@ -27812,7 +27838,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <tr key={p.id} className={parseFloat(p.cantidad)>0?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
                                                         <td className={`px-3 py-2.5 font-medium ${txt}`}>
                                                             {p.nombre}
-                                                            {envioForm.desde && <span className={`text-xs ml-1 ${sub}`}>({getStock(p.id, envioForm.desde)} avail.)</span>}
+                                                            {envioForm.desde && (() => { const real = getStock(p.id, envioForm.desde); const egr = parseFloat((vivoEgresos||{})[`${p.id}_${envioForm.desde}`]||0); const vivo = real - egr; return (<span className={`text-xs ml-1 ${sub}`}>{real} {egr>0&&<span className='text-blue-500 font-semibold'>/ ⚡{vivo}</span>}</span>); })()}
                                                         </td>
                                                         <td className="px-3 py-2.5 text-right">
                                                             <input type="number" step="1"
@@ -29595,7 +29621,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
                                                 {mercadoForm.productos.map((p,i)=>(
                                                     <tr key={p.id} className={(p.cantidad||p.notas)?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
-                                                        <td className={`px-3 py-2 font-medium ${txt}`}>{p.nombre}</td>
+                                                        <td className={`px-3 py-2 font-medium ${txt}`}>
+                                            {p.nombre}
+                                            {mercadoForm.sucursalDescuento && (() => { const real = getStock(p.id, mercadoForm.sucursalDescuento); const egr = parseFloat((vivoEgresos||{})[`${p.id}_${mercadoForm.sucursalDescuento}`]||0); const vivo = real - egr; return <span className={`text-xs ml-1 ${sub}`}>{real}{egr>0&&<span className='text-blue-500 font-semibold'> / ⚡{vivo}</span>}</span>; })()}
+                                        </td>
                                                         <td className="px-3 py-2 text-right">
                                                             <input type="number" step="1" value={p.cantidad}
                                                                 onChange={e=>setMercadoForm(f=>({...f,productos:f.productos.map((x,j)=>j===i?{...x,cantidad:e.target.value}:x)}))}
@@ -30035,7 +30064,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <tr key={p.id} className={parseFloat(p.cantidad)>0?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
                                                         <td className={`px-3 py-2.5 font-medium ${txt}`}>
                                                             {p.nombre}
-                                                            {envioForm.desde && <span className={`text-xs ml-1 ${sub}`}>({getStock(p.id, envioForm.desde)} avail.)</span>}
+                                                            {envioForm.desde && (() => { const real = getStock(p.id, envioForm.desde); const egr = parseFloat((vivoEgresos||{})[`${p.id}_${envioForm.desde}`]||0); const vivo = real - egr; return (<span className={`text-xs ml-1 ${sub}`}>{real} {egr>0&&<span className='text-blue-500 font-semibold'>/ ⚡{vivo}</span>}</span>); })()}
                                                         </td>
                                                         <td className="px-3 py-2.5 text-right">
                                                             <input type="number" step="1"
