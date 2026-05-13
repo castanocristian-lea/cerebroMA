@@ -2011,7 +2011,7 @@ ${invoice.items.map(item => `
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['dashboard', 'ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro', 'seguridad'];
+            const DEFAULT_MODULE_ORDER = ['ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro', 'seguridad'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
@@ -3379,15 +3379,6 @@ ${invoice.items.map(item => `
                         {(() => {
                             // Definición completa de todos los módulos
                             const allModules = {
-                                dashboard: {
-                                    permission: 'caja',
-                                    navigate: 'dashboard',
-                                    color: 'indigo',
-                                    icon: <svg className={`w-8 h-8 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>,
-                                    title: t.dashboard,
-                                    desc: t.dashboardDesc,
-                                    detail: t.dashboardDetail,
-                                },
                                 ventas: {
                                     permission: 'ventas',
                                     navigate: 'ventas',
@@ -3527,7 +3518,7 @@ ${invoice.items.map(item => `
                                 amber:   { border: 'sm:hover:border-amber-500',   bg: darkMode ? 'bg-amber-900'   : 'bg-amber-100',   hover: 'sm:group-hover:bg-amber-600' },
                             };
 
-                            const EN_CONSTRUCCION = ['dashboard'];
+                            const EN_CONSTRUCCION = [];
                             const visibleModules = moduleOrder.filter(key => {
                                 const mod = allModules[key];
                                 if (!mod || !hasPermission(mod.permission, 'read')) return false;
@@ -28410,8 +28401,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         const TABS = [
             { id: 'stock',      label: '📦 Stock' },
-            { id: 'envios',     label: L('🚚 Envíos','🚚 Shipments') },
-            { id: 'mercados',   label: L('🏪 Mercados','🏪 Markets') },
+            { id: 'compra',     label: L('🛒 Plan de Compra','🛒 Purchase Plan') },
             { id: 'control',    label: L('🔍 Control','🔍 Stock Check') },
             { id: 'ingresos',   label: L('📥 Ingresos','📥 Inbound') },
             { id: 'ventas',     label: L('📤 Egresos','📤 Outbound') },
@@ -28815,7 +28805,77 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 )}
 
                 {/* ── CONTROL DE STOCK ── */}
-                {activeTab === 'control' && (
+                {/* ── PLAN DE COMPRA ── */}
+                {activeTab === 'compra' && (() => {
+                    // Por sucursal: cada sucursal tiene su propia lista
+                    const planPorSucursal = sucursales.map(suc => {
+                        const items = productos
+                            .filter(p => p.minimo && parseFloat(p.minimo) > 0)
+                            .map(p => {
+                                const actual = parseFloat(stock[`${p.id}_${suc.id}`] || 0);
+                                const minimo = parseFloat(p.minimo);
+                                const reponer = Math.max(0, minimo - actual);
+                                return { ...p, actual, minimo, reponer };
+                            })
+                            .filter(p => p.actual <= p.minimo);
+                        return { suc, items };
+                    }).filter(x => x.items.length > 0);
+                    const totalItems = planPorSucursal.reduce((s,x)=>s+x.items.length,0);
+                    return (
+                        <div className="mt-4 space-y-4">
+                            <div className={`rounded-xl border ${card} p-4`}>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xl">🛒</span>
+                                    <h3 className={`font-bold ${txt}`}>{L('Plan de Compra','Purchase Plan')}</h3>
+                                </div>
+                                <p className={`text-xs ${sub}`}>{L('Productos por sucursal que alcanzaron o están bajo el mínimo.','Products per branch at or below minimum stock.')}</p>
+                            </div>
+                            {totalItems === 0 ? (
+                                <div className={`rounded-xl border ${card} p-10 text-center`}>
+                                    <p className="text-4xl mb-3">✅</p>
+                                    <p className={`font-semibold ${txt}`}>{L('Todo el stock está en orden','All stock is in order')}</p>
+                                    <p className={`text-sm ${sub} mt-1`}>{L('Ningún producto alcanzó el mínimo en ninguna sucursal','No product reached minimum in any branch')}</p>
+                                </div>
+                            ) : planPorSucursal.map(({suc, items}) => (
+                                <div key={suc.id} className={`rounded-xl border ${card} overflow-hidden`}>
+                                    <div className={`px-4 py-3 flex items-center justify-between ${darkMode?'bg-slate-700/40':'bg-red-50'}`}>
+                                        <span className={`text-sm font-semibold ${darkMode?'text-red-400':'text-red-700'}`}>🏪 {suc.nombre} — ⚠️ {items.length} {L('producto(s) a reponer','product(s) to reorder')}</span>
+                                        <button onClick={()=>{
+                                            const lines = [`PLAN DE COMPRA — ${suc.nombre} — ${new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'})}`, ''];
+                                            items.forEach(p => lines.push(`• ${p.nombre} — Stock: ${p.actual} ${p.unidad||''} / Mínimo: ${p.minimo} ${p.unidad||''} / A reponer: ${p.reponer} ${p.unidad||''}`));
+                                            const blob = new Blob([lines.join('\n')], {type:'text/plain'});
+                                            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `plan-compra-${suc.nombre}.txt`; a.click();
+                                        }} className={`text-xs px-3 py-1.5 rounded-lg font-medium ${darkMode?'bg-slate-600 text-slate-200':'bg-white border border-slate-200 text-slate-600'}`}>
+                                            ⬇️ {L('Exportar','Export')}
+                                        </button>
+                                    </div>
+                                    <table className="w-full text-sm">
+                                        <thead><tr className={darkMode?'bg-slate-700/50':'bg-slate-50'}>
+                                            <th className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{L('PRODUCTO','PRODUCT')}</th>
+                                            <th className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{L('CATEGORÍA','CATEGORY')}</th>
+                                            <th className={`px-4 py-3 text-right text-xs font-semibold ${sub}`}>{L('ACTUAL','CURRENT')}</th>
+                                            <th className={`px-4 py-3 text-right text-xs font-semibold ${sub}`}>{L('MÍNIMO','MIN')}</th>
+                                            <th className={`px-4 py-3 text-right text-xs font-semibold text-red-500`}>{L('REPONER','TO ORDER')}</th>
+                                        </tr></thead>
+                                        <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                            {items.map(p => (
+                                                <tr key={p.id} className={darkMode?'bg-red-900/10':'bg-red-50/50'}>
+                                                    <td className={`px-4 py-3 font-semibold ${txt}`}>{p.nombre}</td>
+                                                    <td className={`px-4 py-3 text-xs ${sub}`}>{p.categoria||'—'}</td>
+                                                    <td className={`px-4 py-3 text-right font-mono font-bold ${p.actual < 0?'text-red-600':'text-orange-500'}`}>{p.actual} <span className={`text-xs font-normal ${sub}`}>{p.unidad||''}</span></td>
+                                                    <td className={`px-4 py-3 text-right font-mono ${sub}`}>{p.minimo}</td>
+                                                    <td className="px-4 py-3 text-right font-mono font-bold text-red-500">{p.reponer} <span className={`text-xs font-normal ${sub}`}>{p.unidad||''}</span></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })()}
+
+                                {activeTab === 'control' && (
                     <div className="mt-4 space-y-4">
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <p className={`text-sm font-semibold ${txt}`}>🔍 {L('Control de Stock','Stock Check')}</p>
