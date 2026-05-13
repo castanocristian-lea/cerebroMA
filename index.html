@@ -15050,7 +15050,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 // Si hay ajuste manual, usarlo; sino calcular desde banco
                                 const horas = ajuste !== undefined
                                     ? (ajuste === null ? null : ajuste)
-                                    : (vh > 0 ? totBanco / vh : null);
+                                    : (vh > 0 ? Math.round(totBanco / vh * 10) / 10 : null);
                                 return { horas, totBanco, ajustado: ajuste !== undefined };
                             });
                             const totalHoras = vh > 0 || meses.some(m => m.ajustado && m.horas !== null)
@@ -15160,6 +15160,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                         ⏱ {language==='en'?'Hours = bank amount ÷ hourly rate · "n/a" = no hourly rate · Click any cell to edit · ✎ = manually edited':language==='cs'?'Hodiny = bankovní částka ÷ hodinová sazba · "n/h" = bez sazby · Klikněte na buňku pro úpravu · ✎ = ručně upraveno':'Horas calculadas = monto banco ÷ valor hora · "s/h" = sin valor hora · Click en celda para editar · ✎ = editado manualmente'}
                                     </p>
                                     <button onClick={() => {
+                                        const redondearH = (h) => { if(!h) return h; const dec=h%1; if(dec===0) return h; if(dec>0&&dec<=0.5) return Math.floor(h)+0.5; return Math.ceil(h); };
                                         const noHoursLabel = language==='en'?'n/a':language==='cs'?'n/h':'s/h';
                                         const employeeLabel = language==='en'?'EMPLOYEE':language==='cs'?'ZAMĚSTNANEC':'EMPLEADO';
                                         const totalLabel = language==='en'?'TOTAL':language==='cs'?'CELKEM':'TOTAL';
@@ -15170,13 +15171,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <td style="padding:8px 12px;font-size:13px;font-weight:600;border-bottom:1px solid #f1f5f9;white-space:nowrap">${emp.nombre} ${emp.apellido}<br><span style="font-size:11px;color:#94a3b8;font-weight:400">${emp.tipoContrato||''}</span></td>
                                                 <td style="padding:8px 6px;text-align:center;font-size:11px;font-family:monospace;color:#64748b;border-bottom:1px solid #f1f5f9">${vh>0?vh:'—'}</td>
                                                 ${meses.map((m,mi) => `<td style="padding:8px 6px;text-align:center;font-size:12px;font-family:monospace;border-bottom:1px solid #f1f5f9;${mi===now.getMonth()&&horasYear===now.getFullYear()?'background:#f0fdf4;':''}">
-                                                    ${m.horas!==null&&m.horas>0?`<span style="color:#16a34a;font-weight:700">${m.horas.toFixed(1)}</span>`:m.totBanco>0&&vh===0?`<span style="color:#94a3b8">${noHoursLabel}</span>`:`<span style="color:#e2e8f0">—</span>`}
+                                                    ${m.horas!==null&&m.horas>0?`<span style="color:#16a34a;font-weight:700">${redondearH(m.horas).toFixed(1)}</span>`:m.totBanco>0&&vh===0?`<span style="color:#94a3b8">${noHoursLabel}</span>`:`<span style="color:#e2e8f0">—</span>`}
                                                 </td>`).join('')}
-                                                <td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;border-bottom:1px solid #f1f5f9;white-space:nowrap">${totalHoras!==null&&totalHoras>0?`${totalHoras.toFixed(1)} hs`:'—'}</td>
+                                                <td style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;border-bottom:1px solid #f1f5f9;white-space:nowrap">${totalHoras!==null&&totalHoras>0?`${redondearH(totalHoras).toFixed(1)} hs`:'—'}</td>
                                             </tr>`).join('');
                                         const totalRowCells = monthNames.map((_,mi) => {
                                             const t = horasData.reduce((s,row) => s+(row.meses[mi].horas||0),0);
-                                            return `<td style="padding:8px 6px;text-align:center;font-size:12px;font-family:monospace;font-weight:700;color:#1e293b">${t>0?t.toFixed(1):'—'}</td>`;
+                                            return `<td style="padding:8px 6px;text-align:center;font-size:12px;font-family:monospace;font-weight:700;color:#1e293b">${t>0?redondearH(t).toFixed(1):'—'}</td>`;
                                         }).join('');
                                         const gt = totalPorMes.reduce((s,t)=>s+t,0);
                                         const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -15201,7 +15202,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <td style="padding:8px 12px;font-size:12px">${totalLabel}</td>
                                                     <td></td>
                                                     ${totalRowCells}
-                                                    <td style="padding:8px 12px;text-align:right;font-size:13px;white-space:nowrap">${gt>0?gt.toFixed(1)+' hs':'—'}</td>
+                                                    <td style="padding:8px 12px;text-align:right;font-size:13px;white-space:nowrap">${gt>0?redondearH(gt).toFixed(1)+' hs':'—'}</td>
                                                 </tr>
                                             </tbody></table></body></html>`;
                                         const w = window.open('','_blank');
