@@ -25517,6 +25517,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             <li>🔍 <strong>Control de Stock</strong> — Hacé un recuento físico y comparalo con el sistema. Genera informe de diferencias y corrige el stock automáticamente.</li>
                                             <li>📥 <strong>Ingresos</strong> — Historial de entradas de stock. Filtrá por categoría.</li>
                                             <li>📤 <strong>Egresos</strong> — Historial de salidas de stock. Filtrá por categoría.</li>
+                                            <li>⚡ <strong>Egresos en Vivo</strong> — Vista del stock en tiempo real. Registrá egresos parciales sin modificar el stock real. Muestra "Stock hasta las HH:MM" para seguimiento durante el servicio.</li>
                                             <li>🗂 <strong>Productos</strong> — Alta, edición y baja de productos. Importá y exportá en Excel con aliases para el matching con Storyous.</li>
                                             <li>🏪 <strong>Sucursales</strong> — Gestioná los locales del sistema.</li>
                                             {isAdmin && <li>📋 <strong>Recetas</strong> — Solo admins. Creá y editá recetas con ingredientes y pasos.</li>}
@@ -25532,6 +25533,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             <li>🔍 <strong>Stock Control</strong> — Do a physical count and compare with the system. Generates difference report and corrects stock automatically.</li>
                                             <li>📥 <strong>Inbound</strong> — Stock entry history. Filter by category.</li>
                                             <li>📤 <strong>Outbound</strong> — Stock exit history. Filter by category.</li>
+                                            <li>⚡ <strong>Live Outbound</strong> — Real-time stock view. Log partial outflows without affecting real stock. Shows "Stock as of HH:MM" for tracking during service.</li>
                                             <li>🗂 <strong>Products</strong> — Create, edit and delete products. Import/export Excel with aliases for Storyous matching.</li>
                                             <li>🏪 <strong>Branches</strong> — Manage the locations in the system.</li>
                                             {isAdmin && <li>📋 <strong>Recipes</strong> — Admins only. Create and edit recipes with ingredients and steps.</li>}
@@ -25547,6 +25549,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             <li>🔍 <strong>Kontrola skladu</strong> — Proveďte fyzické počítání a porovnejte se systémem. Generuje přehled rozdílů.</li>
                                             <li>📥 <strong>Příjem</strong> — Historie vstupů do skladu. Filtrujte podle kategorie.</li>
                                             <li>📤 <strong>Výdej</strong> — Historie výstupů ze skladu. Filtrujte podle kategorie.</li>
+                                            <li>⚡ <strong>Výdej v reálném čase</strong> — Zobrazení skladu v reálném čase. Zaznamenávejte částečné výdeje bez změny skutečného skladu. Zobrazuje "Sklad do HH:MM" pro sledování během provozu.</li>
                                             <li>🗂 <strong>Produkty</strong> — Přidávejte, upravujte a mažte produkty. Import/export Excel s aliasy pro párování se Storyous.</li>
                                             <li>🏪 <strong>Pobočky</strong> — Spravujte pobočky v systému.</li>
                                             {isAdmin && <li>📋 <strong>Recepty</strong> — Pouze správci. Vytvářejte a upravujte recepty s ingrediencemi a kroky.</li>}
@@ -26001,7 +26004,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveListaMercados = (v) => { setListaMercados(v); save('stock_lista_mercados', v); };
 
         const stockKey = (pId, sId) => `${pId}_${sId}`;
-        const getStock = (pId, sId) => parseFloat(stock[stockKey(pId, sId)] || 0);
+        const getStock = (pId, sId) => parseFloat(stock[`${String(pId)}_${String(sId)}`] || 0);
 
         // ── BRANCHES ──
         const guardarSucursal = () => {
@@ -26030,11 +26033,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         // ── INGRESO DE MERCADERÍA ──
         const guardarIngreso = () => {
-            if (!ingForm.productoId || !ingForm.sucursalId || !ingForm.cantidad) return;
-            const k = stockKey(ingForm.productoId, ingForm.sucursalId);
-            const newStock = { ...stock, [k]: (getStock(ingForm.productoId, ingForm.sucursalId) + parseFloat(ingForm.cantidad)) };
+            if (!ingForm.productoId || !ingForm.branchId || !ingForm.cantidad) return;
+            const k = stockKey(ingForm.productoId, ingForm.branchId);
+            const newStock = { ...stock, [k]: (getStock(ingForm.productoId, ingForm.branchId) + parseFloat(ingForm.cantidad)) };
             saveStock(newStock);
-            const mov = { id: Date.now(), tipo: 'ingreso', productoId: ingForm.productoId, branchId: ingForm.sucursalId, cantidad: parseFloat(ingForm.cantidad), notas: ingForm.notas, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+            const mov = { id: Date.now(), tipo: 'ingreso', productoId: ingForm.productoId, branchId: ingForm.branchId, sucursalId: ingForm.branchId, cantidad: parseFloat(ingForm.cantidad), notas: ingForm.notas, fecha: new Date().toISOString(), user: currentUser?.name || '' };
             saveMovimientos([mov, ...movimientos].slice(0, 200));
             setIngForm({ productoId: '', branchId: '', cantidad: '', notas: '' });
             setShowIngModal(false);
@@ -26261,14 +26264,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             }
             const newStock = { ...stock };
             const newMovs = [];
+            console.log('guardarMovManual: suc=', movManualSuc, 'tipo=', movManualTipo, 'filas=', movManualFilas.length);
             movManualFilas.forEach(f => {
                 const cant = parseFloat(f.cantidad);
                 if (!cant || cant <= 0) return;
-                const k = stockKey(f.id, movManualSuc);
+                const k = stockKey(String(f.id), String(movManualSuc));
                 const prev = parseFloat(newStock[k] || 0);
-                newStock[k] = movManualTipo === 'ingreso' ? prev + cant : prev - cant; // permite negativo
-                newMovs.push({ id: Date.now() + Math.random(), tipo: movManualTipo, productoId: f.id, sucursalId: movManualSuc, cantidad: cant, notas: 'Carga manual', fecha: new Date().toISOString(), user: currentUser?.name || '' });
+                newStock[k] = movManualTipo === 'ingreso' ? prev + cant : prev - cant;
+                console.log('  k=', k, 'prev=', prev, 'cant=', cant, 'new=', newStock[k]);
+                newMovs.push({ id: Date.now() + Math.random(), tipo: movManualTipo, productoId: String(f.id), sucursalId: String(movManualSuc), cantidad: cant, notas: 'Carga manual', fecha: new Date().toISOString(), user: currentUser?.name || '' });
             });
+            console.log('newMovs:', newMovs.length, 'newStock keys changed:', Object.keys(newStock).length);
             if (newMovs.length === 0) return;
             saveStock(newStock);
             saveMovimientos([...newMovs, ...movimientos].slice(0, 500));
@@ -28250,7 +28256,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveListaMercados = (v) => { setListaMercados(v); save('almacen_lista_mercados', v); };
 
         const stockKey = (pId, sId) => `${pId}_${sId}`;
-        const getStock = (pId, sId) => parseFloat(stock[stockKey(pId, sId)] || 0);
+        const getStock = (pId, sId) => parseFloat(stock[`${String(pId)}_${String(sId)}`] || 0);
 
         // ── BRANCHES ──
         const guardarSucursal = () => {
@@ -28279,11 +28285,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         // ── INGRESO DE MERCADERÍA ──
         const guardarIngreso = () => {
-            if (!ingForm.productoId || !ingForm.sucursalId || !ingForm.cantidad) return;
-            const k = stockKey(ingForm.productoId, ingForm.sucursalId);
-            const newStock = { ...stock, [k]: (getStock(ingForm.productoId, ingForm.sucursalId) + parseFloat(ingForm.cantidad)) };
+            if (!ingForm.productoId || !ingForm.branchId || !ingForm.cantidad) return;
+            const k = stockKey(ingForm.productoId, ingForm.branchId);
+            const newStock = { ...stock, [k]: (getStock(ingForm.productoId, ingForm.branchId) + parseFloat(ingForm.cantidad)) };
             saveStock(newStock);
-            const mov = { id: Date.now(), tipo: 'ingreso', productoId: ingForm.productoId, branchId: ingForm.sucursalId, cantidad: parseFloat(ingForm.cantidad), notas: ingForm.notas, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+            const mov = { id: Date.now(), tipo: 'ingreso', productoId: ingForm.productoId, branchId: ingForm.branchId, sucursalId: ingForm.branchId, cantidad: parseFloat(ingForm.cantidad), notas: ingForm.notas, fecha: new Date().toISOString(), user: currentUser?.name || '' };
             saveMovimientos([mov, ...movimientos].slice(0, 200));
             setIngForm({ productoId: '', branchId: '', cantidad: '', notas: '' });
             setShowIngModal(false);
