@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Version: 2026-05-12-20:20 - Stock: buscador libre entre sucursales y categorías, aplica en todos los tabs -->
+<!-- Version: 2026-05-13-09:30 - Ingresos/Egresos mobile: cards en lugar de tabla, header botones ordenado -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -5536,7 +5536,7 @@ ${invoice.items.map(item => `
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="sm:hidden space-y-2">
+                                        <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
                                             {[['🕐 Pasados',pasados,false,'text-slate-500','pasados'],['⭐ Hoy',hoyEvs,true,'text-blue-500','hoy'],['📅 Próximos',proximos,false,'text-emerald-500','proximos']].map(([titulo,lista,esHoy,color,key])=>(
                                                 <div key={key} className={`rounded-xl border overflow-hidden ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'}`}>
                                                     <button onClick={()=>setMisEvsOpenSec(s=>({...s,[key]:!s[key]}))}
@@ -26365,7 +26365,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         ) : (
                             <div>
                                 {/* Desktop: tabla */}
-                                <div className={`hidden sm:block rounded-xl border ${card} overflow-hidden`}>
+                                <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
@@ -26431,7 +26431,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </table>
                                 </div>
                                 {/* Mobile: cards */}
-                                <div className="sm:hidden space-y-2">
+                                <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
                                     {stockFiltrado.map(p => (
                                         <div key={p.id} className={`rounded-xl border p-3 ${card} ${p.alerta ? (darkMode?'border-red-800/60 bg-red-900/10':'border-red-200 bg-red-50/60') : ''}`}>
                                             <div className="flex items-start justify-between gap-2 mb-2">
@@ -26693,6 +26693,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                         ) : !showControlInforme ? (
                             <div className="space-y-3">
+                                {/* Buscador */}
+                                <input type="text" value={stockSearch} onChange={e=>setStockSearch(e.target.value)}
+                                    placeholder={L('🔍 Buscar producto...','🔍 Search product...')}
+                                    className={`w-full px-3 py-2 rounded-lg text-sm border ${darkMode?'bg-slate-700 border-slate-600 text-white placeholder-slate-400':'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                />
                                 {/* Filtros */}
                                 <div className="flex gap-3 flex-wrap">
                                     <div>
@@ -26711,7 +26716,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     </div>
                                 </div>
                                 {controlSuc && (()=>{
-                                    const prodsFiltrados = controlCat ? productos.filter(p=>p.categoria===controlCat) : productos;
+                                    const prodsFiltrados = productos
+                                        .filter(p => !controlCat || p.categoria===controlCat)
+                                        .filter(p => !stockSearch || p.nombre.toLowerCase().includes(stockSearch.toLowerCase()));
                                     return (
                                         <div className={`rounded-xl border ${card} overflow-hidden`}>
                                             <table className="w-full text-sm">
@@ -26844,36 +26851,61 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                             <div className="flex gap-2 flex-wrap">
                                 {isAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de ingresos?','Reset inbound history?'))){ const filtered=movimientos.filter(m=>m.tipo!=='ingreso'); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
-                                {canEdit && <button onClick={() => { setIngForm({ productoId: '', branchId: sucursalSel || String(sucursales[0]?.id||''), cantidad: '', notas: '' }); setShowIngModal(true); }} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">{L('📥 1 producto','📥 1 product')}</button>}
-                                {canEdit && <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">{L('📋 Lista completa','📋 Full list')}</button>}
+                                {canEdit && <button onClick={() => { setIngForm({ productoId: '', branchId: sucursalSel || String(sucursales[0]?.id||''), cantidad: '', notas: '' }); setShowIngModal(true); }} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">📥 {L('1 producto','1 product')}</button>}
+                                {canEdit && <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">📋 {L('Lista','List')}</button>}
                             </div>
                         </div>
-                        <div className={`rounded-xl border ${card} overflow-hidden`}>
-                            {movimientos.filter(m => m.tipo === 'ingreso' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).length === 0
-                                ? <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>
-                                : <table className="w-full text-sm">
-                                    <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                        {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QUANTITY'),L('USUARIO','USER'),L('ORIGEN','ORIGIN')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
-                                    </tr></thead>
-                                    <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
-                                        {movimientos.filter(m => m.tipo === 'ingreso' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).slice(0,50).map(m => {
+                        {(() => {
+                            const movsFiltrados = movimientos.filter(m => m.tipo === 'ingreso' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).slice(0,50);
+                            if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>;
+                            return (
+                                <div>
+                                    {/* Desktop */}
+                                    <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
+                                        <table className="w-full text-sm">
+                                            <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
+                                                {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                            </tr></thead>
+                                            <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
+                                                {movsFiltrados.map(m => {
+                                                    const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                    const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
+                                                    return (
+                                                        <tr key={m.id}>
+                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                            <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
+                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
+                                                            <td className="px-4 py-2.5 font-mono font-bold text-green-500">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
+                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {/* Mobile cards */}
+                                    <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
+                                        {movsFiltrados.map(m => {
                                             const prod = productos.find(p => String(p.id) === String(m.productoId));
                                             const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
                                             return (
-                                                <tr key={m.id}>
-                                                    <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                                                    <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
-                                                    <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
-                                                    <td className={`px-4 py-2.5 font-mono font-bold text-green-500`}>+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
-                                                    <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
-                                                    <td className={`px-4 py-2.5 text-xs ${sub} italic`}>{m.notas || '—'}</td>
-                                                </tr>
+                                                <div key={m.id} className={`rounded-xl border ${card} p-3`}>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || m.productoId}</span>
+                                                        <span className="font-mono font-bold text-green-500 text-lg">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
+                                                    </div>
+                                                    <div className={`flex gap-3 text-xs ${sub}`}>
+                                                        <span>🏪 {suc?.nombre || '—'}</span>
+                                                        <span>👤 {m.user || '—'}</span>
+                                                        <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
+                                                    </div>
+                                                </div>
                                             );
                                         })}
-                                    </tbody>
-                                </table>
-                            }
-                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 
@@ -26900,31 +26932,59 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {canEdit && <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
                             </div>
                         </div>
-                        <div className={`rounded-xl border ${card} overflow-hidden`}>
-                            {movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).length === 0
-                                ? <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>
-                                : <table className="w-full text-sm">
-                                    <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                        {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER'),L('ORIGEN','ORIGIN')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
-                                    </tr></thead>
-                                    <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
-                                        {movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())))
-                                            .sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))
-                                            .slice(0,100).map(m => (
-                                                <tr key={m.id}>
-                                                    <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                                                    <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
-                                                    <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{(productos.find(p=>String(p.id)===String(m.productoId)))?.nombre || '—'}</td>
-                                                    <td className={`px-3 py-2.5 text-xs ${sub}`}>{(sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId)))?.nombre || '—'}</td>
-                                                    <td className={`px-3 py-2.5 font-mono font-bold text-red-400 text-sm`}>-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{(productos.find(p=>String(p.id)===String(m.productoId)))?.unidad||''}</span></td>
-                                                    <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
-                                                    <td className={`px-3 py-2.5 text-xs ${sub} italic`}>{m.notas || '—'}</td>
-                                                </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
-                            }
-                        </div>
+                        {(() => {
+                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,100);
+                            if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>;
+                            return (
+                                <div>
+                                    {/* Desktop */}
+                                    <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
+                                        <table className="w-full text-sm">
+                                            <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
+                                                {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                            </tr></thead>
+                                            <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
+                                                {movsFiltrados.map(m => {
+                                                    const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                    const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
+                                                    return (
+                                                        <tr key={m.id}>
+                                                            <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                            <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
+                                                            <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{prod?.nombre || '—'}</td>
+                                                            <td className={`px-3 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
+                                                            <td className="px-3 py-2.5 font-mono font-bold text-red-400 text-sm">-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{prod?.unidad||''}</span></td>
+                                                            <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {/* Mobile cards */}
+                                    <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
+                                        {movsFiltrados.map(m => {
+                                            const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                            const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
+                                            return (
+                                                <div key={m.id} className={`rounded-xl border ${card} p-3`}>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || '—'}</span>
+                                                        <span className="font-mono font-bold text-red-400 text-lg">-{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
+                                                    </div>
+                                                    <div className={`flex gap-3 text-xs ${sub}`}>
+                                                        <span className={`font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?'Venta':m.tipo==='envio'?'Envío':'Ajuste'}</span>
+                                                        <span>🏪 {suc?.nombre || '—'}</span>
+                                                        <span>👤 {m.user || '—'}</span>
+                                                        <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 
@@ -27074,8 +27134,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {/* Modal Nuevo Mercado */}
                 {showMercadoModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
-                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 py-8" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <h2 className={`font-bold ${txt}`}>{editingMercado ? L('✏️ Editar mercado','✏️ Edit market') : L('🏪 Próximo mercado','🏪 Next market')}</h2>
                                 <button onClick={()=>{setShowMercadoModal(false);setEditingMercado(null);}} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
@@ -27168,8 +27228,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {/* Modal Vuelven */}
                 {showVuelvenModal && vuelvenMercado && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
-                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 py-8" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <div>
                                     <h2 className={`font-bold ${txt}`}>↩️ {L('Lo que vuelve','What returns')}</h2>
@@ -27245,7 +27305,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {/* Modal Configurar Mercados */}
                 {showMercadosConfigModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 py-8" style={{touchAction:'none'}}>
                         <div className={`rounded-xl shadow-2xl w-full max-w-sm max-h-[80vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <h2 className={`font-bold ${txt}`}>⚙️ {L('Configurar mercados','Configure markets')}</h2>
@@ -27274,8 +27334,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {/* Modal Delivery */}
                 {showDeliveryModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
-                        <div className={`rounded-xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 py-8" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-sm max-h-[85vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <h2 className={`font-bold ${txt}`}>🛵 {L('Servicio de Delivery','Delivery Service')}</h2>
                                 <button onClick={()=>setShowDeliveryModal(false)} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
@@ -27476,8 +27536,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 {/* Modal Nuevo Envío */}
                 {showEnvioModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{touchAction:'none'}}>
-                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 py-8" style={{touchAction:'none'}}>
+                        <div className={`rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden ${darkMode?'bg-slate-800':'bg-white'}`}>
                             <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${darkMode?'border-slate-700':'border-slate-200'}`}>
                                 <h2 className={`font-bold ${txt}`}>{editingEnvio ? L('✏️ Editar envío','✏️ Edit shipment') : L('🚚 Nuevo envío','🚚 New shipment')}</h2>
                                 <button onClick={() => { setShowEnvioModal(false); setEditingEnvio(null); }} className={`w-7 h-7 flex items-center justify-center rounded-full ${darkMode?'hover:bg-slate-700 text-slate-400':'hover:bg-slate-100 text-slate-500'}`}>✕</button>
