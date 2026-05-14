@@ -635,6 +635,33 @@
     </style>
 <body style="overflow-x:hidden">
     <div id="root" style="overflow-x:hidden;min-height:100dvh"></div>
+    <div id="babel-loading" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f8fafc;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+        <div style="font-size:48px;margin-bottom:16px">🧠</div>
+        <div style="font-size:20px;font-weight:700;color:#1e293b;margin-bottom:8px">CerebroMA</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:24px">Malá Argenta</div>
+        <div style="width:200px;height:4px;background:#e2e8f0;border-radius:4px;overflow:hidden">
+            <div id="babel-progress" style="height:100%;width:0%;background:linear-gradient(90deg,#f97316,#ea580c);border-radius:4px;transition:width 0.3s ease"></div>
+        </div>
+        <div id="babel-status" style="font-size:11px;color:#94a3b8;margin-top:10px">Iniciando...</div>
+    </div>
+    <script>
+        // Animate progress bar while Babel compiles
+        let prog = 0;
+        const bar = document.getElementById('babel-progress');
+        const status = document.getElementById('babel-status');
+        const msgs = ['Iniciando...','Cargando módulos...','Preparando interfaz...','Casi listo...'];
+        let mi = 0;
+        const iv = setInterval(() => {
+            prog = Math.min(prog + (prog < 60 ? 3 : prog < 85 ? 1 : 0.3), 95);
+            if (bar) bar.style.width = prog + '%';
+            if (status && mi < msgs.length && prog > mi * 25) { status.textContent = msgs[mi++]; }
+        }, 150);
+        window.__hideLoader = () => {
+            clearInterval(iv);
+            const el = document.getElementById('babel-loading');
+            if (el) { el.style.transition = 'opacity 0.3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }
+        };
+    </script>
     <!-- Pantalla de carga inmediata mientras Babel compila -->
     <div id="splash" style="position:fixed;inset:0;background:#060918;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.3s">
         <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#1e1b4b,#0c4a6e);display:flex;align-items:center;justify-content:center;margin-bottom:20px;box-shadow:0 0 40px rgba(99,102,241,0.4)">
@@ -4185,6 +4212,8 @@ ${invoice.items.map(item => `
 
         const CalendarioModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
             const { useState, useEffect, useMemo } = React;
+            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'calendario');
+            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
             const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
             const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
             const txt  = darkMode ? 'text-white'     : 'text-slate-900';
@@ -5777,6 +5806,8 @@ ${invoice.items.map(item => `
             const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
             const txt  = darkMode ? 'text-white'     : 'text-slate-900';
             const sub  = darkMode ? 'text-slate-400' : 'text-slate-500';
+            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'misueldo');
+            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
 
             const [empleados,  setEmpleados]  = useState([]);
             const [payroll,    setPayroll]    = useState({});
@@ -6208,6 +6239,8 @@ ${invoice.items.map(item => `
 
         const CodigosModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
             const { useState, useEffect } = React;
+            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'codigos');
+            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
             const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
             const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
             const txt  = darkMode ? 'text-white'     : 'text-slate-900';
@@ -6427,6 +6460,8 @@ ${invoice.items.map(item => `
 
 
         const CredencialesModule = ({ darkMode = false, onBack, currentUser }) => {
+            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'credenciales');
+            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
             const [creds, setCreds] = React.useState([]);
             const [credsLoaded, setCredsLoaded] = React.useState(false);
             const [showModal, setShowModal] = React.useState(false);
@@ -8512,6 +8547,19 @@ ${invoice.items.map(item => `
                                                                     ✏️ {t.edit}
                                                                 </button>)}
 
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const copia = { ...user, id: Date.now(), name: 'Copia ' + user.name, username: 'copia_' + user.username, pin: '0000', createdAt: new Date().toISOString() };
+                                                                        const updated = [...users, copia];
+                                                                        setUsers(updated);
+                                                                        dbSetArray('system_users', updated);
+                                                                        window.__systemUsersPrecargados = updated;
+                                                                    }}
+                                                                    className="text-green-600 hover:text-green-900 mr-4"
+                                                                >
+                                                                    📋 {t.copy || 'Copiar'}
+                                                                </button>
+
                                                                 {user.role !== 'superadmin' && (
                                                                 <button
                                                                     onClick={() => deleteUser(user.id)}
@@ -8762,11 +8810,10 @@ ${invoice.items.map(item => `
                                             </div>
                                             );
                                         })()}
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
-                                
-                                {/* Footer con botones */}
+                                    
+                                    {/* Footer con botones */}
                                 <div className={`flex gap-3 p-6 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                                     <button
                                         onClick={() => setShowUserModal(false)}
@@ -24616,6 +24663,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         // ══ MI CEREBRO ══
         const MiCerebroModule = ({ darkMode, currentUser, systemUsers, onBack, language = 'es' }) => {
             const lang = language || currentUser?.language || 'es';
+            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'micerebro');
+            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
             const L3 = (es, en, cs) => lang==='en' ? en : lang==='cs' ? cs : es;
             // Claves privadas por usuario — definidas PRIMERO antes de cualquier useState
             const _uid = String(currentUser?.id || '');
@@ -25350,6 +25399,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         async function arrancarApp() {
             // Renderizar inmediatamente — el login no necesita Supabase
             ReactDOM.render(<Malagestion />, document.getElementById('root'));
+            if (window.__hideLoader) window.__hideLoader();
             // Ocultar splash una vez que React renderizó
             // splash se oculta desde dentro del componente React (useEffect)
         }
@@ -25873,7 +25923,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
     // ═══════════════════════════════════════════════
     //  STOCK MODULE — dentro de CocinaModule
     // ═══════════════════════════════════════════════
-    const StockModule = ({ darkMode, currentUser, language = 'es' }) => {
+    const StockModule = ({ darkMode, currentUser, language = 'es', onBack = null }) => {
         const { useState, useEffect, useMemo, useRef } = React;
         const { canEdit, canRead, isAdmin, isSuperAdmin } = usePermissions(currentUser, 'cocina');
 
@@ -25992,7 +26042,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveListaMercados = (v) => { setListaMercados(v); save('stock_lista_mercados', v); };
 
         const stockKey = (pId, sId) => `${pId}_${sId}`;
-        const getStock = (pId, sId) => parseFloat(stock[`${String(pId)}_${String(sId)}`] || 0);
+        const getStock = (pId, sId) => parseFloat(stock[`${String(pId)}_${String(sId)}`] || stock[`${pId}_${sId}`] || 0);
 
         // ── BRANCHES ──
         const guardarSucursal = () => {
@@ -26272,13 +26322,21 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const data = { ...envioForm, id: editingEnvio?.id || Date.now(), creadoAt: editingEnvio?.creadoAt || new Date().toISOString(), creadoPor: editingEnvio?.creadoPor || (currentUser?.name || currentUser?.username || ''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || currentUser?.username || '', estado: estadoNuevo };
             const newEnvios = editingEnvio ? envios.map(e => e.id === editingEnvio.id ? data : e) : [data, ...envios];
             saveEnvios(newEnvios);
-            // Descontar stock solo si NO es borrador
-            if (envioForm.descontarDe && !editingEnvio && !envioForm.estadoBorrador) {
+            // Descontar/sumar stock solo si NO es borrador
+            if (!editingEnvio && !envioForm.estadoBorrador && (envioForm.descontarDe || envioForm.sumarEn)) {
                 const newStock = { ...stock };
-                (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
-                    const k = stockKey(p.id, envioForm.descontarDe);
-                    newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
-                });
+                if (envioForm.descontarDe) {
+                    (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                        const k = stockKey(p.id, envioForm.descontarDe);
+                        newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
+                    });
+                }
+                if (envioForm.sumarEn) {
+                    (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                        const k = stockKey(p.id, envioForm.sumarEn);
+                        newStock[k] = (parseFloat(newStock[k]||0)) + parseFloat(p.cantidad);
+                    });
+                }
                 saveStock(newStock);
                 const movDescuento = (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p => ({
                     id: Date.now()+Math.random(), tipo:'envio', productoId:p.id,
@@ -26323,13 +26381,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
         const marcarEnvioEstado = (id, estado) => {
             const envio = envios.find(e => e.id === id);
-            // Apply diffs to product quantities
+            const difs = envio?._difs || {};
             const prodsFinal = (envio?.productos||[]).map(p => {
-                const dif = (envio?._difs||{})[p.id];
+                const dif = difs[p.id];
                 return (dif !== undefined && dif !== '') ? {...p, cantidad: String(parseFloat(dif)), _cantOriginal: p.cantidad} : p;
             });
             saveEnvios(envios.map(e => e.id === id ? { ...e, estado, productos: prodsFinal } : e));
-            // Si sale de borrador → disparar stock y notificaciones
+            // Si sale de borrador → descontar/sumar stock con cantidades finales
             if (envio?.estado === 'borrador' && estado !== 'borrador') {
                 if (envio.descontarDe) {
                     const newStock = { ...stock };
@@ -26352,7 +26410,29 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     });
                     saveStock(newStock);
                 }
-                if (envio.destinatario) {
+                // Al marcar entregado con difs → corregir stock (devolver exceso a origen, ajustar destino)
+            if (estado === 'entregado' && envio?.estado !== 'borrador') {
+                const hasDifs = Object.values(difs).some(v => v !== undefined && v !== '');
+                if (hasDifs && (envio.descontarDe || envio.sumarEn)) {
+                    const newStock = { ...stock };
+                    (envio?.productos||[]).filter(p => difs[p.id] !== undefined && difs[p.id] !== '').forEach(p => {
+                        const cantOriginal = parseFloat(p.cantidad);
+                        const cantReal = parseFloat(difs[p.id]);
+                        const exceso = cantOriginal - cantReal;
+                        if (exceso === 0) return;
+                        if (envio.descontarDe) {
+                            const k = stockKey(p.id, envio.descontarDe);
+                            newStock[k] = (parseFloat(newStock[k]||0)) + exceso; // devolver exceso
+                        }
+                        if (envio.sumarEn) {
+                            const k = stockKey(p.id, envio.sumarEn);
+                            newStock[k] = (parseFloat(newStock[k]||0)) - exceso; // corregir destino
+                        }
+                    });
+                    saveStock(newStock);
+                }
+            }
+            if (envio.destinatario) {
                     const notifKey = `notif_envioNotif_${envio.destinatario}`;
                     dbGetKey('app_config', notifKey).then(existing => {
                         const arr = Array.isArray(existing) ? existing : [];
@@ -26410,7 +26490,23 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             return () => { document.body.style.cssText = ''; };
         }, [anyModal]);
 
-        if (!loaded) return <div className={`flex items-center justify-center py-20 ${sub}`}>{L("Cargando...","Loading...")}</div>;
+        if (!loaded) return (
+            <div className={`min-h-screen ${bg}`}>
+                <div className={`sticky top-0 z-10 border-b ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'} px-4 py-3`}>
+                    <div className="flex items-center gap-2">
+                        {onBack && <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400':'text-slate-500'}`}>← {L('Volver','Back')}</button>}
+                        <h1 className={`text-sm font-bold ${txt} flex-1`}>👨‍🍳 {L('Gestión de Cocina','Kitchen Management')}</h1>
+                    </div>
+                </div>
+                <div className="flex items-center justify-center py-20">
+                    <div className="text-center">
+                        <div style={{width:32,height:32,border:'3px solid #f97316',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.8s linear infinite',margin:'0 auto 12px'}}/>
+                        <p className={`text-sm ${sub}`}>{L('Cargando...','Loading...')}</p>
+                    </div>
+                </div>
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            </div>
+        );
 
         return (
             <div>
@@ -26518,13 +26614,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 onBlur={e => {
                                                                     const val = parseFloat(e.target.value);
                                                                     if (isNaN(val) || val === 0) return;
-                                                                    const k = stockKey(p.id, sucursalSel);
+                                                                    const k = stockKey(String(p.id), String(sucursalSel));
                                                                     const prev = parseFloat(stock[k] || 0);
                                                                     const newQty = prev + val;
                                                                     const newStock = { ...stock, [k]: newQty };
                                                                     saveStock(newStock);
                                                                     const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
-                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: String(p.id), branchId: String(sucursalSel), sucursalId: String(sucursalSel), cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
                                                                     saveMovimientos([mov, ...movimientos].slice(0, 200));
                                                                     e.target.value = '';
                                                                 }}
@@ -26579,13 +26675,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 onBlur={e => {
                                                                     const val = parseFloat(e.target.value);
                                                                     if (isNaN(val) || val === 0) return;
-                                                                    const k = stockKey(p.id, sucursalSel);
+                                                                    const k = stockKey(String(p.id), String(sucursalSel));
                                                                     const prev = parseFloat(stock[k] || 0);
                                                                     const newQty = prev + val;
                                                                     const newStock = { ...stock, [k]: newQty };
                                                                     saveStock(newStock);
                                                                     const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
-                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: String(p.id), branchId: String(sucursalSel), sucursalId: String(sucursalSel), cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
                                                                     saveMovimientos([mov, ...movimientos].slice(0, 200));
                                                                     e.target.value = '';
                                                                 }}
@@ -26986,53 +27082,76 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                         </div>
                         {(() => {
-                            const movsFiltrados = movimientos.filter(m => m.tipo === 'ingreso' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).slice(0,50);
+                            const now = new Date();
+                            const movsFiltrados = movimientos.filter(m => m.tipo === 'ingreso' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())));
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>;
+                            // Group by month
+                            const grupos = {};
+                            movsFiltrados.forEach(m => {
+                                const d = m.fecha ? new Date(m.fecha) : null;
+                                const key = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : 'sin-fecha';
+                                if (!grupos[key]) grupos[key] = [];
+                                grupos[key].push(m);
+                            });
+                            const sortedKeys = Object.keys(grupos).sort((a,b) => b.localeCompare(a));
+                            const isCurrent = (key) => { const d = new Date(); return key === `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+                            const fmtKey = (key) => { if(key==='sin-fecha') return '—'; const [y,m2] = key.split('-'); return new Date(+y, +m2-1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}); };
                             return (
-                                <div>
-                                    {/* Desktop */}
-                                    <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
-                                        <table className="w-full text-sm">
-                                            <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                                {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
-                                            </tr></thead>
-                                            <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
-                                                {movsFiltrados.map(m => {
-                                                    const prod = productos.find(p => String(p.id) === String(m.productoId));
-                                                    const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
-                                                    return (
-                                                        <tr key={m.id}>
-                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                                                            <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
-                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
-                                                            <td className="px-4 py-2.5 font-mono font-bold text-green-500">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
-                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    {/* Mobile cards */}
-                                    <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
-                                        {movsFiltrados.map(m => {
-                                            const prod = productos.find(p => String(p.id) === String(m.productoId));
-                                            const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
-                                            return (
-                                                <div key={m.id} className={`rounded-xl border ${card} p-3`}>
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || m.productoId}</span>
-                                                        <span className="font-mono font-bold text-green-500 text-lg">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
-                                                    </div>
-                                                    <div className={`flex gap-3 text-xs ${sub}`}>
-                                                        <span>🏪 {suc?.nombre || '—'}</span>
-                                                        <span>👤 {m.user || '—'}</span>
-                                                        <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
-                                                    </div>
+                                <div className="space-y-4">
+                                    {sortedKeys.map(key => {
+                                        const movs = grupos[key];
+                                        const current = isCurrent(key);
+                                        return (
+                                            <div key={key}>
+                                                <div className={`flex items-center gap-3 mb-2`}>
+                                                    <span className={`text-sm font-bold capitalize ${current ? 'text-orange-500' : txt}`}>{fmtKey(key)}</span>
+                                                    {current && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold">{L('Mes actual','Current month')}</span>}
+                                                    <span className={`text-xs ${sub}`}>({movs.length} {L('registros','records')})</span>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                                <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
+                                                    <table className="w-full text-sm">
+                                                        <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
+                                                            {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                                        </tr></thead>
+                                                        <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
+                                                            {movs.map(m => {
+                                                                const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                                const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
+                                                                return (
+                                                                    <tr key={m.id}>
+                                                                        <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                                        <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
+                                                                        <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
+                                                                        <td className="px-4 py-2.5 font-mono font-bold text-green-500">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
+                                                                        <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
+                                                    {movs.map(m => {
+                                                        const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                        const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
+                                                        return (
+                                                            <div key={m.id} className={`rounded-xl border ${card} p-3`}>
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || m.productoId}</span>
+                                                                    <span className="font-mono font-bold text-green-500 text-lg">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
+                                                                </div>
+                                                                <div className={`flex gap-3 text-xs ${sub}`}>
+                                                                    <span>🏪 {suc?.nombre || '—'}</span>
+                                                                    <span>👤 {m.user || '—'}</span>
+                                                                    <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             );
                         })()}
@@ -27063,55 +27182,76 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                         </div>
                         {(() => {
-                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,100);
+                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>;
+                            const grupos = {};
+                            movsFiltrados.forEach(m => {
+                                const d = m.fecha ? new Date(m.fecha) : null;
+                                const key = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : 'sin-fecha';
+                                if (!grupos[key]) grupos[key] = [];
+                                grupos[key].push(m);
+                            });
+                            const sortedKeys = Object.keys(grupos).sort((a,b) => b.localeCompare(a));
+                            const isCurrent = (key) => { const d = new Date(); return key === `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+                            const fmtKey = (key) => { if(key==='sin-fecha') return '—'; const [y,m2] = key.split('-'); return new Date(+y, +m2-1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}); };
                             return (
-                                <div>
-                                    {/* Desktop */}
-                                    <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
-                                        <table className="w-full text-sm">
-                                            <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                                {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
-                                            </tr></thead>
-                                            <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
-                                                {movsFiltrados.map(m => {
-                                                    const prod = productos.find(p=>String(p.id)===String(m.productoId));
-                                                    const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
-                                                    return (
-                                                        <tr key={m.id}>
-                                                            <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                                                            <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
-                                                            <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{prod?.nombre || '—'}</td>
-                                                            <td className={`px-3 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
-                                                            <td className="px-3 py-2.5 font-mono font-bold text-red-400 text-sm">-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{prod?.unidad||''}</span></td>
-                                                            <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    {/* Mobile cards */}
-                                    <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
-                                        {movsFiltrados.map(m => {
-                                            const prod = productos.find(p=>String(p.id)===String(m.productoId));
-                                            const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
-                                            return (
-                                                <div key={m.id} className={`rounded-xl border ${card} p-3`}>
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || '—'}</span>
-                                                        <span className="font-mono font-bold text-red-400 text-lg">-{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
-                                                    </div>
-                                                    <div className={`flex gap-3 text-xs ${sub}`}>
-                                                        <span className={`font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?'Venta':m.tipo==='envio'?'Envío':'Ajuste'}</span>
-                                                        <span>🏪 {suc?.nombre || '—'}</span>
-                                                        <span>👤 {m.user || '—'}</span>
-                                                        <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
-                                                    </div>
+                                <div className="space-y-4">
+                                    {sortedKeys.map(key => {
+                                        const movs = grupos[key];
+                                        const current = isCurrent(key);
+                                        return (
+                                            <div key={key}>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <span className={`text-sm font-bold capitalize ${current ? 'text-orange-500' : txt}`}>{fmtKey(key)}</span>
+                                                    {current && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold">{L('Mes actual','Current month')}</span>}
+                                                    <span className={`text-xs ${sub}`}>({movs.length} {L('registros','records')})</span>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                                <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
+                                                    <table className="w-full text-sm">
+                                                        <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
+                                                            {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                                        </tr></thead>
+                                                        <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
+                                                            {movs.map(m => {
+                                                                const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                                const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
+                                                                return (
+                                                                    <tr key={m.id}>
+                                                                        <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                                        <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
+                                                                        <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{prod?.nombre || '—'}</td>
+                                                                        <td className={`px-3 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
+                                                                        <td className="px-3 py-2.5 font-mono font-bold text-red-400 text-sm">-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{prod?.unidad||''}</span></td>
+                                                                        <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
+                                                    {movs.map(m => {
+                                                        const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                        const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
+                                                        return (
+                                                            <div key={m.id} className={`rounded-xl border ${card} p-3`}>
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || '—'}</span>
+                                                                    <span className="font-mono font-bold text-red-400 text-lg">-{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
+                                                                </div>
+                                                                <div className={`flex gap-3 text-xs ${sub}`}>
+                                                                    <span className={`font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?'Venta':m.tipo==='envio'?'Envío':'Ajuste'}</span>
+                                                                    <span>🏪 {suc?.nombre || '—'}</span>
+                                                                    <span>👤 {m.user || '—'}</span>
+                                                                    <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             );
                         })()}
@@ -27190,7 +27330,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="flex flex-wrap gap-2">
                                 {canEdit && <button onClick={()=>setShowCatModal(true)} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>🏷️ {L('Categorías','Categories')}</button>}
                                 <button onClick={()=>{ const XLSX = window.XLSX; const data = [['nombre','categoria','unidad','minimo','alias1','alias2','alias3'],...productos.map(p=>[p.nombre,p.categoria||'',p.unidad||'unidad',p.minimo||'',...(p.aliases||[]),'','',''].slice(0,7))]; const ws = XLSX.utils.aoa_to_sheet(data); ws['!cols'] = [{wch:30},{wch:15},{wch:10},{wch:8},{wch:20},{wch:20},{wch:20}]; const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Productos'); XLSX.writeFile(wb, 'productos.xlsx'); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>⬇️ Excel</button>
-                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; rows.forEach(row=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:Date.now()+Math.random(),nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
+                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; rows.forEach(row=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:Date.now(),nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
                                 {canEdit && <button onClick={() => { setEditingProd(null); setProdForm({ nombre: '', categoria: '', unidad: 'unidad', minimo: '', aliases: [] }); setShowProdModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nuevo producto','+ New product')}</button>}
                                 {isSuperAdmin && productos.length > 0 && <button onClick={()=>{ if(confirm(L(`¿Borrar TODOS los ${productos.length} productos? No se puede deshacer.`,`Delete ALL ${productos.length} products? Cannot be undone.`))) saveProductos([]); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200">🗑 {L('Borrar todos','Delete all')}</button>}
                             </div>
@@ -28241,7 +28381,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveListaMercados = (v) => { setListaMercados(v); save('almacen_lista_mercados', v); };
 
         const stockKey = (pId, sId) => `${pId}_${sId}`;
-        const getStock = (pId, sId) => parseFloat(stock[`${String(pId)}_${String(sId)}`] || 0);
+        const getStock = (pId, sId) => parseFloat(stock[`${String(pId)}_${String(sId)}`] || stock[`${pId}_${sId}`] || 0);
 
         // ── BRANCHES ──
         const guardarSucursal = () => {
@@ -28622,7 +28762,23 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             return () => { document.body.style.cssText = ''; };
         }, [anyModal]);
 
-        if (!loaded) return <div className={`flex items-center justify-center py-20 ${sub}`}>{L("Cargando...","Loading...")}</div>;
+        if (!loaded) return (
+            <div className={`min-h-screen ${bg}`}>
+                <div className={`sticky top-0 z-10 border-b ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'} px-4 py-3`}>
+                    <div className="flex items-center gap-2">
+                        {onBack && <button onClick={onBack} className={`text-sm font-medium ${darkMode?'text-slate-400':'text-slate-500'}`}>← {L('Volver','Back')}</button>}
+                        <h1 className={`text-sm font-bold ${txt} flex-1`}>🏭 {L('Almacén','Warehouse')}</h1>
+                    </div>
+                </div>
+                <div className="flex items-center justify-center py-20">
+                    <div className="text-center">
+                        <div style={{width:32,height:32,border:'3px solid #f97316',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.8s linear infinite',margin:'0 auto 12px'}}/>
+                        <p className={`text-sm ${sub}`}>{L('Cargando...','Loading...')}</p>
+                    </div>
+                </div>
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            </div>
+        );
 
         return (
             <div className={`min-h-screen ${bg}`}>
@@ -28763,13 +28919,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 onBlur={e => {
                                                                     const val = parseFloat(e.target.value);
                                                                     if (isNaN(val) || val === 0) return;
-                                                                    const k = stockKey(p.id, sucursalSel);
+                                                                    const k = stockKey(String(p.id), String(sucursalSel));
                                                                     const prev = parseFloat(stock[k] || 0);
                                                                     const newQty = prev + val;
                                                                     const newStock = { ...stock, [k]: newQty };
                                                                     saveStock(newStock);
                                                                     const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
-                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: String(p.id), branchId: String(sucursalSel), sucursalId: String(sucursalSel), cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
                                                                     saveMovimientos([mov, ...movimientos].slice(0, 200));
                                                                     e.target.value = '';
                                                                 }}
@@ -28824,13 +28980,13 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 onBlur={e => {
                                                                     const val = parseFloat(e.target.value);
                                                                     if (isNaN(val) || val === 0) return;
-                                                                    const k = stockKey(p.id, sucursalSel);
+                                                                    const k = stockKey(String(p.id), String(sucursalSel));
                                                                     const prev = parseFloat(stock[k] || 0);
                                                                     const newQty = prev + val;
                                                                     const newStock = { ...stock, [k]: newQty };
                                                                     saveStock(newStock);
                                                                     const sNombre = sucursales.find(s=>String(s.id)===sucursalSel)?.nombre||sucursalSel;
-                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: p.id, branchId: sucursalSel, sucursalId: sucursalSel, cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
+                                                                    const mov = { id: Date.now(), tipo: val > 0 ? 'ingreso' : 'ajuste', productoId: String(p.id), branchId: String(sucursalSel), sucursalId: String(sucursalSel), cantidad: Math.abs(val), notas: (val > 0 ? 'Ingreso' : 'Egreso') + ' en Stock · ' + sNombre + ' · anterior: '+prev, fecha: new Date().toISOString(), user: currentUser?.name || '' };
                                                                     saveMovimientos([mov, ...movimientos].slice(0, 200));
                                                                     e.target.value = '';
                                                                 }}
@@ -29301,53 +29457,76 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                         </div>
                         {(() => {
-                            const movsFiltrados = movimientos.filter(m => m.tipo === 'ingreso' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).slice(0,50);
+                            const now = new Date();
+                            const movsFiltrados = movimientos.filter(m => m.tipo === 'ingreso' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())));
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>;
+                            // Group by month
+                            const grupos = {};
+                            movsFiltrados.forEach(m => {
+                                const d = m.fecha ? new Date(m.fecha) : null;
+                                const key = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : 'sin-fecha';
+                                if (!grupos[key]) grupos[key] = [];
+                                grupos[key].push(m);
+                            });
+                            const sortedKeys = Object.keys(grupos).sort((a,b) => b.localeCompare(a));
+                            const isCurrent = (key) => { const d = new Date(); return key === `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+                            const fmtKey = (key) => { if(key==='sin-fecha') return '—'; const [y,m2] = key.split('-'); return new Date(+y, +m2-1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}); };
                             return (
-                                <div>
-                                    {/* Desktop */}
-                                    <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
-                                        <table className="w-full text-sm">
-                                            <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                                {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
-                                            </tr></thead>
-                                            <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
-                                                {movsFiltrados.map(m => {
-                                                    const prod = productos.find(p => String(p.id) === String(m.productoId));
-                                                    const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
-                                                    return (
-                                                        <tr key={m.id}>
-                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                                                            <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
-                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
-                                                            <td className="px-4 py-2.5 font-mono font-bold text-green-500">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
-                                                            <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    {/* Mobile cards */}
-                                    <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
-                                        {movsFiltrados.map(m => {
-                                            const prod = productos.find(p => String(p.id) === String(m.productoId));
-                                            const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
-                                            return (
-                                                <div key={m.id} className={`rounded-xl border ${card} p-3`}>
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || m.productoId}</span>
-                                                        <span className="font-mono font-bold text-green-500 text-lg">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
-                                                    </div>
-                                                    <div className={`flex gap-3 text-xs ${sub}`}>
-                                                        <span>🏪 {suc?.nombre || '—'}</span>
-                                                        <span>👤 {m.user || '—'}</span>
-                                                        <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
-                                                    </div>
+                                <div className="space-y-4">
+                                    {sortedKeys.map(key => {
+                                        const movs = grupos[key];
+                                        const current = isCurrent(key);
+                                        return (
+                                            <div key={key}>
+                                                <div className={`flex items-center gap-3 mb-2`}>
+                                                    <span className={`text-sm font-bold capitalize ${current ? 'text-orange-500' : txt}`}>{fmtKey(key)}</span>
+                                                    {current && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold">{L('Mes actual','Current month')}</span>}
+                                                    <span className={`text-xs ${sub}`}>({movs.length} {L('registros','records')})</span>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                                <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
+                                                    <table className="w-full text-sm">
+                                                        <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
+                                                            {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                                        </tr></thead>
+                                                        <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
+                                                            {movs.map(m => {
+                                                                const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                                const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
+                                                                return (
+                                                                    <tr key={m.id}>
+                                                                        <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                                        <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
+                                                                        <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
+                                                                        <td className="px-4 py-2.5 font-mono font-bold text-green-500">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
+                                                                        <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
+                                                    {movs.map(m => {
+                                                        const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                        const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
+                                                        return (
+                                                            <div key={m.id} className={`rounded-xl border ${card} p-3`}>
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || m.productoId}</span>
+                                                                    <span className="font-mono font-bold text-green-500 text-lg">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
+                                                                </div>
+                                                                <div className={`flex gap-3 text-xs ${sub}`}>
+                                                                    <span>🏪 {suc?.nombre || '—'}</span>
+                                                                    <span>👤 {m.user || '—'}</span>
+                                                                    <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             );
                         })()}
@@ -29378,55 +29557,76 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             </div>
                         </div>
                         {(() => {
-                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,100);
+                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>;
+                            const grupos = {};
+                            movsFiltrados.forEach(m => {
+                                const d = m.fecha ? new Date(m.fecha) : null;
+                                const key = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : 'sin-fecha';
+                                if (!grupos[key]) grupos[key] = [];
+                                grupos[key].push(m);
+                            });
+                            const sortedKeys = Object.keys(grupos).sort((a,b) => b.localeCompare(a));
+                            const isCurrent = (key) => { const d = new Date(); return key === `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+                            const fmtKey = (key) => { if(key==='sin-fecha') return '—'; const [y,m2] = key.split('-'); return new Date(+y, +m2-1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}); };
                             return (
-                                <div>
-                                    {/* Desktop */}
-                                    <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
-                                        <table className="w-full text-sm">
-                                            <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                                {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
-                                            </tr></thead>
-                                            <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
-                                                {movsFiltrados.map(m => {
-                                                    const prod = productos.find(p=>String(p.id)===String(m.productoId));
-                                                    const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
-                                                    return (
-                                                        <tr key={m.id}>
-                                                            <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-                                                            <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
-                                                            <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{prod?.nombre || '—'}</td>
-                                                            <td className={`px-3 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
-                                                            <td className="px-3 py-2.5 font-mono font-bold text-red-400 text-sm">-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{prod?.unidad||''}</span></td>
-                                                            <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    {/* Mobile cards */}
-                                    <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
-                                        {movsFiltrados.map(m => {
-                                            const prod = productos.find(p=>String(p.id)===String(m.productoId));
-                                            const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
-                                            return (
-                                                <div key={m.id} className={`rounded-xl border ${card} p-3`}>
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || '—'}</span>
-                                                        <span className="font-mono font-bold text-red-400 text-lg">-{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
-                                                    </div>
-                                                    <div className={`flex gap-3 text-xs ${sub}`}>
-                                                        <span className={`font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?'Venta':m.tipo==='envio'?'Envío':'Ajuste'}</span>
-                                                        <span>🏪 {suc?.nombre || '—'}</span>
-                                                        <span>👤 {m.user || '—'}</span>
-                                                        <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
-                                                    </div>
+                                <div className="space-y-4">
+                                    {sortedKeys.map(key => {
+                                        const movs = grupos[key];
+                                        const current = isCurrent(key);
+                                        return (
+                                            <div key={key}>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <span className={`text-sm font-bold capitalize ${current ? 'text-orange-500' : txt}`}>{fmtKey(key)}</span>
+                                                    {current && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold">{L('Mes actual','Current month')}</span>}
+                                                    <span className={`text-xs ${sub}`}>({movs.length} {L('registros','records')})</span>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                                <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
+                                                    <table className="w-full text-sm">
+                                                        <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
+                                                            {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                                        </tr></thead>
+                                                        <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
+                                                            {movs.map(m => {
+                                                                const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                                const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
+                                                                return (
+                                                                    <tr key={m.id}>
+                                                                        <td className={`px-3 py-2.5 text-xs ${sub} whitespace-nowrap`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                                        <td className={`px-3 py-2.5 text-xs font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?L('Venta','Sale'):m.tipo==='envio'?L('Envío','Shipment'):L('Ajuste','Adjustment')}</td>
+                                                                        <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{prod?.nombre || '—'}</td>
+                                                                        <td className={`px-3 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
+                                                                        <td className="px-3 py-2.5 font-mono font-bold text-red-400 text-sm">-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{prod?.unidad||''}</span></td>
+                                                                        <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
+                                                    {movs.map(m => {
+                                                        const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                        const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
+                                                        return (
+                                                            <div key={m.id} className={`rounded-xl border ${card} p-3`}>
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || '—'}</span>
+                                                                    <span className="font-mono font-bold text-red-400 text-lg">-{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
+                                                                </div>
+                                                                <div className={`flex gap-3 text-xs ${sub}`}>
+                                                                    <span className={`font-semibold ${m.tipo==='venta'?'text-orange-500':m.tipo==='envio'?'text-blue-500':'text-slate-500'}`}>{m.tipo==='venta'?'Venta':m.tipo==='envio'?'Envío':'Ajuste'}</span>
+                                                                    <span>🏪 {suc?.nombre || '—'}</span>
+                                                                    <span>👤 {m.user || '—'}</span>
+                                                                    <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             );
                         })()}
@@ -29441,7 +29641,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="flex flex-wrap gap-2">
                                 {canEdit && <button onClick={()=>setShowCatModal(true)} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>🏷️ {L('Categorías','Categories')}</button>}
                                 <button onClick={()=>{ const XLSX = window.XLSX; const data = [['nombre','categoria','unidad','minimo','alias1','alias2','alias3'],...productos.map(p=>[p.nombre,p.categoria||'',p.unidad||'unidad',p.minimo||'',...(p.aliases||[]),'','',''].slice(0,7))]; const ws = XLSX.utils.aoa_to_sheet(data); ws['!cols'] = [{wch:30},{wch:15},{wch:10},{wch:8},{wch:20},{wch:20},{wch:20}]; const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Productos'); XLSX.writeFile(wb, 'productos.xlsx'); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>⬇️ Excel</button>
-                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; rows.forEach(row=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:Date.now()+Math.random(),nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
+                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; rows.forEach(row=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:Date.now(),nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
                                 {canEdit && <button onClick={() => { setEditingProd(null); setProdForm({ nombre: '', categoria: '', unidad: 'unidad', minimo: '', aliases: [] }); setShowProdModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nuevo producto','+ New product')}</button>}
                                 {isAdmin && productos.length > 0 && <button onClick={()=>{ if(confirm(L(`¿Borrar TODOS los ${productos.length} productos? No se puede deshacer.`,`Delete ALL ${productos.length} products? Cannot be undone.`))) saveProductos([]); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200">🗑 {L('Borrar todos','Delete all')}</button>}
                             </div>
