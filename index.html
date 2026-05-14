@@ -4083,7 +4083,7 @@ ${invoice.items.map(item => `
         
         /**
          * Pantalla de sin acceso reutilizable.
-         * Uso: if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
+         * Uso: if (!canRead) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',flexDirection:'column',gap:8}}><span style={{fontSize:48}}>🔒</span><p style={{color:'#64748b',fontSize:14}}>Sin acceso</p></div>;
          */
         const NoAccessScreen = ({ darkMode = false }) => (
             <div className={`flex items-center justify-center min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
@@ -4212,8 +4212,8 @@ ${invoice.items.map(item => `
 
         const CalendarioModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
             const { useState, useEffect, useMemo } = React;
-            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'calendario');
-            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
+            const { canRead } = usePermissions(currentUser, 'calendario');
+            if (!canRead) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',flexDirection:'column',gap:8}}><span style={{fontSize:48}}>🔒</span><p style={{color:'#64748b',fontSize:14}}>Sin acceso</p></div>;
             const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
             const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
             const txt  = darkMode ? 'text-white'     : 'text-slate-900';
@@ -5806,8 +5806,8 @@ ${invoice.items.map(item => `
             const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
             const txt  = darkMode ? 'text-white'     : 'text-slate-900';
             const sub  = darkMode ? 'text-slate-400' : 'text-slate-500';
-            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'misueldo');
-            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
+            const { canRead } = usePermissions(currentUser, 'misueldo');
+            if (!canRead) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',flexDirection:'column',gap:8}}><span style={{fontSize:48}}>🔒</span><p style={{color:'#64748b',fontSize:14}}>Sin acceso</p></div>;
 
             const [empleados,  setEmpleados]  = useState([]);
             const [payroll,    setPayroll]    = useState({});
@@ -6239,8 +6239,8 @@ ${invoice.items.map(item => `
 
         const CodigosModule = ({ darkMode = false, currentUser = null, onBack = null }) => {
             const { useState, useEffect } = React;
-            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'codigos');
-            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
+            const { canRead } = usePermissions(currentUser, 'codigos');
+            if (!canRead) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',flexDirection:'column',gap:8}}><span style={{fontSize:48}}>🔒</span><p style={{color:'#64748b',fontSize:14}}>Sin acceso</p></div>;
             const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
             const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
             const txt  = darkMode ? 'text-white'     : 'text-slate-900';
@@ -6460,8 +6460,8 @@ ${invoice.items.map(item => `
 
 
         const CredencialesModule = ({ darkMode = false, onBack, currentUser }) => {
-            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'credenciales');
-            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
+            const { canRead } = usePermissions(currentUser, 'credenciales');
+            if (!canRead) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',flexDirection:'column',gap:8}}><span style={{fontSize:48}}>🔒</span><p style={{color:'#64748b',fontSize:14}}>Sin acceso</p></div>;
             const [creds, setCreds] = React.useState([]);
             const [credsLoaded, setCredsLoaded] = React.useState(false);
             const [showModal, setShowModal] = React.useState(false);
@@ -24663,8 +24663,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         // ══ MI CEREBRO ══
         const MiCerebroModule = ({ darkMode, currentUser, systemUsers, onBack, language = 'es' }) => {
             const lang = language || currentUser?.language || 'es';
-            const { canRead, NoAccessScreen } = usePermissions(currentUser, 'micerebro');
-            if (!canRead) return <NoAccessScreen darkMode={darkMode} />;
+            const { canRead } = usePermissions(currentUser, 'micerebro');
+            if (!canRead) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',flexDirection:'column',gap:8}}><span style={{fontSize:48}}>🔒</span><p style={{color:'#64748b',fontSize:14}}>Sin acceso</p></div>;
             const L3 = (es, en, cs) => lang==='en' ? en : lang==='cs' ? cs : es;
             // Claves privadas por usuario — definidas PRIMERO antes de cualquier useState
             const _uid = String(currentUser?.id || '');
@@ -26041,8 +26041,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveMercados = (v) => { setMercados(v); window.__mercadosPrecargados = v; save('stock_mercados', v); setTimeout(()=>window.dispatchEvent(new Event('notifUpdate')),500); };
         const saveListaMercados = (v) => { setListaMercados(v); save('stock_lista_mercados', v); };
 
-        const stockKey = (pId, sId) => `${pId}_${sId}`;
-        const getStock = (pId, sId) => parseFloat(stock[`${String(pId)}_${String(sId)}`] || stock[`${pId}_${sId}`] || 0);
+        const stockKey = (pId, sId) => `${Math.round(parseFloat(pId))}_${String(sId)}`;
+        const getStock = (pId, sId) => {
+            const k1 = `${String(pId)}_${String(sId)}`;
+            const k2 = `${Math.round(parseFloat(pId))}_${String(sId)}`;
+            return parseFloat(stock[k1] || stock[k2] || 0);
+        };
 
         // ── BRANCHES ──
         const guardarSucursal = () => {
@@ -28380,8 +28384,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const saveMercados = (v) => { setMercados(v); window.__mercadosPrecargados = v; save('almacen_mercados', v); setTimeout(()=>window.dispatchEvent(new Event('notifUpdate')),500); };
         const saveListaMercados = (v) => { setListaMercados(v); save('almacen_lista_mercados', v); };
 
-        const stockKey = (pId, sId) => `${pId}_${sId}`;
-        const getStock = (pId, sId) => parseFloat(stock[`${String(pId)}_${String(sId)}`] || stock[`${pId}_${sId}`] || 0);
+        const stockKey = (pId, sId) => `${Math.round(parseFloat(pId))}_${String(sId)}`;
+        const getStock = (pId, sId) => {
+            const k1 = `${String(pId)}_${String(sId)}`;
+            const k2 = `${Math.round(parseFloat(pId))}_${String(sId)}`;
+            return parseFloat(stock[k1] || stock[k2] || 0);
+        };
 
         // ── BRANCHES ──
         const guardarSucursal = () => {
