@@ -25956,6 +25956,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [showControlInforme, setShowControlInforme] = useState(false);
         const [controlHistorial, setControlHistorial] = useState([]);
         const [showControlHistorial, setShowControlHistorial] = useState(false); // '' = todas
+        const [controlBorrador, setControlBorrador] = useState(null); // {suc, cat, data, fecha}
+        const [controlMercadoId, setControlMercadoId] = useState(''); // mercado vinculado
         const [productos,  setProductos]    = useState([]);
         const [stock,      setStock]        = useState({}); // { productoId_sucursalId: cantidad }
         const [movimientos,setMovimientos]  = useState([]);
@@ -26030,6 +26032,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     setListaMercados(Array.isArray(b['stock_lista_mercados']) && b['stock_lista_mercados'].length ? b['stock_lista_mercados'] : ['Mercado Central','Makro','Metro']);
                     if(b['stock_vivo_egresos']) setVivoEgresos(b['stock_vivo_egresos']);
                     if(b['stock_vivo_ts']) setVivoTimestamp(b['stock_vivo_ts']);
+                    if(b['stock_control_borrador']) setControlBorrador(b['stock_control_borrador']);
                 });
                 if (sucList.length) setSucursalSel(String(sucList[0].id));
                 setLoaded(true);
@@ -26709,7 +26712,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </button>
                                 {canEdit && <button onClick={() => {
                                     setEditingMercado(null);
-                                    setMercadoForm({ mercadoNombre: listaMercados[0]||'', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: String(sucursales[0]?.id||'') });
+                                    setMercadoForm({ mercadoNombre: listaMercados[0]||'', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: '' });
                                     setShowMercadoModal(true);
                                 }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">
                                     + {L('Próximo mercado','Next market')}
@@ -26748,20 +26751,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <div className="flex flex-wrap gap-2 mt-2">
                                                     {canEdit && <button onClick={e=>{e.stopPropagation();const newDate=prompt(L('Nueva fecha para repetir este mercado (YYYY-MM-DD):','New date to repeat this market (YYYY-MM-DD):'), new Date().toISOString().split('T')[0]); if(!newDate||!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return; const copia={...m,id:Date.now(),fecha:newDate,estado:'pendiente',creadoAt:new Date().toISOString(),creadoPor:currentUser?.name||currentUser?.username||'',resueltoPor:undefined,resueltAt:undefined,_collapsed:false}; saveMercados([copia,...mercados]); }} className={`px-3 py-1.5 text-xs rounded-lg font-medium ${darkMode?'bg-slate-600 text-slate-200':'bg-slate-100 text-slate-600'}`}>🔁 {L('Repetir','Repeat')}</button>}
                                                     {m.estado === 'borrador' && canEdit && <button onClick={()=>{
-                                                        if(!confirm(L('¿Confirmar este mercado? Se descontará el stock.','Confirm this market? Stock will be deducted.'))) return;
+                                                        if(!confirm(L('¿Confirmar este mercado?','Confirm this market?'))) return;
                                                         saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'pendiente'}:x));
-                                                        if(m.sucursalDescuento) {
-                                                            const newStock = {...stock};
-                                                            (m.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
-                                                                const k = stockKey(p.id, m.sucursalDescuento);
-                                                                newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
-                                                            });
-                                                            saveStock(newStock);
-                                                            const movs = (m.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:m.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado confirmado: '+m.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
-                                                            saveMovimientos([...movs,...movimientos].slice(0,500));
-                                                        }
                                                     }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">✓ {L('Confirmar','Confirm')}</button>}
-                                                    {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
+                                                    {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:m.sucursalVuelven?String(m.sucursalVuelven):String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
                                                         className="px-3 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium">↩️ {L('Vuelven','Returns')}</button>}
                                                     {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ if(!confirm(L('¿Marcar como resuelto? Esto cerrará la lista.','Mark as done? This will close the list.'))) return; saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'resuelto',resueltoPor:currentUser?.name||currentUser?.username||'',resueltAt:new Date().toISOString()}:x)); }}
                                                         className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">✓ {L('Resuelto','Done')}</button>}
@@ -26975,40 +26968,111 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     );
                                 })()}
                                 {controlSuc && Object.keys(controlData).length > 0 && (
-                                    <div className="flex gap-3">
-                                        <button onClick={()=>setShowControlInforme(true)}
-                                            className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border-2 ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>
-                                            📋 {L('Ver informe','View report')}
-                                        </button>
-                                        {canEdit && <button onClick={()=>{
-                                            if(!confirm(L('¿Aplicar correcciones al stock?','Apply stock corrections?'))) return;
-                                            const newStock = {...stock};
-                                            const newMovs = [];
-                                            const prodsFiltrados = controlCat ? productos.filter(p=>p.categoria===controlCat) : productos;
-                                            prodsFiltrados.forEach(p=>{
-                                                if(controlData[p.id]===undefined||controlData[p.id]==='') return;
-                                                const fisico = parseFloat(controlData[p.id]);
-                                                const sistema = getStock(p.id, controlSuc);
-                                                if(Math.abs(fisico-sistema)<0.001) return;
-                                                const k = stockKey(p.id, controlSuc);
-                                                newStock[k] = fisico;
-                                                newMovs.push({id:Date.now()+Math.random(),tipo:'ajuste',productoId:p.id,branchId:controlSuc,cantidad:Math.abs(fisico-sistema),notas:'Control de stock: '+(fisico>sistema?'+':'')+(fisico-sistema).toFixed(2),fecha:new Date().toISOString(),user:currentUser?.name||''});
-                                            });
-                                            saveStock(newStock);
-                                            saveMovimientos([...newMovs,...movimientos].slice(0,200));
-                                            // Guardar historial
-                                            const sucNombre = sucursales.find(s=>String(s.id)===controlSuc)?.nombre||controlSuc;
-                                            const prodsFiltradosSnap = controlCat ? productos.filter(p=>p.categoria===controlCat) : productos;
-                                            const diffsParaHistorial = prodsFiltradosSnap.filter(p=>controlData[p.id]!==undefined&&controlData[p.id]!=='').map(p=>{ const ant=getStock(p.id,controlSuc); const fis=parseFloat(controlData[p.id]); const dif=fis-ant; return {productoId:p.id,nombre:p.nombre,anterior:ant,nuevo:fis,diff:dif}; });
-                                            const entrada = {id:Date.now(),fecha:new Date().toISOString(),sucursal:sucNombre,categoria:controlCat||'Todas',user:currentUser?.name||'',diferencias:diffsParaHistorial,total:diffsParaHistorial.filter(d=>d.diff!==0).length};
-                                            const newHist = [entrada,...controlHistorial].slice(0,50);
-                                            setControlHistorial(newHist);
-                                            save('stock_control_historial', newHist);
-                                            setControlData({});
-                                            alert(L('Stock actualizado. '+newMovs.length+' productos corregidos.','Stock updated. '+newMovs.length+' products corrected.'));
-                                        }} className="flex-1 px-4 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium">
-                                            ✓ {L('Aplicar correcciones','Apply corrections')}
-                                        </button>}
+                                    <div className="space-y-3">
+                                        {/* Vincular mercado */}
+                                        {mercados.filter(m=>m.estado==='resuelto'||m.estado==='pendiente').length > 0 && (
+                                            <div className={`rounded-xl border ${card} p-3`}>
+                                                <p className={`text-xs font-semibold ${sub} mb-2`}>🏪 {L('Vincular mercado (opcional)','Link market (optional)')}</p>
+                                                <select value={controlMercadoId} onChange={e=>setControlMercadoId(e.target.value)} className={`w-full px-3 py-2 rounded-lg text-sm border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                                    <option value="">{L('Sin mercado vinculado','No market linked')}</option>
+                                                    {mercados.filter(m=>m.estado!=='borrador').map(m=><option key={m.id} value={m.id}>🏪 {m.mercadoNombre} · {m.fecha}</option>)}
+                                                </select>
+                                                {controlMercadoId && (() => {
+                                                    const m = mercados.find(x=>String(x.id)===String(controlMercadoId));
+                                                    const prods = m?.vuelven?.length > 0 
+                                                        ? m.vuelven.filter(p=>parseFloat(p.cantVuelve)>0)
+                                                        : (m?.productos||[]).filter(p=>parseFloat(p.cantidad)>0);
+                                                    const usandoVuelven = m?.vuelven?.length > 0;
+                                                    return prods.length > 0 && (
+                                                        <p className={`text-xs mt-1.5 ${sub}`}>
+                                                            📦 {usandoVuelven ? L('Lo que volvió:','What returned:') : L('Se sumarán al físico:','Will be added to physical count:')} {usandoVuelven ? prods.map(p=>`${p.nombre} +${p.cantVuelve}`).join(' · ') : prods.map(p=>`${p.nombre} +${p.cantidad}`).join(' · ')}
+                                                        </p>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+                                        <div className="flex gap-3">
+                                            <button onClick={()=>setShowControlInforme(true)}
+                                                className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border-2 ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>
+                                                📋 {L('Ver informe','View report')}
+                                            </button>
+                                            {canEdit && <button onClick={()=>{
+                                                const borradorData = { suc: controlSuc, cat: controlCat, data: controlData, fecha: new Date().toISOString(), mercadoId: controlMercadoId };
+                                                setControlBorrador(borradorData);
+                                                save('stock_control_borrador', borradorData);
+                                                alert(L('Control guardado como borrador','Control saved as draft'));
+                                            }} className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border-2 border-orange-300 text-orange-600`}>
+                                                📝 {L('Guardar borrador','Save draft')}
+                                            </button>}
+                                            {canEdit && <button onClick={()=>{
+                                                if(!confirm(L('¿Aplicar correcciones al stock?','Apply stock corrections?'))) return;
+                                                // Merge mercado if linked
+                                                const mercadoVinculado = controlMercadoId ? mercados.find(x=>String(x.id)===String(controlMercadoId)) : null;
+                                                const dataFinal = { ...controlData };
+                                                if (mercadoVinculado) {
+                                                    // Usar vuelven si existe, sino productos originales
+                                                    const prodsVuelven = mercadoVinculado.vuelven?.length > 0
+                                                        ? mercadoVinculado.vuelven.filter(p=>parseFloat(p.cantVuelve)>0).map(p=>({id:p.id, cantidad: p.cantVuelve}))
+                                                        : (mercadoVinculado.productos||[]).filter(p=>parseFloat(p.cantidad)>0);
+                                                    prodsVuelven.forEach(p => {
+                                                        const idStr = String(p.id);
+                                                        const actual = dataFinal[idStr] !== undefined ? parseFloat(dataFinal[idStr]) : getStock(p.id, controlSuc);
+                                                        dataFinal[idStr] = actual + parseFloat(p.cantidad);
+                                                    });
+                                                }
+                                                const newStock = {...stock};
+                                                const newMovs = [];
+                                                const prodsFiltrados = controlCat ? productos.filter(p=>p.categoria===controlCat) : productos;
+                                                prodsFiltrados.forEach(p=>{
+                                                    if(dataFinal[p.id]===undefined&&dataFinal[String(p.id)]===undefined) return;
+                                                    const fisico = parseFloat(dataFinal[p.id]??dataFinal[String(p.id)]);
+                                                    if(isNaN(fisico)) return;
+                                                    const sistema = getStock(p.id, controlSuc);
+                                                    const k = stockKey(p.id, controlSuc);
+                                                    newStock[k] = fisico;
+                                                    if(Math.abs(fisico-sistema)>=0.001) newMovs.push({id:Date.now()+Math.random(),tipo:'ajuste',productoId:p.id,sucursalId:controlSuc,branchId:controlSuc,cantidad:Math.abs(fisico-sistema),notas:'Control de stock: '+(fisico>sistema?'+':'')+(fisico-sistema).toFixed(2)+(mercadoVinculado?' (con mercado '+mercadoVinculado.mercadoNombre+')':''),fecha:new Date().toISOString(),user:currentUser?.name||''});
+                                                });
+                                                saveStock(newStock);
+                                                saveMovimientos([...newMovs,...movimientos].slice(0,500));
+                                                const sucNombre = sucursales.find(s=>String(s.id)===controlSuc)?.nombre||controlSuc;
+                                                const prodsFiltradosSnap = controlCat ? productos.filter(p=>p.categoria===controlCat) : productos;
+                                                const diffsParaHistorial = prodsFiltradosSnap.filter(p=>dataFinal[p.id]!==undefined||dataFinal[String(p.id)]!==undefined).map(p=>{ const ant=getStock(p.id,controlSuc); const fis=parseFloat(dataFinal[p.id]??dataFinal[String(p.id)]); const dif=fis-ant; return {productoId:p.id,nombre:p.nombre,anterior:ant,nuevo:fis,diff:dif}; });
+                                                const entrada = {id:Date.now(),fecha:new Date().toISOString(),sucursal:sucNombre,categoria:controlCat||'Todas',user:currentUser?.name||'',mercado:mercadoVinculado?.mercadoNombre||null,diferencias:diffsParaHistorial,total:diffsParaHistorial.filter(d=>d.diff!==0).length};
+                                                const newHist = [entrada,...controlHistorial].slice(0,50);
+                                                setControlHistorial(newHist);
+                                                save('stock_control_historial', newHist);
+                                                setControlData({});
+                                                setControlMercadoId('');
+                                                setControlBorrador(null);
+                                                save('stock_control_borrador', null);
+                                                alert(L('Stock actualizado. '+newMovs.length+' productos corregidos.','Stock updated. '+newMovs.length+' products corrected.'));
+                                            }} className="flex-1 px-4 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium">
+                                                ✓ {L('Aplicar correcciones','Apply corrections')}
+                                            </button>}
+                                        </div>
+                                    </div>
+                                )}
+                                {/* Banner borrador activo */}
+                                {controlBorrador && Object.keys(controlData).length === 0 && (
+                                    <div className={`rounded-xl border-2 border-orange-300 p-4 ${darkMode?'bg-orange-900/20':'bg-orange-50'}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className={`text-sm font-semibold text-orange-600`}>📝 {L('Control en borrador','Draft control')} — {sucursales.find(s=>String(s.id)===String(controlBorrador.suc))?.nombre}</p>
+                                            <span className={`text-xs ${sub}`}>{controlBorrador.fecha?new Date(controlBorrador.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>
+                                        </div>
+                                        <p className={`text-xs ${sub} mb-3`}>{Object.keys(controlBorrador.data||{}).length} {L('productos contados','products counted')}</p>
+                                        <div className="flex gap-2">
+                                            <button onClick={()=>{
+                                                setControlSuc(controlBorrador.suc);
+                                                setControlCat(controlBorrador.cat||'');
+                                                setControlData(controlBorrador.data||{});
+                                                setControlMercadoId(controlBorrador.mercadoId||'');
+                                            }} className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">
+                                                📂 {L('Retomar borrador','Resume draft')}
+                                            </button>
+                                            <button onClick={()=>{ setControlBorrador(null); save('stock_control_borrador',null); }} className={`px-3 py-2 rounded-lg text-sm ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>
+                                                🗑 {L('Descartar','Discard')}
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -27105,7 +27169,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         </tr></thead>
                                                         <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                                             {movs.map(m => {
-                                                                const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                                const prod = productos.find(p => String(p.id) === String(m.productoId) || Math.round(parseFloat(p.id)) === Math.round(parseFloat(m.productoId)));
                                                                 const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
                                                                 return (
                                                                     <tr key={m.id}>
@@ -27123,7 +27187,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                                 <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
                                                     {movs.map(m => {
-                                                        const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                        const prod = productos.find(p => String(p.id) === String(m.productoId) || Math.round(parseFloat(p.id)) === Math.round(parseFloat(m.productoId)));
                                                         const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
                                                         return (
                                                             <div key={m.id} className={`rounded-xl border ${card} p-3`}>
@@ -27205,7 +27269,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         </tr></thead>
                                                         <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                                             {movs.map(m => {
-                                                                const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                                const prod = productos.find(p=>String(p.id)===String(m.productoId)||Math.round(parseFloat(p.id))===Math.round(parseFloat(m.productoId)));
                                                                 const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
                                                                 return (
                                                                     <tr key={m.id}>
@@ -27224,7 +27288,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                                 <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
                                                     {movs.map(m => {
-                                                        const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                        const prod = productos.find(p=>String(p.id)===String(m.productoId)||Math.round(parseFloat(p.id))===Math.round(parseFloat(m.productoId)));
                                                         const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
                                                         return (
                                                             <div key={m.id} className={`rounded-xl border ${card} p-3`}>
@@ -27510,15 +27574,17 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('FECHA *','DATE *')}</label>
                                     <input type="date" value={mercadoForm.fecha} onChange={e=>setMercadoForm(f=>({...f,fecha:e.target.value}))} className={inp} style={{maxWidth:'200px'}}/>
                                 </div>
-                                {/* Sucursal a descontar */}
+
+                                {/* Sucursal de acreditación */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('📦 DESCONTAR STOCK DE','📦 DEDUCT STOCK FROM')}</label>
-                                    <select value={mercadoForm.sucursalDescuento} onChange={e=>setMercadoForm(f=>({...f,sucursalDescuento:e.target.value}))} className={inp}>
-                                        <option value="">{L('No descontar stock','Do not deduct stock')}</option>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>📥 {L('¿A dónde acreditar lo que vuelve?','Where to credit returns?')}</label>
+                                    <select value={mercadoForm.sucursalVuelven||''} onChange={e=>setMercadoForm(f=>({...f,sucursalVuelven:e.target.value}))} className={inp}>
+                                        <option value="">{L('No acreditar automáticamente','Do not credit automatically')}</option>
                                         {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
                                     </select>
-                                    {mercadoForm.sucursalDescuento && <p className={`text-xs mt-1 text-amber-500`}>⚡ {L('Se descontará al guardar','Will be deducted on save')}</p>}
+                                    {mercadoForm.sucursalVuelven && <p className={`text-xs mt-1 ${sub}`}>📥 {L('Lo que vuelva se sumará al stock de esta sucursal al registrar el retorno','Returns will be added to this branch stock when recorded')}</p>}
                                 </div>
+
 
                                 {/* Lista de productos */}
                                 <div>
@@ -27566,21 +27632,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <button onClick={()=>{setShowMercadoModal(false);setEditingMercado(null);}} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cancelar','Cancel')}</button>
                                 <button onClick={()=>{
                                     if(!mercadoForm.mercadoNombre||!mercadoForm.fecha) return;
-                                    const isNew = !editingMercado;
                                     const esBorrador = mercadoForm.estadoBorrador;
                                     const data = {...mercadoForm, id: editingMercado?.id||Date.now(), estado: esBorrador ? 'borrador' : 'pendiente', creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
                                     saveMercados(editingMercado ? mercados.map(m=>m.id===editingMercado.id?data:m) : [data,...mercados]);
-                                    // Descontar stock solo si NO es borrador y se eligió sucursal (solo en creación)
-                                    if (mercadoForm.sucursalDescuento && isNew && !esBorrador) {
-                                        const newStock = {...stock};
-                                        (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
-                                            const k = stockKey(p.id, mercadoForm.sucursalDescuento);
-                                            newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
-                                        });
-                                        saveStock(newStock);
-                                        const movs = (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:mercadoForm.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado: '+mercadoForm.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
-                                        saveMovimientos([...movs,...movimientos].slice(0,500));
-                                    }
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${mercadoForm.estadoBorrador?'bg-amber-500 text-white':'bg-orange-500 text-white'}`}>{mercadoForm.estadoBorrador ? L('💾 Guardar borrador','💾 Save draft') : L('💾 Guardar','💾 Save')}</button>
                             </div>
@@ -29021,7 +29075,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </button>
                                 {canEdit && <button onClick={() => {
                                     setEditingMercado(null);
-                                    setMercadoForm({ mercadoNombre: listaMercados[0]||'', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: String(sucursales[0]?.id||'') });
+                                    setMercadoForm({ mercadoNombre: listaMercados[0]||'', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: '' });
                                     setShowMercadoModal(true);
                                 }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">
                                     + {L('Próximo mercado','Next market')}
@@ -29060,20 +29114,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <div className="flex flex-wrap gap-2 mt-2">
                                                     {canEdit && <button onClick={e=>{e.stopPropagation();const newDate=prompt(L('Nueva fecha para repetir este mercado (YYYY-MM-DD):','New date to repeat this market (YYYY-MM-DD):'), new Date().toISOString().split('T')[0]); if(!newDate||!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return; const copia={...m,id:Date.now(),fecha:newDate,estado:'pendiente',creadoAt:new Date().toISOString(),creadoPor:currentUser?.name||currentUser?.username||'',resueltoPor:undefined,resueltAt:undefined,_collapsed:false}; saveMercados([copia,...mercados]); }} className={`px-3 py-1.5 text-xs rounded-lg font-medium ${darkMode?'bg-slate-600 text-slate-200':'bg-slate-100 text-slate-600'}`}>🔁 {L('Repetir','Repeat')}</button>}
                                                     {m.estado === 'borrador' && canEdit && <button onClick={()=>{
-                                                        if(!confirm(L('¿Confirmar este mercado? Se descontará el stock.','Confirm this market? Stock will be deducted.'))) return;
+                                                        if(!confirm(L('¿Confirmar este mercado?','Confirm this market?'))) return;
                                                         saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'pendiente'}:x));
-                                                        if(m.sucursalDescuento) {
-                                                            const newStock = {...stock};
-                                                            (m.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
-                                                                const k = stockKey(p.id, m.sucursalDescuento);
-                                                                newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
-                                                            });
-                                                            saveStock(newStock);
-                                                            const movs = (m.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:m.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado confirmado: '+m.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
-                                                            saveMovimientos([...movs,...movimientos].slice(0,500));
-                                                        }
                                                     }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">✓ {L('Confirmar','Confirm')}</button>}
-                                                    {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
+                                                    {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ setVuelvenMercado(m); setVuelvenForm({sucursal:m.sucursalVuelven?String(m.sucursalVuelven):String(sucursales[0]?.id||''),productos:(m.productos||[]).filter(p=>p.cantidad).map(p=>({...p,cantVuelve:''}))}); setShowVuelvenModal(true); }}
                                                         className="px-3 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium">↩️ {L('Vuelven','Returns')}</button>}
                                                     {!esResuelto && m.estado !== 'borrador' && canEdit && <button onClick={()=>{ if(!confirm(L('¿Marcar como resuelto? Esto cerrará la lista.','Mark as done? This will close the list.'))) return; saveMercados(mercados.map(x=>x.id===m.id?{...x,estado:'resuelto',resueltoPor:currentUser?.name||currentUser?.username||'',resueltAt:new Date().toISOString()}:x)); }}
                                                         className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">✓ {L('Resuelto','Done')}</button>}
@@ -29487,7 +29531,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         </tr></thead>
                                                         <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                                             {movs.map(m => {
-                                                                const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                                const prod = productos.find(p => String(p.id) === String(m.productoId) || Math.round(parseFloat(p.id)) === Math.round(parseFloat(m.productoId)));
                                                                 const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
                                                                 return (
                                                                     <tr key={m.id}>
@@ -29505,7 +29549,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                                 <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
                                                     {movs.map(m => {
-                                                        const prod = productos.find(p => String(p.id) === String(m.productoId));
+                                                        const prod = productos.find(p => String(p.id) === String(m.productoId) || Math.round(parseFloat(p.id)) === Math.round(parseFloat(m.productoId)));
                                                         const suc  = sucursales.find(s => String(s.id) === String(m.sucursalId||m.branchId));
                                                         return (
                                                             <div key={m.id} className={`rounded-xl border ${card} p-3`}>
@@ -29587,7 +29631,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                         </tr></thead>
                                                         <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                                             {movs.map(m => {
-                                                                const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                                const prod = productos.find(p=>String(p.id)===String(m.productoId)||Math.round(parseFloat(p.id))===Math.round(parseFloat(m.productoId)));
                                                                 const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
                                                                 return (
                                                                     <tr key={m.id}>
@@ -29606,7 +29650,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 </div>
                                                 <div className="space-y-2" style={{display: window.innerWidth < 640 ? 'block' : 'none'}}>
                                                     {movs.map(m => {
-                                                        const prod = productos.find(p=>String(p.id)===String(m.productoId));
+                                                        const prod = productos.find(p=>String(p.id)===String(m.productoId)||Math.round(parseFloat(p.id))===Math.round(parseFloat(m.productoId)));
                                                         const suc = sucursales.find(s=>String(s.id)===String(m.sucursalId||m.branchId));
                                                         return (
                                                             <div key={m.id} className={`rounded-xl border ${card} p-3`}>
@@ -29828,15 +29872,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('FECHA *','DATE *')}</label>
                                     <input type="date" value={mercadoForm.fecha} onChange={e=>setMercadoForm(f=>({...f,fecha:e.target.value}))} className={inp} style={{maxWidth:'200px'}}/>
                                 </div>
-                                {/* Sucursal a descontar */}
-                                <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('📦 DESCONTAR STOCK DE','📦 DEDUCT STOCK FROM')}</label>
-                                    <select value={mercadoForm.sucursalDescuento} onChange={e=>setMercadoForm(f=>({...f,sucursalDescuento:e.target.value}))} className={inp}>
-                                        <option value="">{L('No descontar stock','Do not deduct stock')}</option>
-                                        {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
-                                    </select>
-                                    {mercadoForm.sucursalDescuento && <p className={`text-xs mt-1 text-amber-500`}>⚡ {L('Se descontará al guardar','Will be deducted on save')}</p>}
-                                </div>
+
 
                                 {/* Lista de productos */}
                                 <div>
@@ -29884,21 +29920,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 <button onClick={()=>{setShowMercadoModal(false);setEditingMercado(null);}} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cancelar','Cancel')}</button>
                                 <button onClick={()=>{
                                     if(!mercadoForm.mercadoNombre||!mercadoForm.fecha) return;
-                                    const isNew = !editingMercado;
                                     const esBorrador = mercadoForm.estadoBorrador;
                                     const data = {...mercadoForm, id: editingMercado?.id||Date.now(), estado: esBorrador ? 'borrador' : 'pendiente', creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
                                     saveMercados(editingMercado ? mercados.map(m=>m.id===editingMercado.id?data:m) : [data,...mercados]);
-                                    // Descontar stock solo si NO es borrador y se eligió sucursal (solo en creación)
-                                    if (mercadoForm.sucursalDescuento && isNew && !esBorrador) {
-                                        const newStock = {...stock};
-                                        (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
-                                            const k = stockKey(p.id, mercadoForm.sucursalDescuento);
-                                            newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
-                                        });
-                                        saveStock(newStock);
-                                        const movs = (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p=>({id:Date.now()+Math.random(),tipo:'envio',productoId:p.id,sucursalId:mercadoForm.sucursalDescuento,cantidad:parseFloat(p.cantidad),notas:'Mercado: '+mercadoForm.mercadoNombre,fecha:new Date().toISOString(),user:currentUser?.name||currentUser?.username||''}));
-                                        saveMovimientos([...movs,...movimientos].slice(0,500));
-                                    }
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${mercadoForm.estadoBorrador?'bg-amber-500 text-white':'bg-orange-500 text-white'}`}>{mercadoForm.estadoBorrador ? L('💾 Guardar borrador','💾 Save draft') : L('💾 Guardar','💾 Save')}</button>
                             </div>
