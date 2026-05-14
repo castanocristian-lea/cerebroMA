@@ -8565,7 +8565,7 @@ ${invoice.items.map(item => `
                                                                     📋 {t.copy || 'Copiar'}
                                                                 </button>
 
-                                                                {user.role !== 'superadmin' && (
+                                                                {(user.role !== 'superadmin' || (currentUser?.role === 'superadmin' && user.id !== currentUser?.id)) && (
                                                                 <button
                                                                     onClick={() => deleteUser(user.id)}
                                                                     className="text-red-600 hover:text-red-900"
