@@ -2286,13 +2286,18 @@ ${invoice.items.map(item => `
                 if (!currentUser) return false;
                 // Admin y superadmin tienen acceso total siempre
                 if (currentUser.role === 'admin' || currentUser.role === 'superadmin') return true;
-                // Usuarios sin permisos definidos (antiguos) = acceso total
-                if (!currentUser.permissions) return true;
+                // Usuarios sin permisos definidos (antiguos) = acceso total solo a módulos básicos
+                if (!currentUser.permissions) {
+                    // módulos que requieren permiso explícito
+                    const restricted = ['sueldos','misueldo','config','seguridad','prestamos','codigos'];
+                    if (restricted.includes(module)) return false;
+                    return true;
+                }
                 
                 const userPermission = currentUser.permissions[module];
                 
-                // Sin permiso
-                if (userPermission === 'none') return false;
+                // Sin permiso explícito o 'none'
+                if (!userPermission || userPermission === 'none') return false;
                 
                 // Requiere lectura: acepta read o editor
                 if (requiredLevel === 'read') {
@@ -3497,7 +3502,7 @@ ${invoice.items.map(item => `
                                     detail: 'Generá códigos EAN-13 y QR con link, exportables a PDF para imprimir y usar en el sistema de cobro.',
                                 },
                                 misueldo: {
-                                    permission: 'micerebro',
+                                    permission: 'misueldo',
                                     navigate: 'misueldo',
                                     color: 'green',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-green-400' : 'text-green-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
@@ -11363,9 +11368,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <div className="flex flex-wrap gap-1.5 pl-8">
                                         {diasSinIngreso.slice(0,8).map(fs => (
                                             <button key={fs} onClick={() => {
+                                                if (!canEdit) return;
                                                 setIngresoForm(f => ({...f, fecha: fs, filas: [{id: Date.now(), origen:'', monto:'', notas:''}]}));
                                                 setShowIngresoModal(true);
-                                            }} className="text-xs px-2 py-0.5 rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer" style={{background:'rgba(255,255,255,0.2)'}}>
+                                            }} className={`text-xs px-2 py-0.5 rounded-full font-medium transition-opacity ${canEdit ? 'hover:opacity-80 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`} style={{background:'rgba(255,255,255,0.2)'}}>
                                                 {fmtCorta(fs)}
                                             </button>
                                         ))}
@@ -26326,30 +26332,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const data = { ...envioForm, id: editingEnvio?.id || Date.now(), creadoAt: editingEnvio?.creadoAt || new Date().toISOString(), creadoPor: editingEnvio?.creadoPor || (currentUser?.name || currentUser?.username || ''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || currentUser?.username || '', estado: estadoNuevo };
             const newEnvios = editingEnvio ? envios.map(e => e.id === editingEnvio.id ? data : e) : [data, ...envios];
             saveEnvios(newEnvios);
-            // Descontar/sumar stock solo si NO es borrador
-            if (!editingEnvio && !envioForm.estadoBorrador && (envioForm.descontarDe || envioForm.sumarEn)) {
-                const newStock = { ...stock };
-                if (envioForm.descontarDe) {
-                    (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
-                        const k = stockKey(p.id, envioForm.descontarDe);
-                        newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
-                    });
-                }
-                if (envioForm.sumarEn) {
-                    (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
-                        const k = stockKey(p.id, envioForm.sumarEn);
-                        newStock[k] = (parseFloat(newStock[k]||0)) + parseFloat(p.cantidad);
-                    });
-                }
-                saveStock(newStock);
-                const movDescuento = (envioForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).map(p => ({
-                    id: Date.now()+Math.random(), tipo:'envio', productoId:p.id,
-                    branchId: envioForm.descontarDe, cantidad: parseFloat(p.cantidad),
-                    notas:`Envío a ${sucursales.find(s=>String(s.id)===String(envioForm.hasta))?.nombre||envioForm.hasta}`,
-                    fecha: new Date().toISOString(), user: currentUser?.name||''
-                }));
-                saveMovimientos([...movDescuento, ...movimientos].slice(0,200));
-            }
+            // Descontar/sumar stock solo cuando se marca ENTREGADO, no al crear
+            // (el stock se maneja en marcarEnvioEstado al pasar a entregado)
 
             // Notificar solo si NO es borrador
             if (envioForm.destinatario && !editingEnvio && !envioForm.estadoBorrador) {
@@ -26391,67 +26375,69 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 return (dif !== undefined && dif !== '') ? {...p, cantidad: String(parseFloat(dif)), _cantOriginal: p.cantidad} : p;
             });
             saveEnvios(envios.map(e => e.id === id ? { ...e, estado, productos: prodsFinal } : e));
-            // Si sale de borrador → descontar/sumar stock con cantidades finales
-            if (envio?.estado === 'borrador' && estado !== 'borrador') {
-                if (envio.descontarDe) {
-                    const newStock = { ...stock };
-                    prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
-                        const k = stockKey(p.id, envio.descontarDe);
-                        newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
+
+            // Stock se aplica al pasar a EN CAMINO (con cantidades reales del Dif si existen)
+            if (estado === 'en_camino') {
+                dbGetKey('app_config', 'stock_niveles').then(freshStock => {
+                    const newStock = { ...(freshStock || stock) };
+                    const prodsConCantReal = (envio?.productos||[]).map(p => {
+                        const dif = difs[p.id];
+                        const cantReal = (dif !== undefined && dif !== '') ? parseFloat(dif) : parseFloat(p.cantidad);
+                        return { ...p, cantReal };
                     });
+                    if (envio.descontarDe) {
+                        // Restar del origen la cantidad ORIGINAL del sistema (no la real)
+                        // porque físicamente no quedó nada más
+                        (envio?.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                            const k = stockKey(p.id, envio.descontarDe);
+                            newStock[k] = (parseFloat(newStock[k]||0)) - parseFloat(p.cantidad);
+                        });
+                    }
                     if (envio.sumarEn) {
-                        prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                        // Sumar en destino solo lo que realmente llegó (cantidad real)
+                        prodsConCantReal.filter(p=>p.cantReal>0).forEach(p => {
                             const k = stockKey(p.id, envio.sumarEn);
-                            newStock[k] = (parseFloat(newStock[k]||0)) + parseFloat(p.cantidad);
+                            newStock[k] = (parseFloat(newStock[k]||0)) + p.cantReal;
                         });
                     }
                     saveStock(newStock);
-                } else if (envio.sumarEn) {
-                    const newStock = { ...stock };
-                    prodsFinal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
-                        const k = stockKey(p.id, envio.sumarEn);
-                        newStock[k] = (parseFloat(newStock[k]||0)) + parseFloat(p.cantidad);
-                    });
-                    saveStock(newStock);
-                }
-                // Al marcar entregado con difs → corregir stock (devolver exceso a origen, ajustar destino)
-            if (estado === 'entregado' && envio?.estado !== 'borrador') {
-                const hasDifs = Object.values(difs).some(v => v !== undefined && v !== '');
-                if (hasDifs && (envio.descontarDe || envio.sumarEn)) {
-                    const newStock = { ...stock };
-                    (envio?.productos||[]).filter(p => difs[p.id] !== undefined && difs[p.id] !== '').forEach(p => {
-                        const cantOriginal = parseFloat(p.cantidad);
-                        const cantReal = parseFloat(difs[p.id]);
-                        const exceso = cantOriginal - cantReal;
-                        if (exceso === 0) return;
+                    // Registrar movimientos: egreso en origen + ingreso en destino
+                    const movs = [];
+                    prodsConCantReal.filter(p=>parseFloat(p.cantidad)>0).forEach(p => {
+                        const orig = parseFloat(p.cantidad);
+                        const real = p.cantReal;
+                        const destNombre = sucursales.find(s=>String(s.id)===String(envio.sumarEn||envio.hasta))?.nombre||'';
+                        const origenNombre = sucursales.find(s=>String(s.id)===String(envio.descontarDe))?.nombre||'';
+                        const nota = orig !== real
+                            ? `Se pidió ${orig} ${p.unidad||''} pero solo había ${real}. Se envió ${real} y se ajustó stock de origen.`
+                            : `Envío a ${destNombre}`;
+                        // Egreso en origen
                         if (envio.descontarDe) {
-                            const k = stockKey(p.id, envio.descontarDe);
-                            newStock[k] = (parseFloat(newStock[k]||0)) + exceso; // devolver exceso
+                            movs.push({ id: Date.now()+Math.random(), tipo:'envio', productoId:p.id, sucursalId:String(envio.descontarDe), cantidad:orig, notas:nota, fecha:new Date().toISOString(), user:currentUser?.name||'' });
                         }
-                        if (envio.sumarEn) {
-                            const k = stockKey(p.id, envio.sumarEn);
-                            newStock[k] = (parseFloat(newStock[k]||0)) - exceso; // corregir destino
+                        // Ingreso en destino (solo la cantidad real que llegó)
+                        if (envio.sumarEn && real > 0) {
+                            movs.push({ id: Date.now()+Math.random(), tipo:'ingreso', productoId:p.id, sucursalId:String(envio.sumarEn), branchId:String(envio.sumarEn), cantidad:real, notas:`Recibido de ${origenNombre}${orig!==real?' (pedido: '+orig+', recibido: '+real+')':''}`, fecha:new Date().toISOString(), user:currentUser?.name||'' });
                         }
                     });
-                    saveStock(newStock);
-                }
+                    saveMovimientos([...movs,...movimientos].slice(0,500));
+                });
             }
             if (envio.destinatario) {
-                    const notifKey = `notif_envioNotif_${envio.destinatario}`;
-                    dbGetKey('app_config', notifKey).then(existing => {
-                        const arr = Array.isArray(existing) ? existing : [];
-                        const n = { id: Date.now(), envioId: id, destinatarioId: String(envio.destinatario), tipo: 'armar', desde: envio.desde, hasta: envio.hasta, fecha: envio.fecha, hora: envio.hora, productos: (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0), visto: false, creadoAt: new Date().toISOString() };
-                        dbUpsertOne('app_config', notifKey, [n, ...arr].slice(0,20));
-                    });
-                }
-                if (envio.destinatarioRecibe) {
-                    const notifKey = `notif_envioNotif_${envio.destinatarioRecibe}`;
-                    dbGetKey('app_config', notifKey).then(existing => {
-                        const arr = Array.isArray(existing) ? existing : [];
-                        const n = { id: Date.now(), envioId: id, destinatarioId: String(envio.destinatarioRecibe), tipo: 'recibir_preparacion', desde: envio.desde, hasta: envio.hasta, fecha: envio.fecha, hora: envio.hora, productos: (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0), visto: false, creadoAt: new Date().toISOString() };
-                        dbUpsertOne('app_config', notifKey, [n, ...arr].slice(0,20));
-                    });
-                }
+                const notifKey = `notif_envioNotif_${envio.destinatario}`;
+                dbGetKey('app_config', notifKey).then(existing => {
+                    const arr = Array.isArray(existing) ? existing : [];
+                    const n = { id: Date.now(), envioId: id, destinatarioId: String(envio.destinatario), tipo: 'armar', desde: envio.desde, hasta: envio.hasta, fecha: envio.fecha, hora: envio.hora, productos: (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0), visto: false, creadoAt: new Date().toISOString() };
+                    dbUpsertOne('app_config', notifKey, [n, ...arr].slice(0,20));
+                });
+            }
+            if (envio.destinatarioRecibe) {
+                const notifKey2 = `notif_envioNotif_${envio.destinatarioRecibe}`;
+                dbGetKey('app_config', notifKey2).then(existing => {
+                    const arr = Array.isArray(existing) ? existing : [];
+                    const n = { id: Date.now(), envioId: id, destinatarioId: String(envio.destinatarioRecibe), tipo: 'recibir_preparacion', desde: envio.desde, hasta: envio.hasta, fecha: envio.fecha, hora: envio.hora, productos: (envio.productos||[]).filter(p=>parseFloat(p.cantidad)>0), visto: false, creadoAt: new Date().toISOString() };
+                    dbUpsertOne('app_config', notifKey2, [n, ...arr].slice(0,20));
+                });
             }
             // Notificar al que recibe cuando pasa a "en_camino"
             if (estado === 'en_camino' && envio?.destinatarioRecibe) {
@@ -27115,7 +27101,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
                                                     <table className="w-full text-sm">
                                                         <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                                            {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                                            {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                                         </tr></thead>
                                                         <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                                             {movs.map(m => {
@@ -27124,6 +27110,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 return (
                                                                     <tr key={m.id}>
                                                                         <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                                        <td className="px-4 py-2.5 text-xs font-semibold"><span className={`px-1.5 py-0.5 rounded ${m.notas?.startsWith('Recibido')?'bg-blue-100 text-blue-600':m.notas==='Carga manual'?'bg-slate-100 text-slate-500':'bg-green-100 text-green-600'}`}>{m.notas?.startsWith('Recibido')?L('Envío','Shipment'):m.notas==='Carga manual'?L('Manual','Manual'):L('Ingreso','Inbound')}</span></td>
                                                                         <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
                                                                         <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
                                                                         <td className="px-4 py-2.5 font-mono font-bold text-green-500">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
@@ -27144,7 +27131,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                     <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || m.productoId}</span>
                                                                     <span className="font-mono font-bold text-green-500 text-lg">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
                                                                 </div>
-                                                                <div className={`flex gap-3 text-xs ${sub}`}>
+                                                                <div className={`flex gap-3 text-xs ${sub} flex-wrap`}>
+                                                                    <span className={`font-semibold px-1.5 py-0.5 rounded ${m.notas?.startsWith('Recibido')?'bg-blue-100 text-blue-600':m.notas==='Carga manual'?'bg-slate-100 text-slate-500':'bg-green-100 text-green-600'}`}>{m.notas?.startsWith('Recibido')?L('Envío','Shipment'):m.notas==='Carga manual'?L('Manual','Manual'):L('Ingreso','Inbound')}</span>
                                                                     <span>🏪 {suc?.nombre || '—'}</span>
                                                                     <span>👤 {m.user || '—'}</span>
                                                                     <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
@@ -27213,7 +27201,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
                                                     <table className="w-full text-sm">
                                                         <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                                            {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                                            {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('NOTAS','NOTES'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                                         </tr></thead>
                                                         <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                                             {movs.map(m => {
@@ -27226,6 +27214,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                         <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{prod?.nombre || '—'}</td>
                                                                         <td className={`px-3 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
                                                                         <td className="px-3 py-2.5 font-mono font-bold text-red-400 text-sm">-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{prod?.unidad||''}</span></td>
+                                                                        <td className={`px-3 py-2.5 text-xs ${sub} max-w-xs`}>{m.notas||'—'}</td>
                                                                         <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
                                                                     </tr>
                                                                 );
@@ -27477,9 +27466,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                             </div>
                                                         );
                                                     })}
-                                                    {Object.values(e._difs||{}).some(v=>v!==''&&v!==undefined) && (
+                                                    {prods.some(p=>{const d=(e._difs||{})[p.id];return d!==undefined&&d!==''&&parseFloat(d)!==parseFloat(p.cantidad);}) && (
                                                         <div className={`mt-2 p-2 rounded-lg text-xs ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-700'}`}>
-                                                            ⚠️ {L('Diferencias:','Differences:')} {prods.filter(p=>(e._difs||{})[p.id]!==undefined&&(e._difs||{})[p.id]!=='').map(p=>`${p.nombre}: ${p.cantidad}→${(e._difs||{})[p.id]}`).join(' · ')}
+                                                            ⚠️ {L('Diferencias:','Differences:')} {prods.filter(p=>{const d=(e._difs||{})[p.id];return d!==undefined&&d!==''&&parseFloat(d)!==parseFloat(p.cantidad);}).map(p=>`${p.nombre}: ${p.cantidad}→${(e._difs||{})[p.id]}`).join(' · ')}
                                                         </div>
                                                     )}
                                                 </div>
@@ -29494,7 +29483,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
                                                     <table className="w-full text-sm">
                                                         <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                                            {[L('FECHA','DATE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                                            {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                                         </tr></thead>
                                                         <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                                             {movs.map(m => {
@@ -29503,6 +29492,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                 return (
                                                                     <tr key={m.id}>
                                                                         <td className={`px-4 py-2.5 text-xs ${sub}`}>{m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                                                                        <td className="px-4 py-2.5 text-xs font-semibold"><span className={`px-1.5 py-0.5 rounded ${m.notas?.startsWith('Recibido')?'bg-blue-100 text-blue-600':m.notas==='Carga manual'?'bg-slate-100 text-slate-500':'bg-green-100 text-green-600'}`}>{m.notas?.startsWith('Recibido')?L('Envío','Shipment'):m.notas==='Carga manual'?L('Manual','Manual'):L('Ingreso','Inbound')}</span></td>
                                                                         <td className={`px-4 py-2.5 font-medium ${txt}`}>{prod?.nombre || m.productoId}</td>
                                                                         <td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
                                                                         <td className="px-4 py-2.5 font-mono font-bold text-green-500">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></td>
@@ -29523,7 +29513,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                     <span className={`font-semibold text-base ${txt}`}>{prod?.nombre || m.productoId}</span>
                                                                     <span className="font-mono font-bold text-green-500 text-lg">+{m.cantidad} <span className={`text-xs ${sub}`}>{prod?.unidad||''}</span></span>
                                                                 </div>
-                                                                <div className={`flex gap-3 text-xs ${sub}`}>
+                                                                <div className={`flex gap-3 text-xs ${sub} flex-wrap`}>
+                                                                    <span className={`font-semibold px-1.5 py-0.5 rounded ${m.notas?.startsWith('Recibido')?'bg-blue-100 text-blue-600':m.notas==='Carga manual'?'bg-slate-100 text-slate-500':'bg-green-100 text-green-600'}`}>{m.notas?.startsWith('Recibido')?L('Envío','Shipment'):m.notas==='Carga manual'?L('Manual','Manual'):L('Ingreso','Inbound')}</span>
                                                                     <span>🏪 {suc?.nombre || '—'}</span>
                                                                     <span>👤 {m.user || '—'}</span>
                                                                     <span>🕐 {m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
@@ -29592,7 +29583,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                 <div className={`rounded-xl border ${card} overflow-hidden`} style={{display: window.innerWidth < 640 ? 'none' : 'block'}}>
                                                     <table className="w-full text-sm">
                                                         <thead><tr className={darkMode ? 'bg-slate-700/50' : 'bg-slate-50'}>
-                                                            {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
+                                                            {[L('FECHA','DATE'),L('TIPO','TYPE'),L('PRODUCTO','PRODUCT'),L('SUCURSAL','BRANCH'),L('CANTIDAD','QTY'),L('NOTAS','NOTES'),L('USUARIO','USER')].map(h => <th key={h} className={`px-3 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}
                                                         </tr></thead>
                                                         <tbody className={`divide-y ${darkMode ? 'divide-slate-700' : 'divide-slate-100'}`}>
                                                             {movs.map(m => {
@@ -29605,6 +29596,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                                         <td className={`px-3 py-2.5 font-medium ${txt} text-sm`}>{prod?.nombre || '—'}</td>
                                                                         <td className={`px-3 py-2.5 text-xs ${sub}`}>{suc?.nombre || '—'}</td>
                                                                         <td className="px-3 py-2.5 font-mono font-bold text-red-400 text-sm">-{m.cantidad} <span className={`text-xs font-normal ${sub}`}>{prod?.unidad||''}</span></td>
+                                                                        <td className={`px-3 py-2.5 text-xs ${sub} max-w-xs`}>{m.notas||'—'}</td>
                                                                         <td className={`px-3 py-2.5 text-xs ${sub}`}>{m.user || '—'}</td>
                                                                     </tr>
                                                                 );
@@ -29792,9 +29784,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                             </div>
                                                         );
                                                     })}
-                                                    {Object.values(e._difs||{}).some(v=>v!==''&&v!==undefined) && (
+                                                    {prods.some(p=>{const d=(e._difs||{})[p.id];return d!==undefined&&d!==''&&parseFloat(d)!==parseFloat(p.cantidad);}) && (
                                                         <div className={`mt-2 p-2 rounded-lg text-xs ${darkMode?'bg-orange-900/20 text-orange-300':'bg-orange-50 text-orange-700'}`}>
-                                                            ⚠️ {L('Diferencias:','Differences:')} {prods.filter(p=>(e._difs||{})[p.id]!==undefined&&(e._difs||{})[p.id]!=='').map(p=>`${p.nombre}: ${p.cantidad}→${(e._difs||{})[p.id]}`).join(' · ')}
+                                                            ⚠️ {L('Diferencias:','Differences:')} {prods.filter(p=>{const d=(e._difs||{})[p.id];return d!==undefined&&d!==''&&parseFloat(d)!==parseFloat(p.cantidad);}).map(p=>`${p.nombre}: ${p.cantidad}→${(e._difs||{})[p.id]}`).join(' · ')}
                                                         </div>
                                                     )}
                                                 </div>
