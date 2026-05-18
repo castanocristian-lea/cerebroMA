@@ -10185,20 +10185,14 @@ ${invoice.items.map(item => `
             });
             const [allTxLoaded, setAllTxLoaded] = useState(() => !!(window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0));
             useEffect(() => {
-                // Si ya tenemos datos precargados, usarlos
+                // Mostrar datos precargados inmediatamente mientras carga Supabase
                 if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) {
                     setAllTransactions(window.__cajaPrecargada);
                     setAllTxLoaded(true);
-                    return;
                 }
+                // Siempre refrescar desde Supabase para tener datos actualizados
                 const cargar = async () => {
                     if (window.__supabaseReadyPromise) await window.__supabaseReadyPromise;
-                    if (window.__dataReadyPromise) await window.__dataReadyPromise;
-                    if (window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0) {
-                        setAllTransactions(window.__cajaPrecargada);
-                        setAllTxLoaded(true);
-                        return;
-                    }
                     try {
                         const d = await dbGetKey('cash_transactions', 'multiyear');
                         if (d && Object.keys(d).length > 0) {
