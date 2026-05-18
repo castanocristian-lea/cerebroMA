@@ -10200,6 +10200,7 @@ ${invoice.items.map(item => `
                             window.__cajaPrecargada = d;
                         }
                     } catch(e) { console.error('Error cargando caja:', e); }
+                    window.__cajaDiariaFreshLoaded = true;
                     setAllTxLoaded(true);
                 };
                 cargar();
@@ -10329,10 +10330,12 @@ ${invoice.items.map(item => `
             const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
                           'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
             
-            // Guardar en Supabase cuando cambian las transacciones
+            // Guardar en Supabase cuando cambian las transacciones (solo después de carga inicial)
             useEffect(() => {
-                if (!allTxLoaded) return; // No guardar hasta que los datos estén cargados
-                if (Object.keys(allTransactions).length === 0) return; // No sobreescribir con vacío
+                if (!allTxLoaded) return;
+                if (Object.keys(allTransactions).length === 0) return;
+                // No guardar si los datos vienen del precargado viejo — esperar el fetch fresco
+                if (!window.__cajaDiariaFreshLoaded) return;
                 window.__cashTxPrecargadas = allTransactions;
                 window.__cajaPrecargada = allTransactions;
                 dbUpsertOne('cash_transactions', 'multiyear', allTransactions);
