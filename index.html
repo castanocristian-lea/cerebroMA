@@ -5943,18 +5943,19 @@ ${invoice.items.map(item => `
             // Cobros de hoy — dinámico
             const hoyISO = new Date().toISOString().split('T')[0];
             const cobrosHoy = useMemo(() => {
-                const mesActual  = new Date().getMonth();
                 const yearActual = new Date().getFullYear();
-                // Buscar por yoEmp primero, luego por currentUser.id como fallback
                 const empIds = [];
                 if (yoEmp) empIds.push(String(yoEmp.id));
                 if (currentUser?.id && !empIds.includes(String(currentUser.id))) empIds.push(String(currentUser.id));
                 if (!empIds.length) return [];
                 const pagos = [], segs = [];
                 empIds.forEach(empId => {
-                    const key = `${empId}_${yearActual}_${mesActual}`;
-                    (payroll[key] || []).filter(p => p.fecha === hoyISO).forEach(p => pagos.push(p));
-                    (seguros[key] || []).filter(p => p.fecha === hoyISO).forEach(p => segs.push({...p, concepto: p.concepto || 'Seguro médico', tipo: 'seguro'}));
+                    // Buscar en todos los meses del año actual
+                    for (let m = 0; m <= 11; m++) {
+                        const key = `${empId}_${yearActual}_${m}`;
+                        (payroll[key] || []).filter(p => p.fecha === hoyISO).forEach(p => pagos.push(p));
+                        (seguros[key] || []).filter(p => p.fecha === hoyISO).forEach(p => segs.push({...p, concepto: p.concepto || 'Seguro médico', tipo: 'seguro'}));
+                    }
                 });
                 return [...pagos, ...segs];
             }, [yoEmp, payroll, seguros, hoyISO, currentUser]);
@@ -10278,11 +10279,11 @@ ${invoice.items.map(item => `
                              'Insumos Delivery', 'Insumos Librería', 'Tachos de Basura', 'Viaticos', 
                              'Devolución', 'Devolución Préstamo', 'Ajuste', 'Otros'];
             
-            // Tipos de costo — editables y persistidos en localStorage
+            // Tipos de costo — editables y persistidos en Supabase
             const DEFAULT_TIPOS_COSTO = ['INGRESOS', 'SUELDOS', 'DEV PRESTAMO', 'MATERIA PRIMA', 'GASTOS VARIABLES', 
                               'GASTOS FIJOS', 'IMPUESTOS', 'PUBLICIDAD', 'TRANSPORTE'];
             const [tiposCosto, setTiposCosto] = useState(() => {
-                const saved = null; // loaded from Supabase
+                const saved = null;
                 return saved ? JSON.parse(saved) : DEFAULT_TIPOS_COSTO;
             });
             useEffect(() => { if (!tiposCosto || tiposCosto.length === 0) return; window.__cajaRubrosCostoPrecargados = tiposCosto; dbUpsertOne('cash_planning', 'rubrosCosto', tiposCosto); }, [tiposCosto]);
@@ -10334,7 +10335,7 @@ ${invoice.items.map(item => `
             const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
                           'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
             
-            // Guardar en localStorage y Supabase cuando cambian las transacciones
+            // Guardar en Supabase cuando cambian las transacciones
             useEffect(() => {
                 if (!allTxLoaded) return; // No guardar hasta que los datos estén cargados
                 if (Object.keys(allTransactions).length === 0) return; // No sobreescribir con vacío
@@ -14176,7 +14177,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         year: yr
                     });
                 }
-                try {  } catch(e) {}
                 window.__cajaPrecargada = allTx;
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
@@ -18939,11 +18939,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             // Sync helpers: proveedores -> caja
             const _writeCajaTx = (allTx) => {
-                
-                // Disparar evento para que CashRegister recargue si está montado
+                window.__cajaPrecargada = allTx;
+                dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new StorageEvent('storage', {
                     key: CAJA_KEY, newValue: JSON.stringify(allTx)
                 }));
+                window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
             };
             const updateCajaTxFromInvoice = (invoice) => {
                 if (!invoice.cajaRef) return;
@@ -19024,21 +19025,24 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
             const facturasFiltradas = [
                 ...supplierInvoices.filter(inv => {
-                    // En Pendientes: mostrar facturas pending (con cuotas aún pendientes o sin cuotas)
-                    // En Pagadas: mostrar facturas completamente pagadas
                     if (activeSubTab === 'pending') {
                         if (inv.status !== 'pending') return false;
-                        // Si tiene cuotas y todas están pagas, no mostrar en pendientes
                         if (inv.vencimientos?.length > 0 && inv.vencimientos.every(v=>v.pagado)) return false;
                         return matchesSearch(inv);
                     } else {
                         if (inv.status !== 'paid') return false;
-                        // Si tiene cuotas, no mostrar la factura base (se muestran como virtuales)
                         if (inv.vencimientos?.length > 0) return false;
                         return matchesSearch(inv);
                     }
+                }).sort((a, b) => {
+                    if (activeSubTab !== 'pending') return 0;
+                    const hoyStr = new Date().toISOString().split('T')[0];
+                    const aVencida = (a.dueDate||'') < hoyStr && a.dueDate;
+                    const bVencida = (b.dueDate||'') < hoyStr && b.dueDate;
+                    if (aVencida && !bVencida) return -1;
+                    if (!aVencida && bVencida) return 1;
+                    return (a.dueDate||'').localeCompare(b.dueDate||'');
                 }),
-                // En Pagadas: agregar cuotas pagadas como registros virtuales
                 ...(activeSubTab === 'paid' ? cuotasPagadasVirtuales.filter(matchesSearch) : []),
             ];
             const idsVisibles = facturasFiltradas.map(i => i.id);
@@ -19081,7 +19085,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 Object.keys(allTx).forEach(yr => {
                     allTx[yr] = (allTx[yr] || []).filter(t => !idsACaja.includes(t.id));
                 });
-                
+                window.__cajaPrecargada = allTx;
+                dbUpsertOne('cash_transactions', 'multiyear', allTx);
+                window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
 
                 const next = {...selectedInvoices};
                 seleccionadas.forEach(id => delete next[id]);
@@ -19135,7 +19141,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     }));
                     allTx[year] = [...yearTx, ...nuevasTx];
                     window.__cajaPrecargada = allTx;
-                    try {  } catch(e) {}
                     dbUpsertOne('cash_transactions', 'multiyear', allTx);
                     window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
                     alert(`✅ ${facturasPendientes.length} factura${facturasPendientes.length>1?'s':''} pagadas y registradas en Caja Diaria como ${tipoCosto} · ${pagoMasivoOrigen}`);
@@ -20318,7 +20323,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             const [invMainTab, setInvMainTab] = useState('facturas'); // 'notas' | 'facturas' | 'estadisticas'
 
             const [invNotes, setInvNotes] = useState(() => {
-                const saved = null; // loaded from Supabase
+                const saved = null;
                 return saved ? JSON.parse(saved) : [];
             });
             const [invNotesSubTab, setInvNotesSubTab] = useState('active');
@@ -20454,7 +20459,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 };
                 allTx[year] = [...yearTx, newTx];
                 window.__cajaPrecargada = allTx;
-                try {  } catch(e) {}
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
 
@@ -20603,7 +20607,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     tipoCosto: (newSupplierInfo.tipoCosto || '').trim()
                 };
                 setSuppliersInfo(newInfo);
-                
+                window.__suppliersInfoPrecargada = newInfo;
+                dbUpsertOne('suppliers', 'main', newInfo);
                 
                 setNewCategoryName('');
                 setNewSupplierInfo({ ico: '', dic: '', address: '', phone: '', bankAccount: '', bankCode: '', vs: '', ks: '', email: '', web: '', username: '', password: '', notes: '' });
@@ -20619,7 +20624,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         const newInfo = { ...suppliersInfo };
                         delete newInfo[categoryName];
                         setSuppliersInfo(newInfo);
-                        
+                        window.__suppliersInfoPrecargada = newInfo;
+                        dbUpsertOne('suppliers', 'main', newInfo);
                     }
                     
                     // Cambiar facturas de ese proveedor a "Otros"
@@ -20657,7 +20663,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                     newInfo[trimmedName] = newInfo[editingCategory];
                     delete newInfo[editingCategory];
                     setSuppliersInfo(newInfo);
-                    
+                    window.__suppliersInfoPrecargada = newInfo;
+                    dbUpsertOne('suppliers', 'main', newInfo);
                 }
                 
                 // Actualizar el nombre en todas las facturas que usen este proveedor
@@ -20719,6 +20726,8 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 };
                 
                 setSuppliersInfo(newInfo);
+                window.__suppliersInfoPrecargada = newInfo;
+                dbUpsertOne('suppliers', 'main', newInfo);
                 
                 setEditingSupplierInfo(null);
                 
@@ -20785,7 +20794,10 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 Array.from({length: meta.chunks}, (_, i) => dbGetKey('invoices_data', `chunk_${i}`))
                             );
                             const all = allChunks.flat().filter(Boolean);
-                            if (all.length > 0) { setInvoices(all); window.__invoicesPrecargadas = all; return; }
+                            // Deduplicar por ID (chunks pueden tener duplicados por timing)
+                            const seen = new Set();
+                            const deduped = all.filter(inv => { if (seen.has(inv.id)) return false; seen.add(inv.id); return true; });
+                            if (deduped.length > 0) { setInvoices(deduped); window.__invoicesPrecargadas = deduped; return; }
                         }
                         const d = await dbGetKey('invoices_data', 'main');
                         if (d && d.length > 0) {
@@ -20801,22 +20813,26 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 loadData();
             }, []);
 
-            // Guardar datos persistentes - invoices en chunks de 100
+            // Guardar datos persistentes - invoices en chunks de 20
             useEffect(() => {
                 if (invoices.length === 0) return;
                 try {
                     window.__invoicesPrecargadas = invoices;
-                    // Guardar en chunks para evitar el límite de 5MB de Supabase
                     const chunkSize = 20;
                     const chunks = [];
                     for (let i = 0; i < invoices.length; i += chunkSize) {
                         chunks.push(invoices.slice(i, i + chunkSize));
                     }
-                    // Guardar metadata del total de chunks
+                    const prevMeta = window.__invoicesMetaPrev || {chunks: 0};
+                    // Limpiar chunks sobrantes del guardado anterior
+                    for (let i = chunks.length; i < (prevMeta.chunks || 0); i++) {
+                        dbUpsertOne('invoices_data', `chunk_${i}`, []);
+                    }
                     dbUpsertOne('invoices_data', 'meta', {total: invoices.length, chunks: chunks.length});
                     chunks.forEach((chunk, idx) => {
                         dbUpsertOne('invoices_data', `chunk_${idx}`, chunk);
                     });
+                    window.__invoicesMetaPrev = {chunks: chunks.length};
                 } catch (error) {
                     console.log('Error guardando invoices:', error);
                 }
