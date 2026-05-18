@@ -19081,6 +19081,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const next = {...selectedInvoices};
                 seleccionadas.forEach(id => delete next[id]);
                 setSelectedInvoices(next);
+                facturasPagadas.forEach(f => addProvHistorialEntry('Restablecido', f, supplier, f.amount, ''));
                 alert(`↺ ${facturasPagadas.length} factura${facturasPagadas.length>1?'s':''} restablecidas y eliminadas de Caja Diaria.`);
             };
 
@@ -19139,6 +19140,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 seleccionadas.forEach(id => delete next[id]);
                 setSelectedInvoices(next);
                 setShowPagoMasivoModal(false);
+                facturasPendientes.forEach(f => addProvHistorialEntry('Pago masivo', f, supplier, f.amount, pagoMasivoOrigen));
             };
 
             // ── EXPORT PDF ──
@@ -20221,6 +20223,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 dbGetKey('suppliers', 'categories').then(d => {
                     if (d && d.length > 0) { setCategories(d); window.__categoriesPrecargadas = d; }
                 });
+                dbGetKey('app_config', 'prov_historial').then(d => {
+                    if (d && d.length > 0) { setProvHistorial(d); window.__provHistorialPrecargado = d; }
+                });
                 // Cargar invoices de Supabase - leer de chunks
                 dbGetKey('invoices_data', 'meta').then(async meta => {
                     if (meta && meta.chunks > 0) {
@@ -20285,6 +20290,32 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             };
 
             const [showCategoryManager, setShowCategoryManager] = useState(false);
+            const [showProvHistorial, setShowProvHistorial] = useState(false);
+            const [provHistorial, setProvHistorial] = useState(() => window.__provHistorialPrecargado || []);
+            const [histTab, setHistTab] = useState('pendientes');
+            const [histSearch, setHistSearch] = useState('');
+
+            // Persist provHistorial
+            const saveProvHistorial = (entries) => {
+                setProvHistorial(entries);
+                window.__provHistorialPrecargado = entries;
+                dbUpsertOne('app_config', 'prov_historial', entries);
+            };
+            const addProvHistorialEntry = (accion, invoice, supplier, monto, extra='') => {
+                const entry = {
+                    id: Date.now() + Math.random(),
+                    fecha: new Date().toISOString().split('T')[0],
+                    hora: new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'}),
+                    proveedor: supplier,
+                    factura: invoice.number || '—',
+                    accion,
+                    monto: parseFloat(monto) || 0,
+                    notas: extra,
+                    user: currentUser?.name || ''
+                };
+                const updated = [entry, ...(window.__provHistorialPrecargado || [])].slice(0, 500);
+                saveProvHistorial(updated);
+            };
             const [newCategoryName, setNewCategoryName] = useState('');
             const [newSupplierInfo, setNewSupplierInfo] = useState({
                 ico: '', dic: '', address: '', phone: '', bankAccount: '', email: '', web: '', username: '', password: '', notes: ''
@@ -20421,9 +20452,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                 // Nota solo con números: 50,000 - 25,000 = 25,000
                 const fmtN = (n) => Math.round(n).toLocaleString('es-CZ');
+                const esCuota = invoice._isCuotaVirtual || invoice._cuotaOrig;
                 const notaCaja = esParcial
                     ? `${fmtN(montoTotal)} - ${fmtN(montoPagado)} = ${fmtN(saldoRestante)}`
-                    : `Factura ${invoice.number || ''} - ${supplier}`;
+                    : esCuota
+                        ? `Cuota ${invoice._cuotaOrig?.fecha ? new Date(invoice._cuotaOrig.fecha+'T12:00').toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'}) : ''} · Factura ${invoice.number||''} · ${supplier}`
+                        : `Factura ${invoice.number || ''} · ${supplier}`;
 
                 // Registrar en caja diaria - leer siempre de window.__cajaPrecargada
                 const allTx = window.__cajaPrecargada && Object.keys(window.__cajaPrecargada).length > 0
@@ -20450,8 +20484,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 window.__cajaPrecargada = allTx;
                 dbUpsertOne('cash_transactions', 'multiyear', allTx);
                 window.dispatchEvent(new CustomEvent('caja-updated', { detail: allTx }));
-
-                // Pago parcial: crear factura "pagada" con el monto parcial
+                // Registrar en historial de proveedores
+                addProvHistorialEntry(
+                    esParcial ? 'Pago parcial' : 'Pago',
+                    invoice, supplier, montoPagado,
+                    esParcial ? `${fmtN(saldoRestante)} pendiente` : ''
+                );
                 // y reducir el monto de la factura original al saldo restante
                 if (esParcial) {
                     const nuevaFacturaPagada = {
@@ -22263,10 +22301,81 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <h1 className={`text-4xl font-bold ${'text-slate-800'} mb-2`}>{t.title}</h1>
                                     <p className={`${'text-slate-600'}`}>{t.subtitle}</p>
                                 </div>
+                                <button onClick={()=>setShowProvHistorial(v=>!v)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium border ${showProvHistorial?'bg-indigo-600 text-white border-indigo-600':'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                                    📋 {showProvHistorial ? 'Ver facturas' : 'Historial global'}
+                                </button>
                             </div>
                         </div>
 
                         {/* Panel de Configuración (colapsable) */}
+
+                        {/* Historial Global */}
+                        {showProvHistorial && (() => {
+                            const pendientes = provHistorial.filter(e => e.accion === 'Cargada');
+                            const resueltas = provHistorial.filter(e => e.accion !== 'Cargada');
+                            const listBase = histTab === 'pendientes' ? pendientes : resueltas;
+                            const list = histSearch ? listBase.filter(e =>
+                                e.proveedor?.toLowerCase().includes(histSearch.toLowerCase()) ||
+                                e.factura?.toLowerCase().includes(histSearch.toLowerCase()) ||
+                                e.notas?.toLowerCase().includes(histSearch.toLowerCase())
+                            ) : listBase;
+                            return (
+                            <div className="mb-6 rounded-xl border shadow-sm bg-white border-slate-200 overflow-hidden">
+                                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-4 flex-wrap">
+                                    <h3 className="font-semibold text-slate-800">📋 Historial de acciones</h3>
+                                    <input type="text" value={histSearch} onChange={e=>setHistSearch(e.target.value)}
+                                        placeholder="🔍 Buscar proveedor, factura..."
+                                        className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg flex-1 max-w-xs"/>
+                                    <span className="text-xs text-slate-400">{list.length} registros</span>
+                                </div>
+                                {/* Subtabs */}
+                                <div className="flex border-b border-slate-200">
+                                    {[['pendientes','📤 Cargadas pendientes', pendientes.length],['resueltas','✅ Resueltas', resueltas.length]].map(([key,label,cnt])=>(
+                                        <button key={key} onClick={()=>setHistTab(key)}
+                                            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${histTab===key?'border-b-2 border-indigo-600 text-indigo-600 bg-indigo-50':'text-slate-500 hover:text-slate-700'}`}>
+                                            {label} <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-slate-100">{cnt}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                {list.length === 0 ? (
+                                    <p className="text-center py-10 text-slate-400 text-sm">Sin registros</p>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead><tr className="bg-slate-50">
+                                                {['FECHA','PROVEEDOR','FACTURA','ACCIÓN','MONTO','NOTAS','USUARIO'].map(h=>(
+                                                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500">{h}</th>
+                                                ))}
+                                            </tr></thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {list.map(e => (
+                                                    <tr key={e.id} className="hover:bg-slate-50">
+                                                        <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{e.fecha} {e.hora !== '—' ? e.hora : ''}</td>
+                                                        <td className="px-4 py-2.5 font-medium text-slate-800">{e.proveedor}</td>
+                                                        <td className="px-4 py-2.5 text-slate-600">{e.factura}</td>
+                                                        <td className="px-4 py-2.5">
+                                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                                e.accion==='Pago'?'bg-green-100 text-green-700':
+                                                                e.accion==='Pago masivo'?'bg-blue-100 text-blue-700':
+                                                                e.accion==='Pago parcial'?'bg-yellow-100 text-yellow-700':
+                                                                e.accion==='Cuota pagada'?'bg-teal-100 text-teal-700':
+                                                                e.accion==='Restablecido'?'bg-orange-100 text-orange-700':
+                                                                'bg-slate-100 text-slate-600'
+                                                            }`}>{e.accion}</span>
+                                                        </td>
+                                                        <td className="px-4 py-2.5 font-mono font-semibold text-slate-800">{Math.abs(e.monto).toLocaleString('es-CZ',{minimumFractionDigits:2})} CZK</td>
+                                                        <td className="px-4 py-2.5 text-xs text-slate-500">{e.notas||'—'}</td>
+                                                        <td className="px-4 py-2.5 text-xs text-slate-400">{e.user||'—'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                            );
+                        })()}
 
                             {/* Gestor de Proveedores */}
                             {showCategoryManager && (
@@ -27608,7 +27717,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <tr key={p.id} className={(p.cantidad||p.notas)?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
                                                         <td className={`px-3 py-2 font-medium ${txt}`}>
                                             {p.nombre}
-                                            {mercadoForm.sucursalDescuento && (() => { const real = getStock(p.id, mercadoForm.sucursalDescuento); const egr = parseFloat((vivoEgresos||{})[`${p.id}_${mercadoForm.sucursalDescuento}`]||0); const vivo = real - egr; return <span className={`text-xs ml-1 ${sub}`}>{real}{egr>0&&<span className='text-blue-500 font-semibold'> / ⚡{vivo}</span>}</span>; })()}
+                                            
                                         </td>
                                                         <td className="px-3 py-2 text-right">
                                                             <input type="number" step="1" value={p.cantidad}
@@ -29896,7 +30005,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                                     <tr key={p.id} className={(p.cantidad||p.notas)?(darkMode?'bg-orange-900/20':'bg-orange-50/60'):''}>
                                                         <td className={`px-3 py-2 font-medium ${txt}`}>
                                             {p.nombre}
-                                            {mercadoForm.sucursalDescuento && (() => { const real = getStock(p.id, mercadoForm.sucursalDescuento); const egr = parseFloat((vivoEgresos||{})[`${p.id}_${mercadoForm.sucursalDescuento}`]||0); const vivo = real - egr; return <span className={`text-xs ml-1 ${sub}`}>{real}{egr>0&&<span className='text-blue-500 font-semibold'> / ⚡{vivo}</span>}</span>; })()}
+                                            
                                         </td>
                                                         <td className="px-3 py-2 text-right">
                                                             <input type="number" step="1" value={p.cantidad}
