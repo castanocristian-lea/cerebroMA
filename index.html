@@ -19031,14 +19031,6 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         if (inv.vencimientos?.length > 0) return false;
                         return matchesSearch(inv);
                     }
-                }).sort((a, b) => {
-                    if (activeSubTab !== 'pending') return 0;
-                    const hoyStr = new Date().toISOString().split('T')[0];
-                    const aVencida = (a.dueDate||'') < hoyStr && a.dueDate;
-                    const bVencida = (b.dueDate||'') < hoyStr && b.dueDate;
-                    if (aVencida && !bVencida) return -1;
-                    if (!aVencida && bVencida) return 1;
-                    return (a.dueDate||'').localeCompare(b.dueDate||'');
                 }),
                 ...(activeSubTab === 'paid' ? cuotasPagadasVirtuales.filter(matchesSearch) : []),
             ];
