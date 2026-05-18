@@ -2038,7 +2038,7 @@ ${invoice.items.map(item => `
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro', 'seguridad'];
+            const DEFAULT_MODULE_ORDER = ['ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro', 'seguridad', 'temperatura'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
@@ -3536,6 +3536,15 @@ ${invoice.items.map(item => `
                                     desc: currentLanguage==='en'?'Your personal space for notes and ideas':'Tu espacio personal de notas e ideas',
                                     detail: 'Módulo en construcción. Próximamente disponible.',
                                 },
+                                temperatura: {
+                                    permission: 'temperatura',
+                                    navigate: 'temperatura',
+                                    color: 'cyan',
+                                    icon: <span className="text-3xl group-hover:brightness-0 group-hover:invert transition-all">🌡️</span>,
+                                    title: currentLanguage==='en'?'Temperature Control':currentLanguage==='cs'?'Kontrola Teploty':'Control de Temperatura',
+                                    desc: currentLanguage==='en'?'Daily equipment temperature log':currentLanguage==='cs'?'Denní záznam teploty zařízení':'Registro diario de temperatura de equipos',
+                                    detail: 'Control de temperatura de freezers y heladeras por sucursal. Exportable a PDF.',
+                                },
                             };
 
                             const colorMap = {
@@ -3548,6 +3557,7 @@ ${invoice.items.map(item => `
                                 teal:    { border: 'sm:hover:border-teal-500',    bg: darkMode ? 'bg-teal-900'    : 'bg-teal-100',    hover: 'sm:group-hover:bg-teal-600' },
                                 indigo:  { border: 'sm:hover:border-indigo-500',  bg: darkMode ? 'bg-indigo-900'  : 'bg-indigo-100',  hover: 'sm:group-hover:bg-indigo-600' },
                                 amber:   { border: 'sm:hover:border-amber-500',   bg: darkMode ? 'bg-amber-900'   : 'bg-amber-100',   hover: 'sm:group-hover:bg-amber-600' },
+                                cyan:    { border: 'sm:hover:border-cyan-500',    bg: darkMode ? 'bg-cyan-900'    : 'bg-cyan-100',    hover: 'sm:group-hover:bg-cyan-600' },
                             };
 
                             const EN_CONSTRUCCION = [];
@@ -3810,6 +3820,12 @@ ${invoice.items.map(item => `
                     )}
 
                     {/* Módulo: Seguimiento de Préstamos */}
+                    {activeModule === 'temperatura' && (
+                        <div className="flex-1 overflow-y-auto">
+                            <TemperaturaModule darkMode={darkMode} currentUser={currentUser} language={currentLanguage} onBack={() => setActiveModule('home')} />
+                        </div>
+                    )}
+
                     {activeModule === 'cocina' && (
                         <CocinaModule darkMode={darkMode} currentUser={currentUser} language={currentLanguage} onBack={() => setActiveModule('home')} />
                     )}
@@ -8785,6 +8801,7 @@ ${invoice.items.map(item => `
                                                 { key: 'calendario',  label: '📅 Agenda / Calendario' },
                                                 { key: 'stock',       label: '🏭 Almacén' },
                                                 { key: 'cocina',      label: '👨‍🍳 Gestión de Cocina' },
+                                                { key: 'temperatura', label: '🌡️ Control de Temperatura' },
                                                 { key: 'prestamos',   label: '🏦 Préstamos' },
                                                 { key: 'micerebro',   label: '🧠 Mi Cerebro' },
                                                 { key: 'config',      label: '⚙️ Gestión de Usuarios' },
@@ -30774,6 +30791,196 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
     };
     </script>
 
+
+
+    <script type="text/babel">
+    const TemperaturaModule = ({ darkMode = false, currentUser = null, language = 'es', onBack = null }) => {
+        const { useState, useEffect, useMemo } = React;
+        const bg   = darkMode ? 'bg-slate-900'  : 'bg-slate-50';
+        const card = darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200';
+        const txt  = darkMode ? 'text-white'     : 'text-slate-900';
+        const sub  = darkMode ? 'text-slate-400' : 'text-slate-500';
+        const inp  = `w-full px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-300'}`;
+
+        const isSuperAdmin = currentUser?.role === 'superadmin';
+        const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'superadmin' || currentUser?.permissions?.temperatura === 'editor';
+        const canRead = canEdit || currentUser?.permissions?.temperatura === 'read';
+        if (!canRead) return <div className="flex items-center justify-center min-h-screen flex-col gap-2"><span className="text-5xl">🔒</span><p className={`text-sm ${sub}`}>Sin acceso</p></div>;
+
+        const L = (es, en, cs) => language==='en'?en:language==='cs'?cs:es;
+        const hoy = new Date().toISOString().split('T')[0];
+
+        const [registros, setRegistros] = useState([]);
+        const [equipos, setEquipos] = useState([]);
+        const [sucursales, setSucursales] = useState([]);
+        const [loaded, setLoaded] = useState(false);
+        const [sucSel, setSucSel] = useState('');
+        const [showModal, setShowModal] = useState(false);
+        const [showEquipoModal, setShowEquipoModal] = useState(false);
+        const [form, setForm] = useState({ equipoId:'', fecha:hoy, temperatura:'', notas:'' });
+        const [equipoForm, setEquipoForm] = useState({ nombre:'', sucursalId:'', tipoMin:-25, tipoMax:-15, tipo:'freezer' });
+        const [vistaTab, setVistaTab] = useState('pendientes');
+
+        useEffect(() => {
+            Promise.all([
+                dbGetKey('app_config','temp_registros'),
+                dbGetKey('app_config','temp_equipos'),
+                dbGetKey('app_config','stock_sucursales'),
+            ]).then(([r,e,s]) => {
+                if(r) setRegistros(r);
+                if(e) setEquipos(e);
+                if(s) setSucursales(s);
+                else setSucursales([{id:1,nombre:'Vinohrady'},{id:2,nombre:'Malá Strana'}]);
+                setLoaded(true);
+            });
+        }, []);
+
+        const save = (key,val) => dbUpsertOne('app_config',key,val);
+        const saveRegistros = v => { setRegistros(v); save('temp_registros',v); };
+        const saveEquipos   = v => { setEquipos(v);   save('temp_equipos',v); };
+
+        const diasPendientes = useMemo(() => {
+            const pending = [];
+            const today = new Date(); today.setHours(0,0,0,0);
+            const toLocalDate = d => { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
+            equipos.forEach(eq => {
+                for(let i=0; i<=7; i++) {
+                    const d = new Date(today); d.setDate(d.getDate()-i);
+                    const ds = toLocalDate(d);
+                    if(!registros.some(r=>String(r.equipoId)===String(eq.id)&&r.fecha===ds))
+                        pending.push({equipo:eq, fecha:ds});
+                }
+            });
+            return pending.sort((a,b)=>b.fecha.localeCompare(a.fecha));
+        }, [equipos, registros]);
+
+        const equiposFiltrados = sucSel ? equipos.filter(e=>String(e.sucursalId)===String(sucSel)) : equipos;
+        const fmtFecha = f => f ? new Date(f+'T12:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+        const exportPDF = () => {
+            const title = L('Control de Temperatura de los Equipos de Malá Argenta SRO','Temperature Control of Malá Argenta SRO Equipment','Kontrola Teploty Zařízení Malá Argenta SRO');
+            const rows = registros.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(r => {
+                const eq = equipos.find(e=>String(e.id)===String(r.equipoId));
+                const suc = sucursales.find(s=>String(s.id)===String(eq?.sucursalId));
+                const ok = r.temperatura >= (eq?.tipoMin??-999) && r.temperatura <= (eq?.tipoMax??999);
+                return `<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:6px 8px">${r.fecha}</td><td style="padding:6px 8px">${suc?.nombre||'—'}</td><td style="padding:6px 8px">${eq?.nombre||'—'}</td><td style="padding:6px 8px;font-weight:bold;color:${ok?'#16a34a':'#dc2626'}">${r.temperatura}°C</td><td style="padding:6px 8px;color:${ok?'#16a34a':'#dc2626'}">${ok?'✓ OK':'✗ FUERA DE RANGO'}</td><td style="padding:6px 8px;color:#64748b">${r.notas||'—'}</td><td style="padding:6px 8px;color:#94a3b8">${r.user||'—'}</td></tr>`;
+            }).join('');
+            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;margin:20px;color:#1e293b}h1{color:#0891b2;font-size:18px;margin-bottom:4px}h2{color:#64748b;font-size:12px;font-weight:normal;margin-bottom:20px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0891b2;color:white;padding:8px;text-align:left}.footer{margin-top:20px;font-size:10px;color:#94a3b8;text-align:center}</style></head><body><h1>🌡️ ${title}</h1><h2>${L('Generado el','Generated on','Vygenerováno')}: ${new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'})}</h2><table><thead><tr><th>${L('Fecha','Date','Datum')}</th><th>${L('Sucursal','Branch','Pobočka')}</th><th>${L('Equipo','Equipment','Zařízení')}</th><th>°C</th><th>${L('Estado','Status','Stav')}</th><th>${L('Notas','Notes','Poznámky')}</th><th>${L('Usuario','User','Uživatel')}</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">Malá Argenta SRO · Control de Temperatura HACCP</div></body></html>`;
+            const w = window.open('','_blank'); w.document.write(html); w.document.close(); setTimeout(()=>w.print(),500);
+        };
+
+        if (!loaded) return <div className={`flex items-center justify-center min-h-screen ${bg}`}><div className="text-center"><div style={{width:32,height:32,border:'3px solid #0891b2',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.8s linear infinite',margin:'0 auto 12px'}}/><p className={`text-sm ${sub}`}>{L('Cargando...','Loading...','Načítání...')}</p></div><style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style></div>;
+
+        return (
+            <div className={`min-h-screen ${bg}`}>
+                <div className={`sticky top-0 z-10 border-b ${darkMode?'bg-slate-800 border-slate-700':'bg-white border-slate-200'} px-4 py-3`}>
+                    <div className="flex items-center gap-3 max-w-5xl mx-auto flex-wrap">
+                        {onBack && <button onClick={onBack} className={`text-sm ${sub}`}>←</button>}
+                        <span className="text-xl">🌡️</span>
+                        <h1 className={`font-bold ${txt} flex-1`}>{L('Control de Temperatura','Temperature Control','Kontrola Teploty')}</h1>
+                        <button onClick={exportPDF} className="px-3 py-1.5 text-xs font-medium bg-cyan-600 text-white rounded-lg">📄 PDF</button>
+                        {canEdit && <button onClick={()=>{setEquipoForm({nombre:'',sucursalId:String(sucursales[0]?.id||'1'),tipoMin:-25,tipoMax:-15,tipo:'freezer'});setShowEquipoModal(true);}} className={`px-3 py-1.5 text-xs font-medium border rounded-lg ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-600'}`}>⚙️ {L('Equipos','Equipment','Zařízení')}</button>}
+                        {canEdit && <button onClick={()=>{setForm({equipoId:String(equiposFiltrados[0]?.id||'1'),fecha:hoy,temperatura:'',notas:''});setShowModal(true);}} className="px-3 py-1.5 text-xs font-medium bg-cyan-600 text-white rounded-lg">+ {L('Registrar','Register','Zaznamenat')}</button>}
+                    </div>
+                </div>
+                <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+                    {diasPendientes.length > 0 && (
+                        <div className={`rounded-xl px-4 py-3 border-l-4 border-orange-400 ${darkMode?'bg-orange-900/20':'bg-orange-50'}`}>
+                            <p className="text-sm font-semibold text-orange-600">⚠️ {diasPendientes.length} {L('registros pendientes en los últimos 7 días','pending records in the last 7 days','čekajících záznamů za posledních 7 dní')}</p>
+                            <p className={`text-xs mt-1 ${sub}`}>{[...new Set(diasPendientes.map(p=>p.equipo.nombre))].join(' · ')}</p>
+                        </div>
+                    )}
+                    <div className="flex gap-2 overflow-x-auto pb-1" style={{scrollbarWidth:'none'}}>
+                        <button onClick={()=>setSucSel('')} className={`px-3 py-2 rounded-lg text-sm font-medium shrink-0 ${sucSel===''?'bg-cyan-500 text-white':darkMode?'bg-slate-700 text-slate-300':'bg-white border border-slate-200 text-slate-700'}`}>{L('Todas','All','Vše')}</button>
+                        {sucursales.map(s=><button key={s.id} onClick={()=>setSucSel(String(s.id))} className={`px-3 py-2 rounded-lg text-sm font-medium shrink-0 ${sucSel===String(s.id)?'bg-cyan-500 text-white':darkMode?'bg-slate-700 text-slate-300':'bg-white border border-slate-200 text-slate-700'}`}>🏪 {s.nombre}</button>)}
+                    </div>
+                    <div className={`flex rounded-xl overflow-hidden border ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                        {[['pendientes','⏳ '+L('Pendientes','Pending','Čekající')],['historial','📋 '+L('Historial','History','Historie')]].map(([key,label])=>(
+                            <button key={key} onClick={()=>setVistaTab(key)} className={`flex-1 py-2.5 text-sm font-medium ${vistaTab===key?(darkMode?'bg-cyan-800 text-cyan-100':'bg-cyan-50 text-cyan-700 border-b-2 border-cyan-500'):(darkMode?'bg-slate-800 text-slate-400':'bg-white text-slate-500')}`}>{label}</button>
+                        ))}
+                    </div>
+                    {vistaTab === 'pendientes' && (
+                        <div className="space-y-2">
+                            {diasPendientes.filter(p=>!sucSel||String(p.equipo.sucursalId)===sucSel).length === 0
+                                ? <div className={`rounded-xl border ${card} p-8 text-center`}><p className="text-3xl mb-2">✅</p><p className={`text-sm ${sub}`}>{L('Todo al día','All up to date','Vše aktuální')}</p></div>
+                                : diasPendientes.filter(p=>!sucSel||String(p.equipo.sucursalId)===sucSel).map((p,i)=>{
+                                    const suc=sucursales.find(s=>String(s.id)===String(p.equipo.sucursalId));
+                                    return <div key={i} className={`rounded-xl border ${card} p-4 flex items-center justify-between gap-3 flex-wrap`}><div><p className={`font-semibold text-sm ${txt}`}>{p.equipo.nombre} <span className={`text-xs font-normal ${sub}`}>· {suc?.nombre}</span></p><p className={`text-xs ${sub}`}>{fmtFecha(p.fecha)}</p></div><span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-600 font-semibold">⏳ {L('Pendiente','Pending','Čeká')}</span>{canEdit && <button onClick={()=>{setForm({equipoId:String(p.equipo.id),fecha:p.fecha,temperatura:'',notas:''});setShowModal(true);}} className="px-3 py-1.5 text-xs bg-cyan-500 text-white rounded-lg font-medium">+ {L('Registrar','Register','Zaznamenat')}</button>}</div>;
+                                })
+                            }
+                        </div>
+                    )}
+                    {vistaTab === 'historial' && (
+                        <div className={`rounded-xl border ${card} overflow-hidden`}>
+                            <div className="flex items-center justify-between px-4 py-3 border-b" style={{borderColor:darkMode?'#334155':'#e2e8f0'}}>
+                                <span className={`text-sm font-semibold ${txt}`}>{registros.length} {L('registros','records','záznamů')}</span>
+                                {isSuperAdmin && registros.length > 0 && <button onClick={()=>{if(confirm(L('¿Borrar TODO el historial? Solo superadmin.','Delete ALL history? Only superadmin.','Smazat VŠE? Pouze superadmin.'))) saveRegistros([]);}} className="text-xs text-red-500 hover:text-red-700">🗑 {L('Resetear','Reset','Resetovat')}</button>}
+                            </div>
+                            {registros.length === 0
+                                ? <p className={`text-center py-10 text-sm ${sub}`}>{L('Sin registros','No records','Žádné záznamy')}</p>
+                                : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className={darkMode?'bg-slate-700/50':'bg-slate-50'}>{[L('Fecha','Date','Datum'),L('Sucursal','Branch','Pobočka'),L('Equipo','Equipment','Zařízení'),'°C',L('Estado','Status','Stav'),L('Notas','Notes','Poznámky'),L('Usuario','User','Uživatel')].map(h=><th key={h} className={`px-4 py-3 text-left text-xs font-semibold ${sub}`}>{h}</th>)}</tr></thead>
+                                <tbody className={`divide-y ${darkMode?'divide-slate-700':'divide-slate-100'}`}>
+                                {registros.filter(r=>!sucSel||String(equipos.find(e=>String(e.id)===String(r.equipoId))?.sucursalId)===sucSel).sort((a,b)=>b.fecha.localeCompare(a.fecha)).map((r,i)=>{
+                                    const eq=equipos.find(e=>String(e.id)===String(r.equipoId));
+                                    const suc=sucursales.find(s=>String(s.id)===String(eq?.sucursalId));
+                                    const ok=r.temperatura>=(eq?.tipoMin??-999)&&r.temperatura<=(eq?.tipoMax??999);
+                                    return <tr key={i} className={ok?'':(darkMode?'bg-red-900/10':'bg-red-50/50')}><td className={`px-4 py-2.5 text-xs ${sub}`}>{fmtFecha(r.fecha)}</td><td className={`px-4 py-2.5 text-xs ${sub}`}>{suc?.nombre||'—'}</td><td className={`px-4 py-2.5 font-medium ${txt}`}>{eq?.nombre||'—'}</td><td className={`px-4 py-2.5 font-mono font-bold ${ok?'text-green-500':'text-red-500'}`}>{r.temperatura}°C</td><td className="px-4 py-2.5"><span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${ok?'bg-green-100 text-green-700':'bg-red-100 text-red-600'}`}>{ok?'✓ OK':'✗ Fuera de rango'}</span></td><td className={`px-4 py-2.5 text-xs ${sub}`}>{r.notas||'—'}</td><td className={`px-4 py-2.5 text-xs ${sub}`}>{r.user||'—'}</td></tr>;
+                                })}
+                                </tbody></table></div>
+                            }
+                        </div>
+                    )}
+                </div>
+                {showModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className={`rounded-2xl shadow-2xl w-full max-w-sm ${darkMode?'bg-slate-800':'bg-white'} p-6 space-y-4`}>
+                            <h3 className={`font-bold text-lg ${txt}`}>🌡️ {L('Registrar Temperatura','Register Temperature','Zaznamenat Teplotu')}</h3>
+                            <div><label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('EQUIPO','EQUIPMENT','ZAŘÍZENÍ')} *</label>
+                            <select value={form.equipoId} onChange={e=>setForm(f=>({...f,equipoId:e.target.value}))} className={inp}>
+                                <option value="">{L('Seleccionar...','Select...','Vybrat...')}</option>
+                                {equiposFiltrados.map(e=>{const s=sucursales.find(x=>String(x.id)===String(e.sucursalId));return <option key={e.id} value={e.id}>{e.nombre}{s?' ('+s.nombre+')':''}</option>;})}
+                            </select></div>
+                            <div><label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('FECHA','DATE','DATUM')} *</label><input type="date" value={form.fecha} onChange={e=>setForm(f=>({...f,fecha:e.target.value}))} className={inp}/></div>
+                            <div><label className={`block text-xs font-semibold mb-1 ${sub}`}>TEMPERATURA (°C) *</label>
+                            <input type="number" step="0.1" value={form.temperatura} onChange={e=>setForm(f=>({...f,temperatura:e.target.value}))} placeholder="-18" className={inp}/>
+                            {form.equipoId && form.temperatura!=='' && (()=>{const eq=equipos.find(e=>String(e.id)===String(form.equipoId));const t=parseFloat(form.temperatura);const ok=t>=(eq?.tipoMin??-999)&&t<=(eq?.tipoMax??999);return <p className={`text-xs mt-1 font-semibold ${ok?'text-green-500':'text-red-500'}`}>{ok?`✓ ${L('Dentro del rango','Within range','V rozsahu')} (${eq?.tipoMin}°C – ${eq?.tipoMax}°C)`:`✗ ${L('Fuera del rango','Out of range','Mimo rozsah')} (${eq?.tipoMin}°C – ${eq?.tipoMax}°C)`};</p>;})()}
+                            </div>
+                            <div><label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('NOTAS','NOTES','POZNÁMKY')}</label><input type="text" value={form.notas} onChange={e=>setForm(f=>({...f,notas:e.target.value}))} placeholder={L('Observaciones...','Observations...','Poznámky...')} className={inp}/></div>
+                            <div className="flex gap-3">
+                                <button onClick={()=>setShowModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cancelar','Cancel','Zrušit')}</button>
+                                <button onClick={()=>{if(!form.equipoId||!form.fecha||form.temperatura==='') return alert(L('Completá todos los campos','Fill in all fields','Vyplňte všechna pole'));const nuevo={id:Date.now()+Math.random(),equipoId:form.equipoId,fecha:form.fecha,temperatura:parseFloat(form.temperatura),notas:form.notas,user:currentUser?.name||''};saveRegistros([nuevo,...registros]);setShowModal(false);}} className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm font-medium">💾 {L('Guardar','Save','Uložit')}</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {showEquipoModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className={`rounded-2xl shadow-2xl w-full max-w-sm ${darkMode?'bg-slate-800':'bg-white'} p-6 space-y-4 max-h-[90vh] overflow-y-auto`}>
+                            <h3 className={`font-bold text-lg ${txt}`}>⚙️ {L('Gestión de Equipos','Equipment Management','Správa Zařízení')}</h3>
+                            {equipos.length > 0 && <div className="space-y-2">{equipos.map(e=>{const s=sucursales.find(x=>String(x.id)===String(e.sucursalId));return <div key={e.id} className={`rounded-lg border p-3 flex items-center justify-between ${darkMode?'border-slate-700 bg-slate-700/30':'border-slate-200'}`}><div><p className={`text-sm font-medium ${txt}`}>{e.nombre}</p><p className={`text-xs ${sub}`}>{s?.nombre} · {e.tipoMin}°C a {e.tipoMax}°C</p></div>{isSuperAdmin && <button onClick={()=>saveEquipos(equipos.filter(x=>String(x.id)!==String(e.id)))} className="text-red-400 text-xs hover:text-red-600">🗑</button>}</div>;})}</div>}
+                            <div className={`border-t pt-4 ${darkMode?'border-slate-700':'border-slate-200'}`}>
+                                <p className={`text-xs font-semibold ${sub} mb-3`}>{L('NUEVO EQUIPO','NEW EQUIPMENT','NOVÉ ZAŘÍZENÍ')}</p>
+                                <div className="space-y-3">
+                                    <input type="text" value={equipoForm.nombre} onChange={e=>setEquipoForm(f=>({...f,nombre:e.target.value}))} placeholder={L('Nombre del equipo','Equipment name','Název zařízení')} className={inp}/>
+                                    <select value={equipoForm.sucursalId} onChange={e=>setEquipoForm(f=>({...f,sucursalId:e.target.value}))} className={inp}>{sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}</select>
+                                    <select value={equipoForm.tipo} onChange={e=>setEquipoForm(f=>({...f,tipo:e.target.value,tipoMin:e.target.value==='freezer'?-25:0,tipoMax:e.target.value==='freezer'?-15:8}))} className={inp}><option value="freezer">❄️ Freezer</option><option value="heladera">🧊 Heladera</option><option value="otro">📦 Otro</option></select>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1"><label className={`text-xs ${sub}`}>Mín °C</label><input type="number" value={equipoForm.tipoMin} onChange={e=>setEquipoForm(f=>({...f,tipoMin:parseFloat(e.target.value)||0}))} className={inp}/></div>
+                                        <div className="flex-1"><label className={`text-xs ${sub}`}>Máx °C</label><input type="number" value={equipoForm.tipoMax} onChange={e=>setEquipoForm(f=>({...f,tipoMax:parseFloat(e.target.value)||0}))} className={inp}/></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <button onClick={()=>setShowEquipoModal(false)} className={`flex-1 px-4 py-2 border rounded-lg text-sm ${darkMode?'border-slate-600 text-slate-300':'border-slate-300 text-slate-700'}`}>{L('Cerrar','Close','Zavřít')}</button>
+                                <button onClick={()=>{if(!equipoForm.nombre.trim()) return;const nuevo={id:Date.now(),nombre:equipoForm.nombre.trim(),sucursalId:equipoForm.sucursalId||String(sucursales[0]?.id||'1'),tipo:equipoForm.tipo,tipoMin:equipoForm.tipoMin,tipoMax:equipoForm.tipoMax};saveEquipos([...equipos,nuevo]);setEquipoForm({nombre:'',sucursalId:String(sucursales[0]?.id||'1'),tipoMin:-25,tipoMax:-15,tipo:'freezer'});}} className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm font-medium">+ {L('Agregar','Add','Přidat')}</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+    </script>
 
 </body>
 </html>
