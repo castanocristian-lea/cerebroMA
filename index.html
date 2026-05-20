@@ -20825,32 +20825,25 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
             useEffect(() => {
                 const loadData = async () => {
                     try {
-                        // Primero intentar window precargado
+                        // Mostrar precargado inmediatamente
                         if (window.__invoicesPrecargadas?.length > 0) {
                             setInvoices(window.__invoicesPrecargadas);
-                            return;
                         }
-                        // Luego Supabase
+                        // Siempre buscar fresh desde Supabase
                         const meta = await dbGetKey('invoices_data', 'meta');
                         if (meta && meta.chunks > 0) {
                             const allChunks = await Promise.all(
                                 Array.from({length: meta.chunks}, (_, i) => dbGetKey('invoices_data', `chunk_${i}`))
                             );
                             const all = allChunks.flat().filter(Boolean);
-                            // Deduplicar por ID (chunks pueden tener duplicados por timing)
                             const seen = new Set();
                             const deduped = all.filter(inv => { if (seen.has(inv.id)) return false; seen.add(inv.id); return true; });
-                            if (deduped.length > 0) { setInvoices(deduped); window.__invoicesPrecargadas = deduped; window.__invoicesFreshLoaded = true; return; }
+                            if (deduped.length > 0) { setInvoices(deduped); window.__invoicesPrecargadas = deduped; }
                         }
-                        const d = await dbGetKey('invoices_data', 'main');
-                        if (d && d.length > 0) {
-                            setInvoices(d);
-                            window.__invoicesPrecargadas = d;
-                            return;
-                        }
-                        // Sin datos en Supabase
+                        window.__invoicesFreshLoaded = true;
                     } catch (error) {
-                        console.log('Primera carga, sin datos previos');
+                        console.log('Error cargando invoices:', error);
+                        window.__invoicesFreshLoaded = true;
                     }
                 };
                 loadData();
