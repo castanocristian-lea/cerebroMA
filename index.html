@@ -4570,13 +4570,12 @@ ${invoice.items.map(item => `
                 } else {
                     const newId = Date.now();
                     saveEvs([...eventos,{...baseEv,id:newId}]);
-                    // Notificar a cada empleado asignado
-                    try {
-                        await Promise.all((form.empleadoIds||[]).map(eid =>
-                            notifPush(`calendarioNotif_${empIdToUserId(eid)}`, { id: newId, tipo: baseEv.tipo, fecha: baseEv.fecha, fechaFin: baseEv.fechaFin||'', diasSueltos: baseEv.diasSueltos||[], visto: false })
-                        ));
-                        window.dispatchEvent(new Event('calendarioNotifUpdate'));
-                    } catch(e) {}
+                    // Cerrar modal inmediatamente para que el evento aparezca sin esperar la red
+                    setShowModal(false);
+                    // Notificar en background (no bloquea UI)
+                    Promise.all((form.empleadoIds||[]).map(eid =>
+                        notifPush(`calendarioNotif_${empIdToUserId(eid)}`, { id: newId, tipo: baseEv.tipo, fecha: baseEv.fecha, fechaFin: baseEv.fechaFin||'', diasSueltos: baseEv.diasSueltos||[], visto: false })
+                    )).then(() => window.dispatchEvent(new Event('calendarioNotifUpdate'))).catch(()=>{});
                 }
                 // Carga automática de horas si está marcado
                 if(form.cargarHoras && !form.todoDia && form.horaInicio && form.horaFin && (form.empleadoIds||[]).length > 0) {
@@ -4599,6 +4598,7 @@ ${invoice.items.map(item => `
                     }
                 }
                 } catch(e) { console.error('Error al guardar evento:', e); }
+                // Para edición o si el modal no se cerró en el bloque nuevo arriba
                 setShowModal(false);
             };
 
