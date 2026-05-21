@@ -26222,10 +26222,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const cats = batch['stock_categorias'];
                 const sucList = sucs || [{ id: 1, nombre: 'Vinohrady' }, { id: 2, nombre: 'Malá Strana' }];
                 setSucursales(sucList);
-                setProductos(prods || []);
+                const rawProds = prods || [];
+                const _seen = new Set(); let _needsSave = false;
+                const dedupedProds = rawProds.map(p => { if(!_seen.has(String(p.id))){ _seen.add(String(p.id)); return p; } _needsSave=true; return {...p,id:Date.now()+Math.floor(Math.random()*1e6)}; });
+                if(_needsSave) dbUpsertOne('app_config','stock_productos',dedupedProds);
+                setProductos(dedupedProds);
                 // Migrar keys viejas (Math.round) a keys nuevas (String) al cargar
                 const nivelRaw = niveles || {};
-                const prodList = prods || [];
+                const prodList = dedupedProds;
                 let migrado = false;
                 const nivelMigrado = { ...nivelRaw };
                 prodList.forEach(p => {
@@ -26275,7 +26279,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const getStock = (pId, sId) => {
             const k1 = `${String(pId)}_${String(sId)}`;
             const k2 = `${Math.round(parseFloat(pId))}_${String(sId)}`;
-            return parseFloat(stock[k1] || stock[k2] || 0);
+            return parseFloat(stock[k1] !== undefined ? stock[k1] : (stock[k2] !== undefined ? stock[k2] : 0));
         };
 
         // ── BRANCHES ──
@@ -27608,7 +27612,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="flex flex-wrap gap-2">
                                 {canEdit && <button onClick={()=>setShowCatModal(true)} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>🏷️ {L('Categorías','Categories')}</button>}
                                 <button onClick={()=>{ const XLSX = window.XLSX; const data = [['nombre','categoria','unidad','minimo','alias1','alias2','alias3'],...productos.map(p=>[p.nombre,p.categoria||'',p.unidad||'unidad',p.minimo||'',...(p.aliases||[]),'','',''].slice(0,7))]; const ws = XLSX.utils.aoa_to_sheet(data); ws['!cols'] = [{wch:30},{wch:15},{wch:10},{wch:8},{wch:20},{wch:20},{wch:20}]; const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Productos'); XLSX.writeFile(wb, 'productos.xlsx'); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>⬇️ Excel</button>
-                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; rows.forEach(row=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:Date.now(),nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
+                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; const _tsBase=Date.now(); rows.forEach((row,_ri)=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:_tsBase+_ri,nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
                                 {canEdit && <button onClick={() => { setEditingProd(null); setProdForm({ nombre: '', categoria: '', unidad: 'unidad', minimo: '', aliases: [] }); setShowProdModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nuevo producto','+ New product')}</button>}
                                 {isSuperAdmin && productos.length > 0 && <button onClick={()=>{ if(confirm(L(`¿Borrar TODOS los ${productos.length} productos? No se puede deshacer.`,`Delete ALL ${productos.length} products? Cannot be undone.`))) saveProductos([]); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200">🗑 {L('Borrar todos','Delete all')}</button>}
                             </div>
@@ -28619,10 +28623,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 const cats = batch['almacen_categorias'];
                 const sucList = sucs || [{ id: 1, nombre: 'Vinohrady' }, { id: 2, nombre: 'Malá Strana' }];
                 setSucursales(sucList);
-                setProductos(prods || []);
+                const rawProds = prods || [];
+                const _seen = new Set(); let _needsSave = false;
+                const dedupedProds = rawProds.map(p => { if(!_seen.has(String(p.id))){ _seen.add(String(p.id)); return p; } _needsSave=true; return {...p,id:Date.now()+Math.floor(Math.random()*1e6)}; });
+                if(_needsSave) dbUpsertOne('app_config','almacen_productos',dedupedProds);
+                setProductos(dedupedProds);
                 // Migrar keys viejas (Math.round) a keys nuevas (String) al cargar
                 const nivelRaw = niveles || {};
-                const prodList = prods || [];
+                const prodList = dedupedProds;
                 let migrado = false;
                 const nivelMigrado = { ...nivelRaw };
                 prodList.forEach(p => {
@@ -28669,7 +28677,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const getStock = (pId, sId) => {
             const k1 = `${String(pId)}_${String(sId)}`;
             const k2 = `${Math.round(parseFloat(pId))}_${String(sId)}`;
-            return parseFloat(stock[k1] || stock[k2] || 0);
+            return parseFloat(stock[k1] !== undefined ? stock[k1] : (stock[k2] !== undefined ? stock[k2] : 0));
         };
 
         // ── BRANCHES ──
@@ -29923,7 +29931,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="flex flex-wrap gap-2">
                                 {canEdit && <button onClick={()=>setShowCatModal(true)} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-700'}`}>🏷️ {L('Categorías','Categories')}</button>}
                                 <button onClick={()=>{ const XLSX = window.XLSX; const data = [['nombre','categoria','unidad','minimo','alias1','alias2','alias3'],...productos.map(p=>[p.nombre,p.categoria||'',p.unidad||'unidad',p.minimo||'',...(p.aliases||[]),'','',''].slice(0,7))]; const ws = XLSX.utils.aoa_to_sheet(data); ws['!cols'] = [{wch:30},{wch:15},{wch:10},{wch:8},{wch:20},{wch:20},{wch:20}]; const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Productos'); XLSX.writeFile(wb, 'productos.xlsx'); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-700 text-slate-300':'bg-slate-100 text-slate-600'}`}>⬇️ Excel</button>
-                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; rows.forEach(row=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:Date.now(),nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
+                                {canEdit && <button onClick={()=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls'; inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=ev=>{ try { const XLSX=window.XLSX; const wb=XLSX.read(ev.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{defval:''}); let creados=0,actualizados=0; let lista=[...productos]; const _tsBase=Date.now(); rows.forEach((row,_ri)=>{ const nombre=String(row.nombre||row.Nombre||'').trim(); if(!nombre) return; const aliases=[row.alias1,row.alias2,row.alias3].map(a=>String(a||'').trim()).filter(Boolean); const idx=lista.findIndex(p=>p.nombre.toLowerCase()===nombre.toLowerCase()); if(idx>=0){ lista[idx]={...lista[idx],categoria:String(row.categoria||lista[idx].categoria||''),unidad:String(row.unidad||lista[idx].unidad||'unidad'),minimo:String(row.minimo||lista[idx].minimo||''),aliases:[...new Set([...(lista[idx].aliases||[]),...aliases])]}; actualizados++; } else { lista.push({id:_tsBase+_ri,nombre,categoria:String(row.categoria||''),unidad:String(row.unidad||'unidad'),minimo:String(row.minimo||''),aliases}); creados++; } }); saveProductos(lista); alert(L('Importado: '+creados+' nuevos, '+actualizados+' actualizados','Imported: '+creados+' new, '+actualizados+' updated')); } catch(err){ alert('Error: '+err.message); } }; reader.readAsArrayBuffer(f); }; inp.click(); }} className={`px-3 py-2 rounded-lg text-sm font-medium ${darkMode?'bg-slate-600 text-white':'bg-slate-200 text-slate-700'}`}>⬆️ {L('Importar Excel','Import Excel')}</button>}
                                 {canEdit && <button onClick={() => { setEditingProd(null); setProdForm({ nombre: '', categoria: '', unidad: 'unidad', minimo: '', aliases: [] }); setShowProdModal(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('+ Nuevo producto','+ New product')}</button>}
                                 {isAdmin && productos.length > 0 && <button onClick={()=>{ if(confirm(L(`¿Borrar TODOS los ${productos.length} productos? No se puede deshacer.`,`Delete ALL ${productos.length} products? Cannot be undone.`))) saveProductos([]); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 hover:bg-red-200">🗑 {L('Borrar todos','Delete all')}</button>}
                             </div>
