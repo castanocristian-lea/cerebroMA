@@ -2406,11 +2406,18 @@ ${invoice.items.map(item => `
                             if (data.cashTransactionsMultiYear && Object.keys(data.cashTransactionsMultiYear).length > 0) {
                                 dbUpsertOne('cash_transactions', 'multiyear', data.cashTransactionsMultiYear);
                             }
-                            // Restaurar datos de Cocina a Supabase (app_config)
-                            const cocinaKeys = ['stock_sucursales','stock_productos','stock_niveles','stock_movimientos','stock_envios','stock_categorias','cocina_recetas'];
+                            // Restaurar datos de Cocina y Almacen a Supabase (app_config)
+                            const cocinaKeys = ['stock_sucursales','stock_productos','stock_niveles','stock_movimientos','stock_envios','stock_categorias','cocina_recetas',
+                                'almacen_sucursales','almacen_productos','almacen_niveles','almacen_movimientos','almacen_envios','almacen_categorias'];
                             cocinaKeys.forEach(k => {
                                 if (data[k] !== undefined) dbUpsertOne('app_config', k, data[k]);
                             });
+                            // Restaurar app_config completo (preferencias, autoLogout, orden módulos, etc.)
+                            if (data.app_config && typeof data.app_config === 'object') {
+                                Object.entries(data.app_config).forEach(([k, v]) => {
+                                    dbUpsertOne('app_config', k, v);
+                                });
+                            }
 
                             // Subir datos de proveedores a Supabase
                             const suppKeys = ['invoices','categories','suppliersInfo','salesInvoices','salesProducts','salesClients','salesHolders','invNotes','taxRates'];
@@ -6757,6 +6764,15 @@ ${invoice.items.map(item => `
                 stock_envios:           appConfig['stock_envios'] || [],
                 stock_categorias:       appConfig['stock_categorias'] || [],
                 cocina_recetas:         appConfig['cocina_recetas'] || [],
+                // Almacen
+                almacen_sucursales:     appConfig['almacen_sucursales'] || [],
+                almacen_productos:      appConfig['almacen_productos'] || [],
+                almacen_niveles:        appConfig['almacen_niveles'] || {},
+                almacen_movimientos:    appConfig['almacen_movimientos'] || [],
+                almacen_envios:         appConfig['almacen_envios'] || [],
+                almacen_categorias:     appConfig['almacen_categorias'] || [],
+                // app_config completo
+                app_config:             Object.fromEntries((appR.data||[]).map(r => [r.id, r.data])),
             };
             // Agregar cash_planning
             (cashPlanR.data||[]).forEach(r => { data['caja_'+r.id] = r.data; });
