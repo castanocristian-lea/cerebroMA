@@ -4767,7 +4767,8 @@ ${invoice.items.map(item => `
                                     ))}
                                     {eventosEspeciales.map((ee,i)=>(
                                         <button key={'ee'+i} onClick={()=>{setFiltroTipo(f=>f.includes(ee.nombre)?f.filter(x=>x!==ee.nombre):[...f,ee.nombre]);}}
-                                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium border-2 transition-all ${filtroTipo.includes(ee.nombre)?'bg-yellow-500 border-yellow-500 text-white':'border-yellow-500 text-yellow-600'}`}>
+                                            className="px-2.5 py-0.5 rounded-full text-xs font-medium border-2 transition-all"
+                                            style={filtroTipo.includes(ee.nombre)?{backgroundColor:ee.color||'#C0A060',borderColor:ee.color||'#C0A060',color:'white'}:{borderColor:ee.color||'#C0A060',color:ee.color||'#C0A060',backgroundColor:'transparent'}}>
                                             ⭐ {ee.nombre}
                                         </button>
                                     ))}
@@ -5341,7 +5342,7 @@ ${invoice.items.map(item => `
                                         <label className={`block text-xs font-medium mb-1 ${sub}`}>⭐ Eventos especiales</label>
                                         <div className="flex flex-wrap gap-1.5">
                                             {eventosEspeciales.map((ee,i)=>(
-                                                <button key={i} type="button" onClick={()=>setForm(f=>({...f,tipo:ee.nombre,horaInicio:ee.horaInicio||f.horaInicio,horaFin:ee.horaFin||f.horaFin,notas:ee.notas||f.notas,todoDia:!ee.horaInicio}))}
+                                                <button key={i} type="button" style={form.tipo===ee.nombre?{backgroundColor:ee.color||'#C0A060',borderColor:ee.color||'#C0A060',color:'white'}:{borderColor:ee.color||'#C0A060',color:ee.color||'#C0A060'}} onClick={()=>setForm(f=>({...f,tipo:ee.nombre,horaInicio:ee.horaInicio||f.horaInicio,horaFin:ee.horaFin||f.horaFin,notas:ee.notas||f.notas,todoDia:!ee.horaInicio}))}
                                                     className={`px-2.5 py-1 rounded-full text-xs font-medium border-2 transition-all ${form.tipo===ee.nombre?(darkMode?'bg-yellow-600 text-white border-yellow-600':'bg-yellow-500 text-white border-yellow-500'):(darkMode?'border-yellow-600 text-yellow-400':'border-yellow-500 text-yellow-700')}`}>
                                                     ⭐ {ee.nombre}
                                                 </button>
@@ -5805,6 +5806,7 @@ ${invoice.items.map(item => `
                                                 <div><label className={`text-xs ${sub}`}>Hora fin</label><input type="time" value={ee.horaFin||''} onChange={e=>setEventosEspeciales(prev=>prev.map((x,j)=>j===i?{...x,horaFin:e.target.value}:x))} onBlur={()=>saveEvEsp(eventosEspeciales)} className={`w-full px-2 py-1 text-xs border rounded ${darkMode?'bg-slate-600 border-slate-500 text-white':'border-slate-300'}`} style={{maxWidth:'160px'}}/></div>
                                             </div>
                                             <div><label className={`text-xs ${sub}`}>Notas pre-cargadas</label><input value={ee.notas||''} onChange={e=>setEventosEspeciales(prev=>prev.map((x,j)=>j===i?{...x,notas:e.target.value}:x))} onBlur={()=>saveEvEsp(eventosEspeciales)} className={`w-full px-2 py-1 text-xs border rounded ${darkMode?'bg-slate-600 border-slate-500 text-white':'border-slate-300'}`} placeholder="Notas automáticas..."/></div>
+                                            <div><label className={`text-xs ${sub}`}>Color</label><div className="flex gap-1.5 mt-1 flex-wrap">{['#C0A060','#8B9BB4','#7E9E8A','#B08090','#7BA7BC','#A89070','#9B8BB4','#6B9E9E'].map(c=><button key={c} type="button" onClick={()=>{const updated=eventosEspeciales.map((x,j)=>j===i?{...x,color:c}:x);setEventosEspeciales(updated);saveEvEsp(updated);}} style={{width:20,height:20,borderRadius:'50%',backgroundColor:c,border:ee.color===c?'3px solid #334155':'2px solid transparent',cursor:'pointer'}} />)}</div></div>
                                         </div>
                                     ))}
                                 </div>
@@ -5815,7 +5817,8 @@ ${invoice.items.map(item => `
                                         <div><label className={`text-xs ${sub}`}>Hora fin</label><input type="time" value={newEvEsp.horaFin||''} onChange={e=>setNewEvEsp(f=>({...f,horaFin:e.target.value}))} className={`w-full px-2 py-1.5 text-sm border rounded-lg ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-300'}`} style={{maxWidth:'160px'}}/></div>
                                     </div>
                                     <input value={newEvEsp.notas||''} onChange={e=>setNewEvEsp(f=>({...f,notas:e.target.value}))} placeholder="Notas pre-cargadas (opcional)" className={`w-full px-3 py-2 border rounded-lg text-sm ${darkMode?'bg-slate-700 border-slate-600 text-white placeholder-slate-500':'bg-white border-slate-300 placeholder-slate-400'}`}/>
-                                    <button onClick={()=>{if(newEvEsp.nombre.trim()){saveEvEsp([...eventosEspeciales,{...newEvEsp}]);setNewEvEsp({nombre:'',horaInicio:'',horaFin:'',notas:''});}}} className="w-full px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium">⭐ Agregar evento especial</button>
+                                    <div><label className={`text-xs ${sub}`}>Color</label><div className="flex gap-1.5 mt-1 flex-wrap">{['#C0A060','#8B9BB4','#7E9E8A','#B08090','#7BA7BC','#A89070','#9B8BB4','#6B9E9E'].map(c=><button key={c} type="button" onClick={()=>setNewEvEsp(f=>({...f,color:c}))} style={{width:20,height:20,borderRadius:'50%',backgroundColor:c,border:newEvEsp.color===c?'3px solid #334155':'2px solid transparent',cursor:'pointer'}} />)}</div></div>
+                                    <button onClick={()=>{if(newEvEsp.nombre.trim()){saveEvEsp([...eventosEspeciales,{...newEvEsp}]);setNewEvEsp({nombre:'',horaInicio:'',horaFin:'',notas:'',color:''});}}} className="w-full px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium">⭐ Agregar evento especial</button>
                                 </div>
                             </div>
                             </div>
