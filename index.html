@@ -2439,10 +2439,9 @@ ${invoice.items.map(item => `
                 event.target.value = '';
             };
             
-            const handleLogin = (e) => {
+            const handleLogin = async (e) => {
                 e.preventDefault();
-                
-                // Obtener usuarios del localStorage
+                if (window.__dataReadyPromise) await window.__dataReadyPromise;
                 const systemUsers = (window.__systemUsersPrecargados || []);
                 
                 // Si no hay usuarios, crear usuario admin por defecto
@@ -2480,7 +2479,7 @@ ${invoice.items.map(item => `
                 }
 
                 // Validar PIN
-                if (user.pin === pinInput) {
+                if (String(user.pin).trim() === String(pinInput).trim()) {
                     const userConTs = {...user, loginTs: Date.now()};
                     setCurrentUser(userConTs);
                     window.__currentUserId = user.id;
@@ -5426,7 +5425,7 @@ ${invoice.items.map(item => `
                                         <input type="checkbox" checked={form.cargarHoras||false} onChange={e=>setForm({...form,cargarHoras:e.target.checked})} className="w-4 h-4 accent-teal-600"/>
                                         <div className="flex-1">
                                             <p className={`text-xs font-semibold ${form.cargarHoras?(darkMode?'text-teal-300':'text-teal-700'):txt}`}>⏱️ Cargar horas automáticamente</p>
-                                            <p className={`text-xs ${sub}`}>{form.horaInicio&&form.horaFin?(()=>{const [h1,m1]=form.horaInicio.split(':').map(Number),[h2,m2]=form.horaFin.split(':').map(Number),m=(h2*60+m2)-(h1*60+m1);return m>0?(Math.round(m/60*2)/2)+'h como horas normales':'—';})():'Ingresá horario primero'}</p>
+                                            <p className={`text-xs ${sub}`}>{form.horaInicio&&form.horaFin?(()=>{const [h1,m1]=form.horaInicio.split(':').map(Number),[h2,m2]=form.horaFin.split(':').map(Number),m=(h2*60+m2)-(h1*60+m1);return m>0?(Math.round(m/60*2)/2)+'h cargadas como normales':'—';})():'Ingresá horario primero'}</p>
                                         </div>
                                     </label>
                                 )}
@@ -6809,7 +6808,7 @@ ${invoice.items.map(item => `
                 const users = window.__systemUsersPrecargados || [];
                 const user = users.find(u => String(u.id) === String(currentUser?.id));
                 if (!user) { setPinError('Usuario no encontrado'); return; }
-                if (user.pin === pinInput) {
+                if (String(user.pin).trim() === String(pinInput).trim()) {
                     setPinVerificado(true);
                 } else {
                     setPinError('PIN incorrecto');
