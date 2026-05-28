@@ -8223,16 +8223,12 @@ ${invoice.items.map(item => `
             });
             const [usersLoaded, setUsersLoaded] = useState(() => !!(window.__systemUsersPrecargados?.length));
             const [showUserModal, setShowUserModal] = useState(false);
-            // Cargar usuarios desde Supabase al abrir el módulo
+            // Cargar usuarios SIEMPRE frescos desde Supabase al abrir el módulo
             useEffect(() => {
-                if (users.length === 0) {
-                    dbGetAll('system_users').then(d => {
-                        if (d?.length) { setUsers(d); window.__systemUsersPrecargados = d; }
-                        setUsersLoaded(true);
-                    });
-                } else {
+                dbGetAll('system_users').then(d => {
+                    if (d?.length) { setUsers(d); window.__systemUsersPrecargados = d; }
                     setUsersLoaded(true);
-                }
+                });
             }, []);
             const [editingUser, setEditingUser] = useState(null);
             const [userForm, setUserForm] = useState({
