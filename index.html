@@ -1724,14 +1724,12 @@ ${invoice.items.map(item => `
                 const handler = () => {
                     setSupabaseReady(true);
                     cargarCompartidas();
-                    // Actualizar currentUser con permisos frescos de Supabase
                     setCurrentUser(prev => {
                         if (!prev) return prev;
                         const fresh = (window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(prev.id));
                         if (!fresh) return prev;
-                        const PKEYS = ['caja','ventas','proveedores','sueldos','misueldo','prestamos','calendario','micerebro','credenciales','codigos','seguridad','cocina','almacen','temperatura','exportImport','resetStock'];
-                        const base = Object.fromEntries(PKEYS.map(k=>[k,'none']));
-                        const perms = fresh.role==='superadmin' ? fresh.permissions : {...base,...(fresh.permissions||{})};
+                        const base = Object.fromEntries(['caja','ventas','proveedores','sueldos','misueldo','prestamos','calendario','micerebro','credenciales','codigos','seguridad','cocina','almacen','temperatura','exportImport','resetStock'].map(k=>[k,'none']));
+                        const perms = fresh.role==='superadmin' ? (fresh.permissions||{}) : {...base,...(fresh.permissions||{})};
                         return {...prev, ...fresh, permissions: perms, loginTs: prev.loginTs};
                     });
                 };
