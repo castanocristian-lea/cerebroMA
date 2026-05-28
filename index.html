@@ -258,7 +258,7 @@
                 const _calEvs = calEv.data?.map(r=>r.data) || []; set('calendarioEventos', _calEvs); window.__calendarioEventosPrecargados = _calEvs;
                 set('calendarioHoras',    calH.data?.map(r=>r.data) || []);
                 set('credencialesData',   creds.data?.map(r=>r.data) || []);
-                set('systemUsers',        sysU.data?.map(r=>r.data) || []);
+                set('systemUsers',        (sysU.data?.map(r=>r.data)||[]).map(u=>u.role==='superadmin'?u:{...u,permissions:{...Object.fromEntries(['caja','ventas','proveedores','sueldos','misueldo','prestamos','calendario','micerebro','credenciales','codigos','seguridad','cocina','almacen','temperatura','exportImport','resetStock'].map(k=>[k,'none'])),...(u.permissions||{})}}));
 
                 // cash_transactions multiyear
                 const _cashTx = cashTx.data?.data || {}; 
@@ -400,7 +400,7 @@
                     _sb.from('system_users').select('data'),
                 ]);
                 if (creds.data) window.__systemCredsPrecargadas = creds.data.map(r=>r.data);
-                if (sysU.data) window.__systemUsersPrecargados = sysU.data.map(r=>r.data).map(u=>({...u,permissions:u.role==='superadmin'?u.permissions:{...{caja:'none',ventas:'none',proveedores:'none',sueldos:'none',misueldo:'none',prestamos:'none',calendario:'none',micerebro:'none',credenciales:'none',codigos:'none',seguridad:'none',cocina:'none',almacen:'none',temperatura:'none',exportImport:'none',resetStock:'none'},...(u.permissions||{})}}));
+                if (sysU.data) window.__systemUsersPrecargados = sysU.data.map(r=>r.data).map(u=>u.role==='superadmin'?u:{...u,permissions:{...Object.fromEntries(['caja','ventas','proveedores','sueldos','misueldo','prestamos','calendario','micerebro','credenciales','codigos','seguridad','cocina','almacen','temperatura','exportImport','resetStock'].map(k=>[k,'none'])),...(u.permissions||{})}});
             } catch(e) { console.warn('Error cargando credenciales:', e); }
             // Señal para que React sepa que puede intentar login
             window.__supabaseReady = true;
@@ -2314,14 +2314,6 @@ ${invoice.items.map(item => `
                 return false;
             };
             
-
-            // Normalizar permisos de usuario — aplica en toda carga desde Supabase
-            const _PERM_KEYS = ['caja','ventas','proveedores','sueldos','misueldo','prestamos','calendario','micerebro','credenciales','codigos','seguridad','cocina','almacen','temperatura','exportImport','resetStock'];
-            const _PERM_BASE = Object.fromEntries(_PERM_KEYS.map(k=>[k,'none']));
-            const normalizeUser = (u) => {
-                if (!u || u.role === 'superadmin') return u;
-                return {...u, permissions: {..._PERM_BASE, ...(u.permissions||{})}};
-            };
             const toggleDarkMode = () => {
                 const newMode = !darkMode;
                 setDarkMode(newMode);
@@ -2497,8 +2489,8 @@ ${invoice.items.map(item => `
 
                 // Validar PIN
                 if (String(user.pin).trim() === String(pinInput).trim()) {
-                    const _normUser = (!user || user.role==='superadmin') ? user : {...user, permissions:{...{caja:'none',ventas:'none',proveedores:'none',sueldos:'none',misueldo:'none',prestamos:'none',calendario:'none',micerebro:'none',credenciales:'none',codigos:'none',seguridad:'none',cocina:'none',almacen:'none',temperatura:'none',exportImport:'none',resetStock:'none'},...(user.permissions||{})}};
-                    const userConTs = {..._normUser, loginTs: Date.now()};
+                    const _nu = (u=>u.role==='superadmin'?u:{...u,permissions:{...Object.fromEntries(['caja','ventas','proveedores','sueldos','misueldo','prestamos','calendario','micerebro','credenciales','codigos','seguridad','cocina','almacen','temperatura','exportImport','resetStock'].map(k=>[k,'none'])),...(u.permissions||{})}})(user);
+                    const userConTs = {..._nu, loginTs: Date.now()};
                     setCurrentUser(userConTs);
                     window.__currentUserId = user.id;
                     setIntentosFallidos(prev => { const n={...prev}; delete n[String(user.id)]; return n; });
