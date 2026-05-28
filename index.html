@@ -2038,13 +2038,15 @@ ${invoice.items.map(item => `
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro', 'seguridad', 'temperatura'];
+            const DEFAULT_MODULE_ORDER = ['ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'prestamos', 'credenciales', 'calendario', 'codigos', 'almacen', 'cocina', 'micerebro', 'seguridad', 'temperatura'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
-                // Agregar al final cualquier módulo nuevo del DEFAULT que no esté en el orden guardado
-                const missing = DEFAULT_MODULE_ORDER.filter(m => !saved.includes(m));
-                return missing.length > 0 ? [...saved, ...missing] : saved;
+                // Renombrar ids obsoletos
+                const renamed = saved.map(m => m === 'stock' ? 'almacen' : m).filter(m => DEFAULT_MODULE_ORDER.includes(m));
+                const deduped = [...new Set(renamed)];
+                const missing = DEFAULT_MODULE_ORDER.filter(m => !deduped.includes(m));
+                return missing.length > 0 ? [...deduped, ...missing] : deduped;
             };
 
             const [moduleOrder, setModuleOrder] = React.useState(() => {
