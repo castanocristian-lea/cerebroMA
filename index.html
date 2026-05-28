@@ -1995,6 +1995,19 @@ ${invoice.items.map(item => `
             const [respuestaError, setRespuestaError] = useState(false);
             const [currentUser, setCurrentUser] = useState(null);
             const [activeModule, setActiveModule] = useState('home');
+
+            // Recargar permisos frescos desde Supabase cada vez que se vuelve al home
+            React.useEffect(() => {
+                if (activeModule !== 'home' || !currentUser || !window._sb) return;
+                window._sb.from('system_users').select('data').then(({data}) => {
+                    if (!data) return;
+                    const PKEYS = ['caja','ventas','proveedores','sueldos','misueldo','prestamos','calendario','micerebro','credenciales','codigos','seguridad','cocina','almacen','temperatura','exportImport','resetStock'];
+                    const base = Object.fromEntries(PKEYS.map(k=>[k,'none']));
+                    window.__systemUsersPrecargados = data.map(r=>r.data).map(u=>
+                        u.role==='superadmin' ? u : {...u, permissions:{...base,...(u.permissions||{})}}
+                    );
+                });
+            }, [activeModule, currentUser?.id]);
             const [showUserMenu, setShowUserMenu] = useState(false);
             const [showChangePinModal, setShowChangePinModal] = useState(false);
             const [showSecurityModal, setShowSecurityModal] = useState(false);
@@ -2297,14 +2310,32 @@ ${invoice.items.map(item => `
             // Función para verificar permisos del usuario actual
             const hasPermission = (module, requiredLevel = 'read') => {
                 if (!currentUser) return false;
-                // Leer siempre los permisos frescos de Supabase, no del state de React
-                const freshUser = (window.__systemUsersPrecargados||[]).find(u=>String(u.id)===String(currentUser.id)) || currentUser;
-                if (freshUser.role === 'admin' || freshUser.role === 'superadmin') return true;
-                const perms = freshUser.permissions || {};
-                const val = perms[module] || 'none';
-                if (val === 'none') return false;
-                if (requiredLevel === 'editor') return val === 'editor';
-                return val === 'read' || val === 'editor';
+                // Admin y superadmin tienen acceso total siempre
+                if (currentUser.role === 'admin' || currentUser.role === 'superadmin') return true;
+                // Usuarios sin permisos definidos (antiguos) = acceso total solo a módulos básicos
+                if (!currentUser.permissions) {
+                    // módulos que requieren permiso explícito
+                    const restricted = ['sueldos','misueldo','seguridad','prestamos','codigos'];
+                    if (restricted.includes(module)) return false;
+                    return true;
+                }
+                
+                const userPermission = currentUser.permissions[module];
+                
+                // Sin permiso explícito o 'none'
+                if (!userPermission || userPermission === 'none') return false;
+                
+                // Requiere lectura: acepta read o editor
+                if (requiredLevel === 'read') {
+                    return userPermission === 'read' || userPermission === 'editor';
+                }
+                
+                // Requiere editor: solo acepta editor
+                if (requiredLevel === 'editor') {
+                    return userPermission === 'editor';
+                }
+                
+                return false;
             };
             
             const toggleDarkMode = () => {
