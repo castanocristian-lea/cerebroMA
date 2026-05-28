@@ -3535,9 +3535,9 @@ ${invoice.items.map(item => `
                                     desc: currentLanguage==='en'?'My payments, salary and medical insurance':'Mis pagos, sueldos y seguros médicos',
                                     detail: 'Historial personal de sueldos cobrados, seguros médicos y pagos mensuales.',
                                 },
-                                stock: {
+                                almacen: {
                                     permission: 'almacen',
-                                    navigate: 'stock',
+                                    navigate: 'almacen',
                                     color: 'amber',
                                     icon: <svg className={`w-8 h-8 ${darkMode ? 'text-amber-400' : 'text-amber-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
                                     title: currentLanguage==='en'?'Warehouse':'Almacén',
@@ -3838,7 +3838,7 @@ ${invoice.items.map(item => `
                     {activeModule === 'micerebro' && (
                         <MiCerebroModule darkMode={darkMode} currentUser={currentUser} systemUsers={systemUsers} language={currentLanguage} onBack={() => setActiveModule('home')} />
                     )}
-                    {activeModule === 'stock' && (
+                    {activeModule === 'almacen' && (
                         <AlmacenModule darkMode={darkMode} currentUser={currentUser} language={currentLanguage} onBack={() => setActiveModule('home')} />
                     )}
                     {activeModule === 'prestamos' && (
