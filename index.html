@@ -8221,13 +8221,17 @@ ${invoice.items.map(item => `
             const [users, setUsers] = useState(() => {
                 return window.__systemUsersPrecargados || [];
             });
+            const [usersLoaded, setUsersLoaded] = useState(() => !!(window.__systemUsersPrecargados?.length));
             const [showUserModal, setShowUserModal] = useState(false);
             // Cargar usuarios desde Supabase al abrir el módulo
             useEffect(() => {
                 if (users.length === 0) {
                     dbGetAll('system_users').then(d => {
                         if (d?.length) { setUsers(d); window.__systemUsersPrecargados = d; }
+                        setUsersLoaded(true);
                     });
+                } else {
+                    setUsersLoaded(true);
                 }
             }, []);
             const [editingUser, setEditingUser] = useState(null);
@@ -8260,10 +8264,9 @@ ${invoice.items.map(item => `
                 custom:     { accessType: 'custom', permissions: {"ventas": "none", "proveedores": "none", "sueldos": "none", "caja": "none", "dashboard": "none", "calendario": "none", "stock": "none", "cocina": "none", "prestamos": "none", "credenciales": "none", "micerebro": "none", "apps": "none", "config": "none"} },
             };
             
-            // Guardar usuarios en localStorage
+            // Guardar usuarios - solo si ya cargaron desde Supabase
             useEffect(() => {
-                if (!users || users.length === 0) return;
-                
+                if (!users || users.length === 0 || !usersLoaded) return;
                 dbSetArray('system_users', users);
             }, [users]);
             
