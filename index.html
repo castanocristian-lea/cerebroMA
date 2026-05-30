@@ -26978,6 +26978,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     const esBorrador = mercadoForm.estadoBorrador;
                                     const data = {...mercadoForm, id: editingMercado?.id||Date.now(), estado: esBorrador ? 'borrador' : 'pendiente', creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
                                     saveMercados(editingMercado ? mercados.map(m=>m.id===editingMercado.id?data:m) : [data,...mercados]);
+                                    if(mercadoForm.sucursalDescuento&&!esBorrador&&!editingMercado){
+                                        const ns={...stock};
+                                        (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
+                                            const k=`${p.id}_${mercadoForm.sucursalDescuento}`;
+                                            ns[k]=Math.max(0,(parseFloat(ns[k]||0)-parseFloat(p.cantidad||0)));
+                                        });
+                                        saveStock(ns);
+                                    }
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${mercadoForm.estadoBorrador?'bg-amber-500 text-white':'bg-orange-500 text-white'}`}>{mercadoForm.estadoBorrador ? L('💾 Guardar borrador','💾 Save draft') : L('💾 Guardar','💾 Save')}</button>
                             </div>
@@ -29333,6 +29341,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     const esBorrador = mercadoForm.estadoBorrador;
                                     const data = {...mercadoForm, id: editingMercado?.id||Date.now(), estado: esBorrador ? 'borrador' : 'pendiente', creadoAt: editingMercado?.creadoAt||new Date().toISOString(), creadoPor: editingMercado?.creadoPor||(currentUser?.name||currentUser?.username||''), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name||currentUser?.username||'', vistos: editingMercado?.vistos||[]};
                                     saveMercados(editingMercado ? mercados.map(m=>m.id===editingMercado.id?data:m) : [data,...mercados]);
+                                    if(mercadoForm.sucursalDescuento&&!esBorrador&&!editingMercado){
+                                        const ns={...stock};
+                                        (mercadoForm.productos||[]).filter(p=>parseFloat(p.cantidad)>0).forEach(p=>{
+                                            const k=`${p.id}_${mercadoForm.sucursalDescuento}`;
+                                            ns[k]=Math.max(0,(parseFloat(ns[k]||0)-parseFloat(p.cantidad||0)));
+                                        });
+                                        saveStock(ns);
+                                    }
                                     setShowMercadoModal(false); setEditingMercado(null);
                                 }} className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${mercadoForm.estadoBorrador?'bg-amber-500 text-white':'bg-orange-500 text-white'}`}>{mercadoForm.estadoBorrador ? L('💾 Guardar borrador','💾 Save draft') : L('💾 Guardar','💾 Save')}</button>
                             </div>
