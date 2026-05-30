@@ -26029,7 +26029,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </button>
                                 {canEdit && <button onClick={() => {
                                     setEditingMercado(null);
-                                    setMercadoForm({ mercadoNombre: listaMercados[0]||'', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: '' });
+                                    setMercadoForm({ mercadoNombre: '', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: '' });
                                     setShowMercadoModal(true);
                                 }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">
                                     + {L('Próximo mercado','Next market')}
@@ -26468,7 +26468,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         </div>
                         {(() => {
                             const now = new Date();
-                            const movsFiltrados = movimientos.filter(m => (m.tipo === 'ingreso' || m.tipo === 'vuelve') && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!ingFechaDesde||m.fecha>=ingFechaDesde) && (!ingFechaHasta||m.fecha<=ingFechaHasta+'T23:59:59') && (!ingSucursal||String(m.sucursalId||m.branchId)===ingSucursal)).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).slice(-100);
+                            const movsFiltrados = movimientos.filter(m => (m.tipo === 'ingreso' || m.tipo === 'vuelve') && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!ingFechaDesde||m.fecha>=ingFechaDesde) && (!ingFechaHasta||m.fecha<=ingFechaHasta+'T23:59:59') && (!ingSucursal||String(m.sucursalId||m.branchId)===ingSucursal)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,100);
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>;
                             // Group by month
                             const grupos = {};
@@ -26565,7 +26565,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="flex gap-2 flex-wrap">
                                 {isSuperAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de egresos?','Reset outbound history?'))){ const filtered=movimientos.filter(m=>!['venta','ajuste','envio'].includes(m.tipo)); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
                                 {canEdit && <button onClick={() => { setMovManualTipo('venta'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('📋 Carga manual','📋 Manual entry')}</button>}
-                                {canEdit && <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
+                                {canEdit && <button onClick={() => { setVentasSucursal(''); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
                             </div>
                         </div>
                         <div className="flex gap-2 flex-wrap items-center mb-2">
@@ -26580,7 +26580,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             {(egrFechaDesde||egrFechaHasta||egrSucursal)&&<button onClick={()=>{setEgrFechaDesde('');setEgrFechaHasta('');setEgrSucursal('')}} className="px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded-lg">✕ Limpiar</button>}
                         </div>
                         {(() => {
-                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!egrFechaDesde||m.fecha>=egrFechaDesde) && (!egrFechaHasta||m.fecha<=egrFechaHasta+'T23:59:59') && (!egrSucursal||String(m.sucursalId||m.branchId)===egrSucursal)).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).slice(-100);
+                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!egrFechaDesde||m.fecha>=egrFechaDesde) && (!egrFechaHasta||m.fecha<=egrFechaHasta+'T23:59:59') && (!egrSucursal||String(m.sucursalId||m.branchId)===egrSucursal)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,100);
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>;
                             const grupos = {};
                             movsFiltrados.forEach(m => {
@@ -26689,7 +26689,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             {canEdit && (
                                 <div className="flex gap-2 flex-wrap">
                                     <button onClick={()=>{ setMovManualTipo('vivo'); setMovManualSuc(sucSel); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium">📋 {L('Carga manual','Manual entry')}</button>
-                                    <button onClick={()=>{ setVivoMode(true); setVentasSucursal(sucSel); setShowVentasModal(true); }} className="px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium">📤 {L('Importar Excel/CSV','Import Excel/CSV')}</button>
+                                    <button onClick={()=>{ setVivoMode(true); setVentasSucursal(''); setShowVentasModal(true); }} className="px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium">📤 {L('Importar Excel/CSV','Import Excel/CSV')}</button>
                                 </div>
                             )}
                             <div className={`rounded-xl border ${card} overflow-hidden`}>
@@ -26905,6 +26905,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('MERCADO *','MARKET *')}</label>
                                     <div className="flex gap-2">
                                         <select value={mercadoForm.mercadoNombre} onChange={e=>setMercadoForm(f=>({...f,mercadoNombre:e.target.value}))} className={`${inp} flex-1`}>
+                                            <option value="">-- Seleccionar --</option>
                                             {listaMercados.map(m=><option key={m} value={m}>{m}</option>)}
                                         </select>
                                         <input value={mercadoForm.mercadoNombreCustom||''} onChange={e=>setMercadoForm(f=>({...f,mercadoNombreCustom:e.target.value,mercadoNombre:e.target.value||f.mercadoNombre}))}
@@ -28458,7 +28459,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 </button>
                                 {canEdit && <button onClick={() => {
                                     setEditingMercado(null);
-                                    setMercadoForm({ mercadoNombre: listaMercados[0]||'', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: '' });
+                                    setMercadoForm({ mercadoNombre: '', fecha: new Date().toISOString().split('T')[0], productos: productos.map(p=>({id:p.id,nombre:p.nombre,cantidad:'',notas:''})), destinatarios: [], sucursalDescuento: '' });
                                     setShowMercadoModal(true);
                                 }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">
                                     + {L('Próximo mercado','Next market')}
@@ -28896,7 +28897,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                         </div>
                         {(() => {
                             const now = new Date();
-                            const movsFiltrados = movimientos.filter(m => (m.tipo === 'ingreso' || m.tipo === 'vuelve') && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!ingFechaDesde||m.fecha>=ingFechaDesde) && (!ingFechaHasta||m.fecha<=ingFechaHasta+'T23:59:59') && (!ingSucursal||String(m.sucursalId||m.branchId)===ingSucursal)).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).slice(-100);
+                            const movsFiltrados = movimientos.filter(m => (m.tipo === 'ingreso' || m.tipo === 'vuelve') && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!ingFechaDesde||m.fecha>=ingFechaDesde) && (!ingFechaHasta||m.fecha<=ingFechaHasta+'T23:59:59') && (!ingSucursal||String(m.sucursalId||m.branchId)===ingSucursal)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,100);
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>;
                             // Group by month
                             const grupos = {};
@@ -28993,7 +28994,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="flex gap-2 flex-wrap">
                                 {isAdmin && <button onClick={()=>{ if(confirm(L('¿Resetear historial de egresos?','Reset outbound history?'))){ const filtered=movimientos.filter(m=>!['venta','ajuste','envio'].includes(m.tipo)); saveMovimientos(filtered); } }} className="px-3 py-1.5 text-xs rounded-lg bg-red-100 text-red-600 hover:bg-red-200 font-medium">🗑 {L('Resetear','Reset')}</button>}
                                 {canEdit && <button onClick={() => { setMovManualTipo('venta'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">{L('📋 Carga manual','📋 Manual entry')}</button>}
-                                {canEdit && <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
+                                {canEdit && <button onClick={() => { setVentasSucursal(''); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
                             </div>
                         </div>
                         <div className="flex gap-2 flex-wrap items-center mb-2">
@@ -29008,7 +29009,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             {(egrFechaDesde||egrFechaHasta||egrSucursal)&&<button onClick={()=>{setEgrFechaDesde('');setEgrFechaHasta('');setEgrSucursal('')}} className="px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded-lg">✕ Limpiar</button>}
                         </div>
                         {(() => {
-                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!egrFechaDesde||m.fecha>=egrFechaDesde) && (!egrFechaHasta||m.fecha<=egrFechaHasta+'T23:59:59') && (!egrSucursal||String(m.sucursalId||m.branchId)===egrSucursal)).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).slice(-100);
+                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!egrFechaDesde||m.fecha>=egrFechaDesde) && (!egrFechaHasta||m.fecha<=egrFechaHasta+'T23:59:59') && (!egrSucursal||String(m.sucursalId||m.branchId)===egrSucursal)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,100);
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>;
                             const grupos = {};
                             movsFiltrados.forEach(m => {
@@ -29269,6 +29270,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('MERCADO *','MARKET *')}</label>
                                     <div className="flex gap-2">
                                         <select value={mercadoForm.mercadoNombre} onChange={e=>setMercadoForm(f=>({...f,mercadoNombre:e.target.value}))} className={`${inp} flex-1`}>
+                                            <option value="">-- Seleccionar --</option>
                                             {listaMercados.map(m=><option key={m} value={m}>{m}</option>)}
                                         </select>
                                         <input value={mercadoForm.mercadoNombreCustom||''} onChange={e=>setMercadoForm(f=>({...f,mercadoNombreCustom:e.target.value,mercadoNombre:e.target.value||f.mercadoNombre}))}
