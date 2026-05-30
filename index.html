@@ -2038,7 +2038,7 @@ ${invoice.items.map(item => `
             // Orden de módulos por usuario — guardado en localStorage
             const getModuleOrderKey = (user) => `moduleOrder_${user?.id || 'default'}`;
             
-            const DEFAULT_MODULE_ORDER = ['ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'config', 'prestamos', 'credenciales', 'calendario', 'codigos', 'stock', 'cocina', 'micerebro', 'seguridad', 'temperatura'];
+            const DEFAULT_MODULE_ORDER = ['ventas', 'proveedores', 'sueldos', 'misueldo', 'caja', 'prestamos', 'credenciales', 'calendario', 'codigos', 'almacen', 'cocina', 'micerebro', 'seguridad', 'temperatura'];
             
             const mergeModuleOrder = (saved) => {
                 if (!saved) return DEFAULT_MODULE_ORDER;
@@ -2289,7 +2289,7 @@ ${invoice.items.map(item => `
                 // Usuarios sin permisos definidos (antiguos) = acceso total solo a módulos básicos
                 if (!currentUser.permissions) {
                     // módulos que requieren permiso explícito
-                    const restricted = ['sueldos','misueldo','config','seguridad','prestamos','codigos'];
+                    const restricted = ['sueldos','misueldo','seguridad','prestamos','codigos'];
                     if (restricted.includes(module)) return false;
                     return true;
                 }
@@ -3453,15 +3453,7 @@ ${invoice.items.map(item => `
                                     desc: t.cashRegisterDesc,
                                     detail: t.cashRegisterDetail,
                                 },
-                                config: {
-                                    permission: 'config',
-                                    navigate: 'config',
-                                    color: 'slate',
-                                    icon: <svg className={`w-8 h-8 ${darkMode ? 'text-slate-400' : 'text-slate-600'} group-hover:text-white transition-colors`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-                                    title: t.settings,
-                                    desc: t.settingsDesc,
-                                    detail: t.settingsDetail,
-                                },
+
                                 prestamos: {
                                     permission: 'prestamos',
                                     navigate: 'prestamos',
@@ -3796,26 +3788,7 @@ ${invoice.items.map(item => `
                         </div>
                     )}
                     
-                    {/* Módulo: Configuración */}
-                    {activeModule === 'config' && (
-                        <div>
-                            {/* Botón para volver */}
-                            <div className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-b px-4 py-3`}>
-                                <div className="max-w-7xl mx-auto">
-                                    <button
-                                        onClick={() => setActiveModule('home')}
-                                        className={`flex items-center gap-2 font-medium ${darkMode?'text-slate-300 hover:text-white':'text-slate-600 hover:text-slate-700'}`}
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                        </svg>
-                                        {t.backToMenu}
-                                    </button>
-                                </div>
-                            </div>
-                            <SettingsModule language={currentLanguage} darkMode={darkMode} currentUser={currentUser} />
-                        </div>
-                    )}
+
                     
                     {/* Módulo: Aplicaciones Externas */}
                     {/* Módulo: Dashboard */}
@@ -7964,917 +7937,6 @@ ${invoice.items.map(item => `
                             </p>
                         </div>
                     </div>
-                </div>
-            );
-        };
-        
-        // COMPONENTE: SETTINGS MODULE (CONFIGURACIÓN)
-        const SettingsModule = ({ language = 'es', darkMode = false, currentUser = null }) => {
-            // Verificar permisos
-            const { isAdmin, canEdit, canRead } = usePermissions(currentUser, 'config');
-            
-            // Traducciones
-            const translations = {
-                es: {
-                    settings: "Gestión de Usuarios",
-                    users: 'Usuarios',
-                    userManagement: 'Gestión de Usuarios',
-                    addUser: '+ Nuevo Usuario',
-                    searchUsers: 'Buscar usuarios...',
-                    name: 'Nombre',
-                    lastname: 'Apellido',
-                    phone: 'Teléfono',
-                    email: 'Email',
-                    username: 'Usuario',
-                    role: 'Rol',
-                    pin: 'PIN',
-                    actions: 'Acciones',
-                    edit: 'Editar',
-                    delete: 'Eliminar',
-                    noUsers: 'No hay usuarios registrados',
-                    createFirstUser: 'Crea tu primer usuario para empezar',
-                    userName: 'Nombre',
-                    userLastname: 'Apellido',
-                    userPhone: 'Teléfono',
-                    userEmail: 'Email',
-                    userUsername: 'Usuario',
-                    userRole: 'Rol del Usuario',
-                    userPin: 'PIN (4 dígitos)',
-                    searchEmployee: 'Buscar en empleados existentes',
-                    selectEmployee: 'Seleccionar empleado',
-                    noEmployeesFound: 'No se encontraron empleados',
-                    personalInfo: 'Información Personal',
-                    accessInfo: 'Acceso al Sistema',
-                    cancel: 'Cancelar',
-                    save: 'Guardar',
-                    admin: 'Administrador',
-                    manager: 'Gerente',
-                    employee: 'Empleado',
-                    viewer: 'Visualizador',
-                    custom: 'Personalizado',
-                    confirmDelete: '¿Eliminar este usuario?',
-                    userCreated: '✅ Usuario creado exitosamente',
-                    userUpdated: '✅ Usuario actualizado',
-                    userDeleted: '✅ Usuario eliminado',
-                    pinRequired: '⚠️ El PIN es obligatorio',
-                    nameRequired: '⚠️ El nombre es obligatorio',
-                    usernameRequired: '⚠️ El usuario es obligatorio',
-                    pinInvalid: '⚠️ El PIN debe tener 4 dígitos',
-                    cannotDeleteLastAdmin: '⚠️ No se puede eliminar el último administrador',
-                    cannotChangeLastAdmin: '⚠️ No se puede cambiar el rol del último administrador',
-                    noAccessTitle: 'Sin Acceso',
-                    noAccessMsg: 'No tienes permisos para ver este módulo',
-                    readOnlyTitle: 'Modo Solo Lectura',
-                    readOnlyMsg: 'No puedes crear, editar o eliminar usuarios',
-                    general: 'General',
-                    security: 'Seguridad',
-                    permissions: 'Permisos',
-                    modulePermissions: 'Permisos por Módulo',
-                    fullAccess: 'Acceso Total',
-                    customAccess: 'Acceso Personalizado',
-                    noAccess: 'Sin acceso',
-                    readOnly: 'Solo lectura',
-                    editor: 'Editor',
-                    salesInvoicing: 'Facturador de Ventas',
-                    suppliers: 'Proveedores',
-                    payroll: 'Gestión de Sueldos',
-                    cashRegister: 'Caja Diaria',
-                    settings: "Gestión de Usuarios",
-                    changePin: 'Cambiar PIN',
-                    currentPin: 'PIN Actual',
-                    newPin: 'Nuevo PIN',
-                    confirmPin: 'Confirmar PIN',
-                    pinChanged: '✅ PIN cambiado exitosamente',
-                    pinMismatch: '⚠️ Los PINs no coinciden',
-                    wrongPin: '⚠️ PIN actual incorrecto'
-                },
-                en: {
-                    settings: 'Settings',
-                    users: 'Users',
-                    userManagement: 'User Management',
-                    addUser: '+ New User',
-                    searchUsers: 'Search users...',
-                    name: 'Name',
-                    role: 'Role',
-                    pin: 'PIN',
-                    actions: 'Actions',
-                    edit: 'Edit',
-                    delete: 'Delete',
-                    noUsers: 'No users registered',
-                    createFirstUser: 'Create your first user to get started',
-                    userName: 'Name',
-                    userLastname: 'Last Name',
-                    userPhone: 'Phone',
-                    userEmail: 'Email',
-                    userUsername: 'Username',
-                    userRole: 'User Role',
-                    userPin: 'PIN (4 digits)',
-                    searchEmployee: 'Search in existing employees',
-                    selectEmployee: 'Select employee',
-                    noEmployeesFound: 'No employees found',
-                    personalInfo: 'Personal Information',
-                    accessInfo: 'System Access',
-                    lastname: 'Last Name',
-                    phone: 'Phone',
-                    email: 'Email',
-                    username: 'Username',
-                    cancel: 'Cancel',
-                    save: 'Save',
-                    admin: 'Administrator',
-                    manager: 'Manager',
-                    employee: 'Employee',
-                    viewer: 'Viewer',
-                    custom: 'Custom',
-                    confirmDelete: 'Delete this user?',
-                    userCreated: '✅ User created successfully',
-                    userUpdated: '✅ User updated',
-                    userDeleted: '✅ User deleted',
-                    pinRequired: '⚠️ PIN is required',
-                    nameRequired: '⚠️ Name is required',
-                    usernameRequired: '⚠️ Username is required',
-                    pinInvalid: '⚠️ PIN must be 4 digits',
-                    cannotDeleteLastAdmin: '⚠️ Cannot delete the last administrator',
-                    cannotChangeLastAdmin: '⚠️ Cannot change the role of the last administrator',
-                    noAccessTitle: 'No Access',
-                    noAccessMsg: "You don't have permissions to view this module",
-                    readOnlyTitle: 'Read-Only Mode',
-                    readOnlyMsg: "You cannot create, edit or delete users",
-                    general: 'General',
-                    security: 'Security',
-                    permissions: 'Permissions',
-                    modulePermissions: 'Module Permissions',
-                    fullAccess: 'Full Access',
-                    customAccess: 'Custom Access',
-                    noAccess: 'No access',
-                    readOnly: 'Read only',
-                    editor: 'Editor',
-                    salesInvoicing: 'Sales Invoicing',
-                    suppliers: 'Suppliers',
-                    payroll: 'Payroll',
-                    cashRegister: 'Cash Register',
-                    settings: 'Settings',
-                    changePin: 'Change PIN',
-                    currentPin: 'Current PIN',
-                    newPin: 'New PIN',
-                    confirmPin: 'Confirm PIN',
-                    pinChanged: '✅ PIN changed successfully',
-                    pinMismatch: '⚠️ PINs do not match',
-                    wrongPin: '⚠️ Current PIN is incorrect'
-                },
-                cz: {
-                    settings: 'Nastavení',
-                    users: 'Uživatelé',
-                    userManagement: 'Správa uživatelů',
-                    addUser: '+ Nový uživatel',
-                    searchUsers: 'Hledat uživatele...',
-                    name: 'Jméno',
-                    role: 'Role',
-                    pin: 'PIN',
-                    actions: 'Akce',
-                    edit: 'Upravit',
-                    delete: 'Smazat',
-                    noUsers: 'Žádní registrovaní uživatelé',
-                    createFirstUser: 'Vytvořte prvního uživatele',
-                    userName: 'Jméno',
-                    userLastname: 'Příjmení',
-                    userPhone: 'Telefon',
-                    userEmail: 'Email',
-                    userUsername: 'Uživatel',
-                    userRole: 'Role uživatele',
-                    userPin: 'PIN (4 číslice)',
-                    searchEmployee: 'Hledat v existujících zaměstnancích',
-                    selectEmployee: 'Vybrat zaměstnance',
-                    noEmployeesFound: 'Žádní zaměstnanci nenalezeni',
-                    personalInfo: 'Osobní informace',
-                    accessInfo: 'Přístup k systému',
-                    lastname: 'Příjmení',
-                    phone: 'Telefon',
-                    email: 'Email',
-                    username: 'Uživatel',
-                    cancel: 'Zrušit',
-                    save: 'Uložit',
-                    admin: 'Administrátor',
-                    manager: 'Manažer',
-                    employee: 'Zaměstnanec',
-                    viewer: 'Pozorovatel',
-                    custom: 'Vlastní',
-                    confirmDelete: 'Smazat tohoto uživatele?',
-                    userCreated: '✅ Uživatel vytvořen',
-                    userUpdated: '✅ Uživatel aktualizován',
-                    userDeleted: '✅ Uživatel smazán',
-                    pinRequired: '⚠️ PIN je povinný',
-                    nameRequired: '⚠️ Jméno je povinné',
-                    usernameRequired: '⚠️ Uživatel je povinný',
-                    pinInvalid: '⚠️ PIN musí mít 4 číslice',
-                    cannotDeleteLastAdmin: '⚠️ Nelze smazat posledního administrátora',
-                    cannotChangeLastAdmin: '⚠️ Nelze změnit roli posledního administrátora',
-                    noAccessTitle: 'Bez Přístupu',
-                    noAccessMsg: 'Nemáte oprávnění k zobrazení tohoto modulu',
-                    readOnlyTitle: 'Režim Pouze Pro Čtení',
-                    readOnlyMsg: 'Nemůžete vytvářet, upravovat nebo mazat uživatele',
-                    general: 'Obecné',
-                    security: 'Zabezpečení',
-                    permissions: 'Oprávnění',
-                    modulePermissions: 'Oprávnění modulů',
-                    fullAccess: 'Plný přístup',
-                    customAccess: 'Vlastní přístup',
-                    noAccess: 'Bez přístupu',
-                    readOnly: 'Pouze čtení',
-                    editor: 'Editor',
-                    salesInvoicing: 'Fakturace prodeje',
-                    suppliers: 'Dodavatelé',
-                    payroll: 'Mzdy',
-                    cashRegister: 'Pokladna',
-                    settings: 'Nastavení',
-                    changePin: 'Změnit PIN',
-                    currentPin: 'Aktuální PIN',
-                    newPin: 'Nový PIN',
-                    confirmPin: 'Potvrdit PIN',
-                    pinChanged: '✅ PIN úspěšně změněn',
-                    pinMismatch: '⚠️ PINy se neshodují',
-                    wrongPin: '⚠️ Aktuální PIN je nesprávný'
-                }
-            };
-            
-            const t = translations[language] || translations['es'] || {};
-            
-            // Si no tiene acceso de lectura, mostrar mensaje
-            if (!canRead) {
-                return (
-                    <div className={`flex items-center justify-center min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
-                        <div className={`max-w-md p-8 rounded-xl text-center ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} border-2`}>
-                            <div className="text-6xl mb-4">🚫</div>
-                            <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                {t.noAccessTitle}
-                            </h2>
-                            <p className={darkMode ? 'text-slate-400' : 'text-slate-600'}>
-                                {t.noAccessMsg}
-                            </p>
-                        </div>
-                    </div>
-                );
-            }
-            
-            // Estados
-            const [activeTab, setActiveTab] = useState('users');
-            const [searchQuery, setSearchQuery] = useState('');
-            const [users, setUsers] = useState(() => {
-                return window.__systemUsersPrecargados || [];
-            });
-            const [usersLoaded, setUsersLoaded] = useState(() => !!(window.__systemUsersPrecargados?.length));
-            const [showUserModal, setShowUserModal] = useState(false);
-            // Cargar usuarios desde Supabase al abrir el módulo
-            useEffect(() => {
-                if (users.length === 0) {
-                    dbGetAll('system_users').then(d => {
-                        if (d?.length) { setUsers(d); window.__systemUsersPrecargados = d; }
-                        setUsersLoaded(true);
-                    });
-                } else {
-                    setUsersLoaded(true);
-                }
-            }, []);
-            const [editingUser, setEditingUser] = useState(null);
-            const [userForm, setUserForm] = useState({
-                name: '',
-                lastname: '',
-                phone: '',
-                email: '',
-                username: '',
-                role: 'custom',
-                pin: '',
-                accessType: 'full',
-                permissions: {
-                    ventas: 'editor',
-                    proveedores: 'editor',
-                    sueldos: 'editor',
-                    caja: 'editor',
-                    apps: 'editor',
-                    config: 'none'
-                }
-            });
-            
-            // Permisos predefinidos por rol
-            const rolePermissions = {
-                superadmin: { accessType: 'full', permissions: {"ventas": "editor", "proveedores": "editor", "sueldos": "editor", "caja": "editor", "dashboard": "editor", "calendario": "editor", "stock": "editor", "cocina": "editor", "prestamos": "editor", "credenciales": "editor", "micerebro": "editor", "apps": "editor", "config": "editor"} },
-                admin:      { accessType: 'full', permissions: {"ventas": "editor", "proveedores": "editor", "sueldos": "editor", "caja": "editor", "dashboard": "editor", "calendario": "editor", "stock": "editor", "cocina": "editor", "prestamos": "editor", "credenciales": "editor", "micerebro": "editor", "apps": "editor", "config": "editor"} },
-                manager:    { accessType: 'full', permissions: {"ventas": "editor", "proveedores": "editor", "sueldos": "editor", "caja": "editor", "dashboard": "editor", "calendario": "editor", "stock": "editor", "cocina": "editor", "prestamos": "editor", "credenciales": "editor", "micerebro": "editor", "apps": "editor", "config": "read"} },
-                employee:   { accessType: 'custom', permissions: {"ventas": "editor", "proveedores": "none", "sueldos": "none", "caja": "editor", "dashboard": "none", "calendario": "none", "stock": "none", "cocina": "none", "prestamos": "none", "credenciales": "none", "micerebro": "editor", "apps": "none", "config": "none"} },
-                viewer:     { accessType: 'custom', permissions: {"ventas": "read", "proveedores": "none", "sueldos": "none", "caja": "read", "dashboard": "none", "calendario": "none", "stock": "none", "cocina": "none", "prestamos": "none", "credenciales": "none", "micerebro": "editor", "apps": "none", "config": "none"} },
-                custom:     { accessType: 'custom', permissions: {"ventas": "none", "proveedores": "none", "sueldos": "none", "caja": "none", "dashboard": "none", "calendario": "none", "stock": "none", "cocina": "none", "prestamos": "none", "credenciales": "none", "micerebro": "none", "apps": "none", "config": "none"} },
-            };
-            
-            // Guardar usuarios - solo si ya cargaron desde Supabase
-            useEffect(() => {
-                if (!users || users.length === 0 || !usersLoaded) return;
-                dbSetArray('system_users', users);
-            }, [users]);
-            
-            // Funciones de usuarios
-            const openUserModal = () => {
-                setEditingUser(null);
-                setUserForm({ 
-                    name: '',
-                    lastname: '',
-                    phone: '',
-                    email: '',
-                    username: '',
-                    role: 'custom', 
-                    pin: '',
-                    preguntaSeguridad: '',
-                    respuestaSeguridad: '',
-                    accessType: 'custom',
-                    permissions: {
-                        ventas: 'editor',
-                        proveedores: 'editor',
-                        sueldos: 'editor',
-                        caja: 'editor',
-                        apps: 'editor',
-                        config: 'none'
-                    }
-                });
-                setShowUserModal(true);
-            };
-            
-            const editUser = (user) => {
-                setEditingUser(user);
-                setUserForm({
-                    name: user.name || '',
-                    lastname: user.lastname || '',
-                    phone: user.phone || '',
-                    email: user.email || '',
-                    username: user.username || '',
-                    role: user.role || 'custom',
-                    pin: user.pin,
-                    preguntaSeguridad: user.preguntaSeguridad || '',
-                    respuestaSeguridad: user.respuestaSeguridad || '',
-                    accessType: user.accessType || 'custom',
-                    permissions: user.permissions || {
-                        ventas: 'editor',
-                        proveedores: 'editor',
-                        sueldos: 'editor',
-                        caja: 'editor',
-                        apps: 'editor',
-                        config: 'none'
-                    }
-                });
-                setShowUserModal(true);
-            };
-            
-            const handleRoleChange = (newRole) => {
-                const roleConfig = rolePermissions[newRole];
-                setUserForm({
-                    ...userForm,
-                    role: newRole,
-                    accessType: roleConfig.accessType,
-                    permissions: { ...roleConfig.permissions }
-                });
-            };
-            
-            const handlePermissionChange = (module, permission) => {
-                setUserForm({
-                    ...userForm,
-                    permissions: {
-                        ...userForm.permissions,
-                        [module]: permission
-                    }
-                });
-            };
-            
-            const saveUser = () => {
-                // Validaciones
-                if (!userForm.name.trim()) {
-                    alert(t.nameRequired);
-                    return;
-                }
-                if (!userForm.username.trim()) {
-                    alert(t.usernameRequired);
-                    return;
-                }
-                if (!userForm.pin.trim()) {
-                    alert(t.pinRequired);
-                    return;
-                }
-                if (!/^\d{4}$/.test(userForm.pin)) {
-                    alert(t.pinInvalid);
-                    return;
-                }
-                
-                if (editingUser) {
-                    if (editingUser.role === 'admin' && userForm.role !== 'admin' && currentUser?.role !== 'superadmin') {
-                        const adminCount = users.filter(u => u.role === 'admin').length;
-                        if (adminCount <= 1) { alert(t.cannotChangeLastAdmin); return; }
-                    }
-                    const updated = users.map(u => u.id === editingUser.id ? { ...u, ...userForm, preguntaSeguridad: userForm.preguntaSeguridad||'', respuestaSeguridad: (userForm.respuestaSeguridad||'').toLowerCase().trim() } : u);
-                    setUsers(updated);
-                    dbSetArray('system_users', updated);
-                    window.__systemUsersPrecargados = updated;
-                    alert(t.userUpdated);
-                } else {
-                    const newUser = { id: Date.now(), ...userForm, preguntaSeguridad: userForm.preguntaSeguridad || '', respuestaSeguridad: (userForm.respuestaSeguridad || '').toLowerCase().trim(), createdAt: new Date().toISOString() };
-                    const updated = [...users, newUser];
-                    setUsers(updated);
-                    dbSetArray('system_users', updated);
-                    window.__systemUsersPrecargados = updated;
-                    alert(t.userCreated);
-                }
-                
-                setShowUserModal(false);
-                setUserForm({ name: '', role: 'employee', pin: '' });
-            };
-            
-            const deleteUser = (id) => {
-                const userToDelete = users.find(u => u.id === id);
-                
-                // Verificar si es el último administrador
-                if (userToDelete && userToDelete.role === 'admin') {
-                    const adminCount = users.filter(u => u.role === 'admin').length;
-                    if (adminCount <= 1) {
-                        alert(t.cannotDeleteLastAdmin);
-                        return;
-                    }
-                }
-                
-                if (confirm(t.confirmDelete)) {
-                    const updated = users.filter(u => u.id !== id);
-                    setUsers(updated);
-                    dbSetArray('system_users', updated);
-                    window.__systemUsersPrecargados = updated;
-                    alert(t.userDeleted);
-                }
-            };
-            
-            // Filtrar usuarios según búsqueda
-            const filteredUsers = users.filter(user => {
-                const searchLower = searchQuery.toLowerCase();
-                return (
-                    (user.name && user.name.toLowerCase().includes(searchLower)) ||
-                    (user.lastname && user.lastname.toLowerCase().includes(searchLower)) ||
-                    (user.username && user.username.toLowerCase().includes(searchLower)) ||
-                    (user.email && user.email.toLowerCase().includes(searchLower)) ||
-                    (user.phone && user.phone.toLowerCase().includes(searchLower))
-                );
-            });
-            
-            const getRoleLabel = (role) => {
-                const roles = {
-                    admin: t.admin,
-                    manager: t.manager,
-                    employee: t.employee,
-                    viewer: t.viewer
-                };
-                return roles[role] || role;
-            };
-            
-            return (
-                <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8 overflow-hidden">
-                    {/* Banner de solo lectura */}
-                    {!canEdit && (
-                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-                            <div className="flex items-center gap-2">
-                                <span className="text-2xl">👁️</span>
-                                <div>
-                                    <p className="font-bold text-yellow-800">{t.readOnlyTitle}</p>
-                                    <p className="text-sm text-yellow-700">{t.readOnlyMsg}</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    
-                    <h1 className={`text-3xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                        ⚙️ {t.settings}
-                    </h1>
-                    
-                    {/* Pestañas */}
-                    <div className="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700">
-                        <button
-                            onClick={() => setActiveTab('users')}
-                            className={`px-4 py-2 font-medium transition-colors ${
-                                activeTab === 'users'
-                                    ? 'text-blue-600 border-b-2 border-blue-600'
-                                    : darkMode
-                                        ? 'text-slate-400 hover:text-white'
-                                        : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                        >
-                            👤 {t.users}
-                        </button>
-                    </div>
-                    
-                    {/* TAB: USUARIOS */}
-                    {activeTab === 'users' && (
-                        <div>
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                    {t.userManagement}
-                                </h2>
-                                {canEdit && (
-                                    <button
-                                        onClick={openUserModal}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-                                    >
-                                        {t.addUser}
-                                    </button>
-                                )}
-                            </div>
-                            
-                            {/* Buscador de usuarios */}
-                            {users.length > 0 && (
-                                <div className="mb-4">
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            placeholder={t.searchUsers}
-                                            className={`w-full px-4 py-2.5 pl-10 border rounded-lg ${darkMode ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-500'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                                        />
-                                        <svg className={`absolute left-3 top-3 w-5 h-5 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                        </svg>
-                                        {searchQuery && (
-                                            <button
-                                                onClick={() => setSearchQuery('')}
-                                                className={`absolute right-3 top-3 ${darkMode ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'}`}
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                            
-                            {users.length === 0 ? (
-                                <div className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} rounded-lg border-2 border-dashed p-12 text-center`}>
-                                    <svg className={`w-16 h-16 mx-auto mb-4 ${darkMode ? 'text-slate-600' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                    <p className={`text-lg font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                        {t.noUsers}
-                                    </p>
-                                    <p className={`text-sm ${darkMode ? 'text-slate-500' : 'text-slate-500'} mt-1`}>
-                                        {t.createFirstUser}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className={`${darkMode ? 'bg-slate-800' : 'bg-white'} rounded-lg shadow overflow-hidden`}>
-                                    <table className="w-full">
-                                        <thead className={darkMode ? 'bg-slate-700' : 'bg-slate-50'}>
-                                            <tr>
-                                                <th className={`px-6 py-3 text-left text-xs font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'} uppercase tracking-wider`}>
-                                                    {t.name}
-                                                </th>
-                                                <th className={`px-6 py-3 text-left text-xs font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'} uppercase tracking-wider`}>
-                                                    {t.role}
-                                                </th>
-                                                <th className={`px-6 py-3 text-left text-xs font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'} uppercase tracking-wider`}>
-                                                    {t.pin}
-                                                </th>
-                                                <th className={`px-6 py-3 text-right text-xs font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'} uppercase tracking-wider`}>
-                                                    {t.actions}
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className={`${darkMode ? 'divide-slate-700' : 'divide-slate-200'} divide-y`}>
-                                            {filteredUsers.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan="4" className="px-6 py-8 text-center">
-                                                        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                            🔍 No se encontraron usuarios que coincidan con "{searchQuery}"
-                                                        </p>
-                                                    </td>
-                                                </tr>
-                                            ) : (
-                                                filteredUsers.map(user => (
-                                                <tr key={user.id} className={darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}>
-                                                    <td className={`px-6 py-4 whitespace-nowrap ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                                        {user.name}
-                                                    </td>
-                                                    <td className={`px-6 py-4 whitespace-nowrap ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                                            user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                                                            user.role === 'manager' ? 'bg-blue-100 text-blue-800' :
-                                                            user.role === 'employee' ? 'bg-green-100 text-green-800' :
-                                                            'bg-slate-100 text-slate-800'
-                                                        }`}>
-                                                            {getRoleLabel(user.role)}
-                                                        </span>
-                                                    </td>
-                                                    <td className={`px-6 py-4 whitespace-nowrap font-mono ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                        ••••
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                        {canEdit && (
-                                                            <>
-                                                                {currentUser?.role === 'superadmin' && user.role !== 'superadmin' && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const updated = users.map(u => u.id === user.id ? {...u, bloqueado: !u.bloqueado} : u);
-                                                                            setUsers(updated);
-                                                                            
-                                                                            dbSetArray('system_users', updated);
-                                                                        }}
-                                                                        className={`mr-4 text-xs px-2 py-1 rounded-full font-medium border transition-all ${user.bloqueado ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-red-50 hover:text-red-600'}`}
-                                                                        title={user.bloqueado ? 'Desbloquear usuario' : 'Bloquear usuario'}
-                                                                    >
-                                                                        {user.bloqueado ? '🔒 Bloqueado' : '🔓 Bloquear'}
-                                                                    </button>
-                                                                )}
-                                                                {(user.role !== 'superadmin' || currentUser?.role === 'superadmin' && currentUser?.name?.toLowerCase() === user.name?.toLowerCase()) && (
-                                                                <button
-                                                                    onClick={() => editUser(user)}
-                                                                    className="text-blue-600 hover:text-blue-900 mr-4"
-                                                                >
-                                                                    ✏️ {t.edit}
-                                                                </button>)}
-
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const copia = { ...user, id: Date.now(), name: 'Copia ' + user.name, username: 'copia_' + user.username, pin: '0000', createdAt: new Date().toISOString() };
-                                                                        const updated = [...users, copia];
-                                                                        setUsers(updated);
-                                                                        dbSetArray('system_users', updated);
-                                                                        window.__systemUsersPrecargados = updated;
-                                                                    }}
-                                                                    className="text-green-600 hover:text-green-900 mr-4"
-                                                                >
-                                                                    📋 {t.copy || 'Copiar'}
-                                                                </button>
-
-                                                                {(user.role !== 'superadmin' || (currentUser?.role === 'superadmin' && user.id !== currentUser?.id)) && (
-                                                                <button
-                                                                    onClick={() => deleteUser(user.id)}
-                                                                    className="text-red-600 hover:text-red-900"
-                                                                >
-                                                                    🗑️ {t.delete}
-                                                                </button>)}
-                                                            </>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            )))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    
-                    {/* MODAL: CREAR/EDITAR USUARIO */}
-                    {showUserModal && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-                            <div className={`${darkMode ? 'bg-slate-800' : 'bg-white'} rounded-xl shadow-2xl max-w-3xl w-full my-8 relative`}>
-                                {/* Header con título y botón cerrar */}
-                                <div className={`flex items-center justify-between p-6 border-b ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-                                    <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                        {editingUser ? '✏️ ' + t.edit : '➕ ' + t.addUser}
-                                    </h3>
-                                    <button
-                                        onClick={() => setShowUserModal(false)}
-                                        className={`p-2 rounded-lg hover:bg-slate-100 ${darkMode ? 'hover:bg-slate-700 text-slate-400' : 'text-slate-600'} transition-colors`}
-                                        title="Cerrar sin guardar"
-                                    >
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </div>
-                                
-                                <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-                                    {/* SECCIÓN 1: SELECCIONAR EMPLEADO EXISTENTE */}
-                                    <EmployeeSelector 
-                                        darkMode={darkMode}
-                                        t={t}
-                                        userForm={userForm}
-                                        setUserForm={setUserForm}
-                                    />
-                                    
-                                    {/* SECCIÓN 2: INFORMACIÓN PERSONAL */}
-                                    <div className={`p-4 rounded-lg border ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
-                                        <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                            📋 {t.personalInfo}
-                                        </h4>
-                                        
-                                        <div className="flex justify-center">
-                                            {/* Nombre */}
-                                            <div>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                                    {t.name} *
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={userForm.name}
-                                                    onChange={(e) => setUserForm({...userForm, name: e.target.value})}
-                                                    className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                                    placeholder="Juan"
-                                                />
-                                            </div>
-                                            
-                                            {/* Apellido */}
-                                            <div>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                                    {t.lastname}
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={userForm.lastname}
-                                                    onChange={(e) => setUserForm({...userForm, lastname: e.target.value})}
-                                                    className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                                    placeholder="Pérez"
-                                                />
-                                            </div>
-                                            
-                                            {/* Email */}
-                                            <div>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                                    {t.email}
-                                                </label>
-                                                <input
-                                                    type="email"
-                                                    value={userForm.email}
-                                                    onChange={(e) => setUserForm({...userForm, email: e.target.value})}
-                                                    className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                                    placeholder="juan@example.com"
-                                                />
-                                            </div>
-                                            
-                                            {/* Teléfono */}
-                                            <div>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                                    {t.phone}
-                                                </label>
-                                                <input
-                                                    type="tel"
-                                                    value={userForm.phone}
-                                                    onChange={(e) => setUserForm({...userForm, phone: e.target.value})}
-                                                    className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                                    placeholder="+420 123 456 789"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* SECCIÓN 3: ACCESO AL SISTEMA */}
-                                    <div className={`p-4 rounded-lg border ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
-                                        <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                            🔐 {t.accessInfo}
-                                        </h4>
-                                        
-                                        <div className="flex justify-center">
-                                            {/* Usuario */}
-                                            <div>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                                    {t.username} *
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={userForm.username}
-                                                    onChange={(e) => setUserForm({...userForm, username: e.target.value})}
-                                                    className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                                    placeholder="juan.perez"
-                                                />
-                                            </div>
-                                            
-                                            {/* PIN */}
-                                            <div>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                                    {t.userPin} *
-                                                </label>
-                                                <input
-                                                    type="password"
-                                                    value={userForm.pin}
-                                                    onChange={(e) => setUserForm({...userForm, pin: e.target.value})}
-                                                    className={`w-full px-3 py-2 border rounded-lg font-mono ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                                    placeholder="1234"
-                                                    maxLength="4"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* SECCIÓN: PREGUNTA DE SEGURIDAD */}
-                                    <div className={`p-4 rounded-lg border ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
-                                        <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                            🔐 Pregunta de seguridad
-                                        </h4>
-                                        <p className={`text-xs mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                            Se pregunta tras 2 intentos fallidos de PIN. No aplica a superadmin.
-                                        </p>
-                                        <div className="space-y-3">
-                                            <div>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Pregunta</label>
-                                                <select
-                                                    value={userForm.preguntaSeguridad}
-                                                    onChange={(e) => setUserForm({...userForm, preguntaSeguridad: e.target.value})}
-                                                    className={`w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                                >
-                                                    <option value="">— Seleccionar pregunta —</option>
-                                                    <option value="¿Cuál es el nombre de tu mascota?">¿Cuál es el nombre de tu mascota?</option>
-                                                    <option value="¿En qué ciudad naciste?">¿En qué ciudad naciste?</option>
-                                                    <option value="¿Cuál es el nombre de tu madre?">¿Cuál es el nombre de tu madre?</option>
-                                                    <option value="¿Cuál es tu película favorita?">¿Cuál es tu película favorita?</option>
-                                                    <option value="¿Cuál fue el nombre de tu primera escuela?">¿Cuál fue el nombre de tu primera escuela?</option>
-                                                    <option value="¿Cuál es el apodo de tu mejor amigo?">¿Cuál es el apodo de tu mejor amigo?</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Respuesta</label>
-                                                <input
-                                                    type="text"
-                                                    value={userForm.respuestaSeguridad}
-                                                    onChange={(e) => setUserForm({...userForm, respuestaSeguridad: e.target.value.toLowerCase().trim()})}
-                                                    className={`w-full px-3 py-2 border rounded-lg text-sm ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                                    placeholder="Respuesta (sin mayúsculas ni espacios extra)"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className={`p-4 rounded-lg border ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
-                                        <h4 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                            👤 {t.userRole}
-                                        </h4>
-                                        
-                                        {/* Selector de Rol */}
-                                        <select
-                                            value={userForm.role}
-                                            onChange={(e) => handleRoleChange(e.target.value)}
-                                            className={`w-full px-3 py-2 border rounded-lg mb-4 ${darkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-slate-300'}`}
-                                        >
-                                            <option value="superadmin">⭐ Super Admin - Acceso total</option>
-                                            <option value="admin">👑 {t.admin} - {t.fullAccess}</option>
-                                            <option value="manager">📊 {t.manager} - {t.fullAccess}</option>
-                                            <option value="employee">👤 {t.employee}</option>
-                                            <option value="viewer">👀 {t.viewer} - {t.readOnly}</option>
-                                            <option value="custom">⚙️ {t.custom}</option>
-                                        </select>
-                                        
-                                        {/* Panel de Permisos Personalizados */}
-                                        {userForm.accessType === 'custom' && (() => {
-                                            const ALL_MODULES = [
-                                                { key: 'ventas',      label: '💰 Facturador de Ventas' },
-                                                { key: 'proveedores', label: '📦 Proveedores' },
-                                                { key: 'sueldos',     label: '💵 Gestión de Sueldos' },
-                                                { key: 'misueldo',    label: '💰 Mi Sueldo' },
-                                                { key: 'codigos',     label: '🏷️ Generador de Códigos' },
-                                                { key: 'caja',        label: '💰 Caja Diaria' },
-                                                { key: 'calendario',  label: '📅 Agenda / Calendario' },
-                                                { key: 'stock',       label: '🏭 Almacén' },
-                                                { key: 'cocina',      label: '👨‍🍳 Gestión de Cocina' },
-                                                { key: 'temperatura', label: '🌡️ Control de Temperatura' },
-                                                { key: 'prestamos',   label: '🏦 Préstamos' },
-                                                { key: 'micerebro',   label: '🧠 Mi Cerebro' },
-                                                { key: 'config',      label: '⚙️ Gestión de Usuarios' },
-                                                { key: 'seguridad',   label: '🛡️ Seguridad del Sistema' },
-                                            ];
-                                            return (
-                                            <div className={`p-4 rounded-lg border-2 ${darkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}>
-                                                <h5 className={`text-sm font-bold mb-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-                                                    🔐 {t.modulePermissions}
-                                                </h5>
-                                                <div className="space-y-3">
-                                                    {ALL_MODULES.map(mod => (
-                                                        <div key={mod.key}>
-                                                            <label className={`block text-xs font-medium mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                                                {mod.label}
-                                                            </label>
-                                                            <select
-                                                                value={userForm.permissions?.[mod.key] || 'none'}
-                                                                onChange={(e) => handlePermissionChange(mod.key, e.target.value)}
-                                                                className={`w-full px-2 py-1.5 text-sm border rounded ${darkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-slate-300'}`}
-                                                            >
-                                                                <option value="none">🚫 {t.noAccess}</option>
-                                                                <option value="read">👁️ {t.readOnly}</option>
-                                                                <option value="editor">✏️ {t.editor}</option>
-                                                            </select>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            );
-                                        })()}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Footer con botones */}
-                                <div className={`flex gap-3 p-6 border-t ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-                                    <button
-                                        onClick={() => setShowUserModal(false)}
-                                        className={`flex-1 px-4 py-2.5 rounded-lg font-medium ${darkMode ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'} transition-colors`}
-                                    >
-                                        {t.cancel}
-                                    </button>
-                                    <button
-                                        onClick={saveUser}
-                                        className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-                                    >
-                                        💾 {t.save}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
@@ -26172,6 +25234,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [categoriasProd, setCategoriasProd] = useState([]);
         const [catFilter, setCatFilter] = useState('');
         const [stockSearch, setStockSearch] = useState('');
+        const [ingFechaDesde, setIngFechaDesde] = useState('');
+        const [ingFechaHasta, setIngFechaHasta] = useState('');
+        const [ingSucursal, setIngSucursal] = useState('');
+        const [egrFechaDesde, setEgrFechaDesde] = useState('');
+        const [egrFechaHasta, setEgrFechaHasta] = useState('');
+        const [egrSucursal, setEgrSucursal] = useState('');
         const [vivoEgresos, setVivoEgresos] = useState({}); // {productoId_sucId: cant}
         const [vivoTimestamp, setVivoTimestamp] = useState(null);
         const [vivoSucursal, setVivoSucursal] = useState('');
@@ -26762,6 +25830,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {/* ── CURRENT STOCK ── */}
                 {activeTab === 'stock' && (
                     <div className="mt-4 space-y-4">
+                        <div className={`rounded-xl p-3 text-xs ${darkMode?'bg-yellow-900/30 text-yellow-300 border border-yellow-700':'bg-yellow-50 text-yellow-800 border border-yellow-200'}`}>
+                            ⚠️ <strong>Atención:</strong> acá solo se suma stock nuevo. Los días que se hace control físico de stock se realizan desde la solapa <strong>Control</strong>.
+                        </div>
                         {/* Selector branch + categoria */}
                         <div className="space-y-2">
                             <div className="flex gap-2 overflow-x-auto pb-1" style={{scrollbarWidth:'none',WebkitOverflowScrolling:'touch'}}>
@@ -27104,6 +26175,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {/* ── CONTROL DE STOCK ── */}
                 {activeTab === 'control' && (
                     <div className="mt-4 space-y-4">
+                        <div className={`rounded-xl p-3 text-xs mb-1 ${darkMode?'bg-blue-900/30 text-blue-300 border border-blue-700':'bg-blue-50 text-blue-800 border border-blue-200'}`}>
+                            📋 Este módulo se utiliza cuando se hace conteo físico de la mercadería.
+                        </div>
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <p className={`text-sm font-semibold ${txt}`}>🔍 {L('Control de Stock','Stock Check')}</p>
                             <div className='flex gap-2'>
@@ -27381,9 +26455,20 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {canEdit && <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">📋 {L('Lista','List')}</button>}
                             </div>
                         </div>
+                        <div className="flex gap-2 flex-wrap items-center mb-2">
+                            <select value={ingSucursal} onChange={e=>setIngSucursal(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                <option value="">Todas las sucursales</option>
+                                {sucursales.map(s=><option key={s.id} value={String(s.id)}>{s.nombre}</option>)}
+                            </select>
+                            <label className={`text-xs font-semibold ${txt}`}>Desde</label>
+                            <input type="date" value={ingFechaDesde} onChange={e=>setIngFechaDesde(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            <label className={`text-xs font-semibold ${txt}`}>Hasta</label>
+                            <input type="date" value={ingFechaHasta} onChange={e=>setIngFechaHasta(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            {(ingFechaDesde||ingFechaHasta||ingSucursal)&&<button onClick={()=>{setIngFechaDesde('');setIngFechaHasta('');setIngSucursal('')}} className="px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded-lg">✕ Limpiar</button>}
+                        </div>
                         {(() => {
                             const now = new Date();
-                            const movsFiltrados = movimientos.filter(m => m.tipo === 'ingreso' || m.tipo === 'vuelve' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())));
+                            const movsFiltrados = movimientos.filter(m => (m.tipo === 'ingreso' || m.tipo === 'vuelve') && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!ingFechaDesde||m.fecha>=ingFechaDesde) && (!ingFechaHasta||m.fecha<=ingFechaHasta+'T23:59:59') && (!ingSucursal||String(m.sucursalId||m.branchId)===ingSucursal)).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).slice(-100);
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>;
                             // Group by month
                             const grupos = {};
@@ -27483,8 +26568,19 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {canEdit && <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
                             </div>
                         </div>
+                        <div className="flex gap-2 flex-wrap items-center mb-2">
+                            <select value={egrSucursal} onChange={e=>setEgrSucursal(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                <option value="">Todas las sucursales</option>
+                                {sucursales.map(s=><option key={s.id} value={String(s.id)}>{s.nombre}</option>)}
+                            </select>
+                            <label className={`text-xs font-semibold ${txt}`}>Desde</label>
+                            <input type="date" value={egrFechaDesde} onChange={e=>setEgrFechaDesde(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            <label className={`text-xs font-semibold ${txt}`}>Hasta</label>
+                            <input type="date" value={egrFechaHasta} onChange={e=>setEgrFechaHasta(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            {(egrFechaDesde||egrFechaHasta||egrSucursal)&&<button onClick={()=>{setEgrFechaDesde('');setEgrFechaHasta('');setEgrSucursal('')}} className="px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded-lg">✕ Limpiar</button>}
+                        </div>
                         {(() => {
-                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!egrFechaDesde||m.fecha>=egrFechaDesde) && (!egrFechaHasta||m.fecha<=egrFechaHasta+'T23:59:59') && (!egrSucursal||String(m.sucursalId||m.branchId)===egrSucursal)).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).slice(-100);
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>;
                             const grupos = {};
                             movsFiltrados.forEach(m => {
@@ -27821,14 +26917,14 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                     <input type="date" value={mercadoForm.fecha} onChange={e=>setMercadoForm(f=>({...f,fecha:e.target.value}))} className={inp} style={{maxWidth:'200px'}}/>
                                 </div>
 
-                                {/* Sucursal de acreditación */}
+                                {/* Sucursal descuento */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>📥 {L('¿A dónde acreditar lo que vuelve?','Where to credit returns?')}</label>
-                                    <select value={mercadoForm.sucursalVuelven||''} onChange={e=>setMercadoForm(f=>({...f,sucursalVuelven:e.target.value}))} className={inp}>
-                                        <option value="">{L('No acreditar automáticamente','Do not credit automatically')}</option>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>📦 ¿De qué sucursal se resta el stock? *</label>
+                                    <select value={mercadoForm.sucursalDescuento||''} onChange={e=>setMercadoForm(f=>({...f,sucursalDescuento:e.target.value}))} className={`${inp} ${!mercadoForm.sucursalDescuento?'border-red-400':''}`}>
+                                        <option value="">-- Seleccionar sucursal --</option>
                                         {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
                                     </select>
-                                    {mercadoForm.sucursalVuelven && <p className={`text-xs mt-1 ${sub}`}>📥 {L('Lo que vuelva se sumará al stock de esta sucursal al registrar el retorno','Returns will be added to this branch stock when recorded')}</p>}
+                                    {!mercadoForm.sucursalDescuento&&<p className="text-xs text-red-500 mt-1">⚠️ Seleccioná una sucursal para continuar</p>}
                                 </div>
 
 
@@ -27903,10 +26999,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Sucursal destino */}
                                 <div>
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('SUMAR STOCK A SUCURSAL *','ADD STOCK TO BRANCH *')}</label>
-                                    <select value={vuelvenForm.sucursal} onChange={e=>setVuelvenForm(f=>({...f,sucursal:e.target.value}))} className={inp}>
+                                    <select value={vuelvenForm.sucursal} onChange={e=>setVuelvenForm(f=>({...f,sucursal:e.target.value}))} className={`${inp} ${!vuelvenForm.sucursal?'border-red-400':''}`}>
                                         <option value="">— Seleccionar sucursal —</option>
                                         {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
                                     </select>
+                                    {!vuelvenForm.sucursal&&<p className="text-xs text-red-500 mt-1">⚠️ Seleccioná una sucursal para continuar</p>}
                                 </div>
                                 {/* Lista de productos que vuelven */}
                                 <div>
@@ -28474,8 +27571,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
                                 {/* Paso 1: Sucursal */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>1. BRANCH *</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>1. SUCURSAL *</label>
+                                    <div className={`text-xs rounded-lg p-2 mb-2 ${darkMode?'bg-green-900/30 text-green-300':'bg-green-50 text-green-800'}`}>
+                                        Seleccioná <strong>Todas</strong> si el archivo incluye ventas de todas las sucursales. Seleccioná una sucursal específica si el archivo es solo de esa sucursal.<br/>
+                                        <strong>Nota:</strong> los mercados no necesitan importarse — se descuentan al crearlos y se ajustan con el "Vuelven".
+                                    </div>
                                     <div className="flex gap-2 flex-wrap">
+                                        <button onClick={() => setVentasSucursal('todas')}
+                                            className={`px-3 py-2 rounded-lg text-sm font-medium ${ventasSucursal === 'todas' ? 'bg-blue-600 text-white' : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
+                                            🏪 Todas
+                                        </button>
                                         {sucursales.map(s => (
                                             <button key={s.id} onClick={() => setVentasSucursal(String(s.id))}
                                                 className={`px-3 py-2 rounded-lg text-sm font-medium ${ventasSucursal === String(s.id) ? 'bg-blue-600 text-white' : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
@@ -28483,6 +27588,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             </button>
                                         ))}
                                     </div>
+                                    {!ventasSucursal && <p className="text-xs text-red-500 mt-1">⚠️ Seleccioná una opción para continuar</p>}
                                 </div>
                                 {/* Paso 2: Archivo */}
                                 <div>
@@ -28579,6 +27685,12 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
         const [categoriasProd, setCategoriasProd] = useState([]);
         const [catFilter, setCatFilter] = useState('');
         const [stockSearch, setStockSearch] = useState('');
+        const [ingFechaDesde, setIngFechaDesde] = useState('');
+        const [ingFechaHasta, setIngFechaHasta] = useState('');
+        const [ingSucursal, setIngSucursal] = useState('');
+        const [egrFechaDesde, setEgrFechaDesde] = useState('');
+        const [egrFechaHasta, setEgrFechaHasta] = useState('');
+        const [egrSucursal, setEgrSucursal] = useState('');
         const [controlSuc, setControlSuc] = useState('');
         const [controlCat, setControlCat] = useState('');
         const [controlData, setControlData] = useState({}); // {productoId: cantidadFisica}
@@ -29147,6 +28259,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                 {/* ── CURRENT STOCK ── */}
                 {activeTab === 'stock' && (
                     <div className="mt-4 space-y-4">
+                        <div className={`rounded-xl p-3 text-xs ${darkMode?'bg-yellow-900/30 text-yellow-300 border border-yellow-700':'bg-yellow-50 text-yellow-800 border border-yellow-200'}`}>
+                            ⚠️ <strong>Atención:</strong> acá solo se suma stock nuevo. Los días que se hace control físico de stock se realizan desde la solapa <strong>Control</strong>.
+                        </div>
                         {/* Selector branch + categoria */}
                         <div className="space-y-2">
                             <div className="flex gap-2 overflow-x-auto pb-1" style={{scrollbarWidth:'none',WebkitOverflowScrolling:'touch'}}>
@@ -29559,6 +28674,9 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
 
                                 {activeTab === 'control' && (
                     <div className="mt-4 space-y-4">
+                        <div className={`rounded-xl p-3 text-xs mb-1 ${darkMode?'bg-blue-900/30 text-blue-300 border border-blue-700':'bg-blue-50 text-blue-800 border border-blue-200'}`}>
+                            📋 Este módulo se utiliza cuando se hace conteo físico de la mercadería.
+                        </div>
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <p className={`text-sm font-semibold ${txt}`}>🔍 {L('Control de Stock','Stock Check')}</p>
                             <div className='flex gap-2'>
@@ -29765,9 +28883,20 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {canEdit && <button onClick={() => { setMovManualTipo('ingreso'); setMovManualSuc(sucursalSel || String(sucursales[0]?.id||'')); setMovManualFilas(productos.map(p=>({id:p.id,nombre:p.nombre,unidad:p.unidad,cantidad:''}))); setShowMovManual(true); }} className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">📋 {L('Lista','List')}</button>}
                             </div>
                         </div>
+                        <div className="flex gap-2 flex-wrap items-center mb-2">
+                            <select value={ingSucursal} onChange={e=>setIngSucursal(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                <option value="">Todas las sucursales</option>
+                                {sucursales.map(s=><option key={s.id} value={String(s.id)}>{s.nombre}</option>)}
+                            </select>
+                            <label className={`text-xs font-semibold ${txt}`}>Desde</label>
+                            <input type="date" value={ingFechaDesde} onChange={e=>setIngFechaDesde(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            <label className={`text-xs font-semibold ${txt}`}>Hasta</label>
+                            <input type="date" value={ingFechaHasta} onChange={e=>setIngFechaHasta(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            {(ingFechaDesde||ingFechaHasta||ingSucursal)&&<button onClick={()=>{setIngFechaDesde('');setIngFechaHasta('');setIngSucursal('')}} className="px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded-lg">✕ Limpiar</button>}
+                        </div>
                         {(() => {
                             const now = new Date();
-                            const movsFiltrados = movimientos.filter(m => m.tipo === 'ingreso' || m.tipo === 'vuelve' && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())));
+                            const movsFiltrados = movimientos.filter(m => (m.tipo === 'ingreso' || m.tipo === 'vuelve') && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!ingFechaDesde||m.fecha>=ingFechaDesde) && (!ingFechaHasta||m.fecha<=ingFechaHasta+'T23:59:59') && (!ingSucursal||String(m.sucursalId||m.branchId)===ingSucursal)).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).slice(-100);
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L("Sin ingresos registrados","No inbound records")}</p>;
                             // Group by month
                             const grupos = {};
@@ -29867,8 +28996,19 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {canEdit && <button onClick={() => { setVentasSucursal(sucursalSel || String(sucursales[0]?.id||'')); setShowVentasModal(true); }} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">{L('📤 Importar Excel/CSV','📤 Import Excel/CSV')}</button>}
                             </div>
                         </div>
+                        <div className="flex gap-2 flex-wrap items-center mb-2">
+                            <select value={egrSucursal} onChange={e=>setEgrSucursal(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}>
+                                <option value="">Todas las sucursales</option>
+                                {sucursales.map(s=><option key={s.id} value={String(s.id)}>{s.nombre}</option>)}
+                            </select>
+                            <label className={`text-xs font-semibold ${txt}`}>Desde</label>
+                            <input type="date" value={egrFechaDesde} onChange={e=>setEgrFechaDesde(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            <label className={`text-xs font-semibold ${txt}`}>Hasta</label>
+                            <input type="date" value={egrFechaHasta} onChange={e=>setEgrFechaHasta(e.target.value)} className={`px-2 py-1.5 rounded-lg text-xs border ${darkMode?'bg-slate-700 border-slate-600 text-white':'bg-white border-slate-200'}`}/>
+                            {(egrFechaDesde||egrFechaHasta||egrSucursal)&&<button onClick={()=>{setEgrFechaDesde('');setEgrFechaHasta('');setEgrSucursal('')}} className="px-2 py-1 text-xs bg-slate-100 border border-slate-200 rounded-lg">✕ Limpiar</button>}
+                        </div>
                         {(() => {
-                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase()))).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+                            const movsFiltrados = movimientos.filter(m => ['venta','ajuste','envio'].includes(m.tipo) && (!catFilter || (productos.find(p=>String(p.id)===String(m.productoId))?.categoria===catFilter)) && (!stockSearch || (productos.find(p=>String(p.id)===String(m.productoId))?.nombre||'').toLowerCase().includes(stockSearch.toLowerCase())) && (!egrFechaDesde||m.fecha>=egrFechaDesde) && (!egrFechaHasta||m.fecha<=egrFechaHasta+'T23:59:59') && (!egrSucursal||String(m.sucursalId||m.branchId)===egrSucursal)).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).slice(-100);
                             if (movsFiltrados.length === 0) return <p className={`text-center py-10 ${sub} text-sm`}>{L('Sin egresos registrados','No outbound records')}</p>;
                             const grupos = {};
                             movsFiltrados.forEach(m => {
@@ -30213,10 +29353,11 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                 {/* Sucursal destino */}
                                 <div>
                                     <label className={`block text-xs font-semibold mb-1 ${sub}`}>{L('SUMAR STOCK A SUCURSAL *','ADD STOCK TO BRANCH *')}</label>
-                                    <select value={vuelvenForm.sucursal} onChange={e=>setVuelvenForm(f=>({...f,sucursal:e.target.value}))} className={inp}>
+                                    <select value={vuelvenForm.sucursal} onChange={e=>setVuelvenForm(f=>({...f,sucursal:e.target.value}))} className={`${inp} ${!vuelvenForm.sucursal?'border-red-400':''}`}>
                                         <option value="">— Seleccionar sucursal —</option>
                                         {sucursales.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
                                     </select>
+                                    {!vuelvenForm.sucursal&&<p className="text-xs text-red-500 mt-1">⚠️ Seleccioná una sucursal para continuar</p>}
                                 </div>
                                 {/* Lista de productos que vuelven */}
                                 <div>
@@ -30775,8 +29916,16 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                             <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
                                 {/* Paso 1: Sucursal */}
                                 <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>1. BRANCH *</label>
+                                    <label className={`block text-xs font-semibold mb-1 ${sub}`}>1. SUCURSAL *</label>
+                                    <div className={`text-xs rounded-lg p-2 mb-2 ${darkMode?'bg-green-900/30 text-green-300':'bg-green-50 text-green-800'}`}>
+                                        Seleccioná <strong>Todas</strong> si el archivo incluye ventas de todas las sucursales. Seleccioná una sucursal específica si el archivo es solo de esa sucursal.<br/>
+                                        <strong>Nota:</strong> los mercados no necesitan importarse — se descuentan al crearlos y se ajustan con el "Vuelven".
+                                    </div>
                                     <div className="flex gap-2 flex-wrap">
+                                        <button onClick={() => setVentasSucursal('todas')}
+                                            className={`px-3 py-2 rounded-lg text-sm font-medium ${ventasSucursal === 'todas' ? 'bg-blue-600 text-white' : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
+                                            🏪 Todas
+                                        </button>
                                         {sucursales.map(s => (
                                             <button key={s.id} onClick={() => setVentasSucursal(String(s.id))}
                                                 className={`px-3 py-2 rounded-lg text-sm font-medium ${ventasSucursal === String(s.id) ? 'bg-blue-600 text-white' : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
@@ -30784,6 +29933,7 @@ td{border-bottom:1px solid #f8fafc;vertical-align:middle}
                                             </button>
                                         ))}
                                     </div>
+                                    {!ventasSucursal && <p className="text-xs text-red-500 mt-1">⚠️ Seleccioná una opción para continuar</p>}
                                 </div>
                                 {/* Paso 2: Archivo */}
                                 <div>
